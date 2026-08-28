@@ -12,7 +12,10 @@ namespace AzerothVoices
     {
         bool enabled = true;
         bool debug = false;
-        bool tracePrompts = false;
+        bool consoleGeneratedMessages = false;
+        bool consoleApiCallStats = false;
+        uint32_t consoleApiCallStatsIntervalSeconds = 60;
+        uint32_t consoleRecentMessages = 5;
 
         std::string providerMode;
         std::string endpoint;
@@ -120,19 +123,56 @@ namespace AzerothVoices
         uint32_t maximumReplyCharacters = 220;
         uint32_t maximumReplyLines = 3;
 
-        bool historyEnabled = true;
-        uint32_t historyMaximumTurns = 6;
+        uint32_t historyStorageMode = 2;
+        uint32_t historyRamMaximumTurns = 6;
+        uint32_t historyDatabaseMaximumTurns = 20;
         uint32_t historyTtlMinutes = 30;
+        uint32_t historyDatabaseTtlMinutes = 10080;
         uint32_t historyMaximumCharacters = 2500;
+        uint32_t historyMaximumConversations = 2048;
+        uint32_t historyDatabaseFlushSeconds = 5;
+        uint32_t historyDatabaseFlushBatchSize = 20;
         std::string historyHeaderTemplate;
         std::string historyLineTemplate;
         std::string historyFooterTemplate;
 
-        bool knowledgeEnabled = false;
-        std::string knowledgeFile;
-        uint32_t knowledgeMaximumItems = 3;
-        uint32_t knowledgeMinimumScore = 1;
-        std::string knowledgePromptTemplate;
+        bool surroundingChatEnabled = true;
+        uint32_t surroundingChatMaximumLines = 8;
+        uint32_t surroundingChatTtlMinutes = 5;
+        uint32_t surroundingChatMaximumCharacters = 1200;
+        uint32_t surroundingChatMaximumScopes = 512;
+
+        bool snapshotEnabled = false;
+        bool snapshotIncludeCombat = true;
+        bool snapshotIncludeGroup = true;
+        bool snapshotIncludeSpells = true;
+        bool snapshotIncludeQuests = true;
+        bool snapshotIncludeLineOfSight = true;
+        bool snapshotIncludeNearbyPlayers = true;
+        float snapshotDistance = 40.0f;
+        uint32_t snapshotMaximumGroupMembers = 5;
+        uint32_t snapshotMaximumSpells = 20;
+        uint32_t snapshotMaximumQuests = 10;
+        uint32_t snapshotMaximumCreatures = 10;
+        uint32_t snapshotMaximumGameObjects = 8;
+        uint32_t snapshotMaximumPlayers = 8;
+        uint32_t snapshotMaximumCharacters = 3500;
+        std::string snapshotPromptTemplate;
+        uint32_t snapshotStorageMode = 0;
+        uint32_t snapshotRamMaximumSnapshots = 3;
+        uint32_t snapshotDatabaseMaximumSnapshots = 10;
+        uint32_t snapshotHistoryTtlMinutes = 30;
+        uint32_t snapshotDatabaseTtlMinutes = 10080;
+        uint32_t snapshotHistoryMaximumCharacters = 1600;
+        uint32_t snapshotHistoryMaximumActors = 2048;
+
+        bool ragEnabled = false;
+        std::string ragDirectory;
+        uint32_t ragMaximumItems = 3;
+        float ragSimilarityThreshold = 0.3f;
+        uint32_t ragMaximumCharacters = 1200;
+        bool ragReloadOnRestart = true;
+        std::string ragPromptTemplate;
 
         static Config Load();
         std::string ResolveApiKey() const;

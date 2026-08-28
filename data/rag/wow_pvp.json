@@ -1,0 +1,107 @@
+[
+  {
+    "id": "pvp_battlegrounds",
+    "title": "Battlegrounds",
+    "content": "Battlegrounds are instanced PvP areas where teams compete for objectives. Warsong Gulch (capture the flag), Arathi Basin (resource control), Alterac Valley (massive battle with multiple objectives). Players earn honor points for victories and can purchase PvP gear. Battlegrounds require teamwork and strategy. Winning battlegrounds provides marks of honor used for epic gear.",
+    "keywords": ["battlegrounds", "warsong gulch", "arathi basin", "alterac valley", "honor", "marks", "instanced pvp areas", "teams compete", "objectives", "capture the flag", "resource control", "massive battle", "multiple objectives", "earn honor points", "victories", "purchase pvp gear", "require teamwork", "strategy", "winning", "marks of honor", "epic gear"],
+    "tags": ["pvp", "battlegrounds", "teamwork", "honor"]
+  },
+  {
+    "id": "pvp_duels_and_gurubashi",
+    "title": "Duels and the Gurubashi Arena",
+    "content": "Vanilla has no Burning Crusade-style rated 2v2, 3v3, or 5v5 arena system. Players can practice through consensual duels, organized community tournaments, and the free-for-all Gurubashi Arena in Stranglethorn Vale. The Gurubashi chest event attracts opportunistic fighters and groups, while duels end before death. Neither activity awards arena points or rated arena gear.",
+    "keywords": ["duel", "duels", "gurubashi arena", "stranglethorn vale", "free for all", "chest event", "community tournament", "arena", "2v2", "3v3", "5v5", "arena points", "rated gear"],
+    "tags": ["pvp", "duel", "gurubashi", "vanilla"]
+  },
+  {
+    "id": "pvp_world_pvp",
+    "title": "World PvP",
+    "content": "World PvP occurs wherever opposing flagged players meet. Common Vanilla flashpoints include Southshore and Tarren Mill, Stranglethorn Vale, Blackrock Mountain, the Plaguelands, Silithus, and the Gurubashi Arena. Terrain, graveyards, reinforcements, guards, and escape routes matter. PvE-server players generally need to flag or enter a PvP area, while PvP-server rules make contested zones more dangerous.",
+    "keywords": ["world pvp", "tarren mill", "crossroads", "gurubashi", "awareness", "rivalries", "open world", "players can attack", "popular spots", "southshore", "the bulwark", "gurubashi arena", "requires awareness", "very rewarding", "special rules", "objectives", "creates memorable moments"],
+    "tags": ["pvp", "world", "open_world", "rivalries"]
+  },
+  {
+    "id": "pvp_ranks",
+    "title": "PvP Ranks and Titles",
+    "content": "Players earn ranks through PvP victories, from 1 to 14. Higher ranks provide better gear and titles like 'Sergeant', 'Knight-Captain', 'Grand Marshal' (Alliance) or 'Grunt', 'Blood Guard', 'High Warlord' (Horde). Rank 14 requires extensive grinding. Titles are prestigious and show PvP dedication. Some ranks unlock special mounts or items.",
+    "keywords": ["pvp ranks", "titles", "grand marshal", "high warlord", "grinding", "prestige", "earn ranks", "pvp victories", "from 1 to 14", "higher ranks", "better gear", "sergeant", "knight captain", "alliance", "grunt", "blood guard", "horde", "rank 14", "extensive grinding", "prestigious", "show pvp dedication", "unlock special mounts", "items"],
+    "tags": ["pvp", "ranks", "titles", "prestige"]
+  },
+  {
+    "id": "pvp_gear_progression",
+    "title": "PvP Gear Progression",
+    "content": "Vanilla PvP gear comes from faction rank requirements, battleground reputations, marks, and honor-system vendors. Rank gear and weapons require sustained weekly standing, while battleground factions offer rewards at increasing reputation. There are no arena points, Resilience, or PvP Power stats. Strong PvE items may be mixed with PvP rewards when their damage, healing, stamina, or utility better fits the build.",
+    "keywords": ["pvp gear", "honor", "pvp ranks", "hybrid builds", "competitive", "battleground reputation", "battleground marks", "honor vendors", "rank gear", "grand marshal", "high warlord", "pvp sets", "stamina", "mix pvp and pve", "competitive play"],
+    "tags": ["pvp", "gear", "progression", "equipment"]
+  },
+  {
+    "id": "pvp_faction_conflicts",
+    "title": "Faction Conflicts",
+    "content": "Alliance and Horde rivalry drives battlegrounds and contested-zone fighting. Warsong Gulch reflects the Warsong-Outrider and Silverwing-Sentinel struggle in Ashenvale; Arathi Basin centers on resource control; Alterac Valley pits the Frostwolf clan against the Stormpike Guard. Local conflicts and Turtle WoW custom zones can also create world-PvP flashpoints without using later expansion campaigns.",
+    "keywords": ["faction conflicts", "alliance", "horde", "scourge", "burning legion", "lore", "major faction conflicts", "drive pvp activity", "longstanding war", "battle for azeroth", "conflicts with", "provide context", "pvp battles", "create stakes", "understanding faction lore", "enhances pvp experiences", "world events", "special pvp content"],
+    "tags": ["pvp", "factions", "conflicts", "lore"]
+  },
+  {
+    "id": "pvp_strategies",
+    "title": "PvP Strategies and Tactics",
+    "content": "Successful PvP requires different strategies than PvE. Focus on crowd control, burst damage, and survivability. Know class matchups and counters. Use terrain and positioning. Coordinate with team members. PvP often involves trading cooldowns and managing resources. Adapting to different situations is key to victory.",
+    "keywords": ["pvp strategies", "crowd control", "burst damage", "matchups", "coordination", "cooldowns", "successful pvp", "different strategies", "pve", "focus on", "survivability", "know class", "counters", "use terrain", "positioning", "coordinate with team", "trading cooldowns", "managing resources", "adapting to", "different situations", "key to victory"],
+    "tags": ["pvp", "strategies", "tactics", "skill"]
+  },
+  {
+    "id": "pvp_honor_system",
+    "title": "Honor System",
+    "content": "The Vanilla honor system records honorable kills and battleground contribution, compares weekly honor against other players of the same faction, and updates rank progress during the weekly calculation. Repeatedly killing the same target gives diminishing value, while dishonorable kills can damage progress. Rank can decay without sustained participation; there are no rated seasons or arena points. Rank and battleground reputation unlock vendor rewards.",
+    "keywords": ["honor system", "honor points", "decay", "rankings", "seasonal", "grind", "rewards pvp participation", "earned from", "killing enemy players", "winning objectives", "decays weekly", "resets seasonally", "used to purchase", "pvp gear", "weapons", "honor grind", "requires consistent", "pvp activity", "honor rankings", "show the top", "pvp players", "each season"],
+    "tags": ["pvp", "honor", "system", "rewards"]
+  },
+  {
+    "id": "pvp_ganking",
+    "title": "Ganking and Ambush Tactics",
+    "content": "Ganking involves high-level players attacking lower-level players. This controversial tactic is common in world PvP. Players use stealth, speed, and surprise to ambush enemies. Ganking can be frustrating but is part of the PvP experience. Some areas are notorious for ganking. Players learn to be aware and prepared.",
+    "keywords": ["ganking", "ambush", "stealth", "surprise", "controversial", "awareness"],
+    "tags": ["pvp", "tactics", "ganking", "controversy"]
+  },
+  {
+    "id": "pvp_objectives",
+    "title": "Battleground Objectives",
+    "content": "Each Vanilla battleground has distinct objectives. Warsong Gulch requires capturing the enemy flag while protecting one's own. Arathi Basin rewards holding resource nodes until a team reaches the resource goal. Alterac Valley combines towers, graveyards, commanders, turn-ins, and the opposing general. Fighting away from objectives can waste time even when it produces honorable kills.",
+    "keywords": ["battleground objectives", "capture flag", "resource nodes", "towers", "coordination", "each battleground", "specific objectives", "warsong gulch", "capture enemy flag", "return to base", "arathi basin", "control resource nodes", "alterac valley", "destroy enemy towers", "generals", "eye of the storm", "control the central flag", "understanding objectives", "crucial for victory", "teams coordinate", "achieve goals", "efficiently"],
+    "tags": ["pvp", "objectives", "battlegrounds", "strategy"]
+  },
+  {
+    "id": "pvp_team_composition",
+    "title": "Team Composition",
+    "content": "A strong battleground team mixes healing, durable flag or objective defenders, mobile damage, ranged pressure, crowd control, dispels, and utility. Class roles change by map: a druid may carry flags, a warrior may lead a focused push, and stealth classes may assault remote nodes. Vanilla has no rated arena-composition system, but class synergy, target calls, and communication remain decisive.",
+    "keywords": ["team composition", "healers", "tanks", "damage", "crowd control", "synergies", "good team composition", "essential for", "pvp success", "balance healers", "damage dealers", "include crowd control", "utility classes", "different compositions", "work for", "different battlegrounds", "arena teams", "built around", "counters", "understanding class roles", "helps build", "better teams", "communication about", "improves performance"],
+    "tags": ["pvp", "teams", "composition", "strategy"]
+  },
+  {
+    "id": "pvp_gear_specialization",
+    "title": "PvP vs PvE Gear",
+    "content": "Vanilla PvP gear often emphasizes stamina, broad offensive stats, and useful set bonuses, but it has no Resilience or PvP Power. PvE raid gear can deliver stronger damage or healing while sacrificing survivability or accessibility. Build around the character's job, expected opponents, spell hit, weapon skill, resistances, and available consumables rather than assuming every item labeled as a PvP reward is automatically superior.",
+    "keywords": ["pvp gear", "pve gear", "stamina", "hybrid", "playstyle", "performance", "damage", "healing", "spell hit", "weapon skill", "resistances", "consumables", "hybrid gear", "pvp or pve", "progression", "gear choice"],
+    "tags": ["pvp", "gear", "specialization", "choice"]
+  },
+  {
+    "id": "pvp_psychology",
+    "title": "PvP Psychology and Mindset",
+    "content": "PvP requires mental toughness and adaptability. Dealing with losses, managing tilt, staying focused. Understanding opponent psychology. Using mind games and deception. PvP is as much mental as physical. Developing the right mindset leads to better performance. Learning from defeats is crucial for improvement.",
+    "keywords": ["pvp psychology", "mindset", "tilt", "adaptability", "mind games", "improvement", "requires mental toughness", "dealing with losses", "managing tilt", "staying focused", "understanding opponent", "psychology", "using mind games", "deception", "as much mental", "physical", "developing the right", "leads to better", "performance", "learning from defeats", "crucial for"],
+    "tags": ["pvp", "psychology", "mindset", "mental"]
+  },
+  {
+    "id": "pvp_community",
+    "title": "PvP Community and Culture",
+    "content": "PvP has a strong community with rivalries, friendships, and traditions. Top players become celebrities. PvP guilds focus on competition. Community events and tournaments. Toxic behavior exists but good sportsmanship is valued. PvP community creates lasting bonds and memorable experiences. Being part of PvP community enhances enjoyment.",
+    "keywords": ["pvp_community", "rivalries", "tournaments", "sportsmanship", "bonds", "culture"],
+    "tags": ["pvp", "community", "culture", "social"]
+  },
+  {
+    "id": "pvp_rewards",
+    "title": "PvP Rewards and Incentives",
+    "content": "Vanilla PvP rewards include faction rank titles, rank armor and weapons, high-rank mounts, battleground marks, reputation equipment, recipes, consumables, and tabards. The most prestigious rewards demand sustained weekly competition or high battleground reputation. There are no achievement-point or seasonal arena rewards. Turtle WoW may add custom PvP rewards, which follow the server's current vendor requirements.",
+    "keywords": ["pvp rewards", "rank titles", "rank armor", "rank weapons", "pvp mounts", "battleground marks", "battleground reputation", "prestigious", "special tabards", "recipes", "consumables", "participation", "competition", "honor system"],
+    "tags": ["pvp", "rewards", "incentives", "motivation"]
+  }
+]

@@ -1,0 +1,185 @@
+[
+  {
+    "id": "profession_alchemy",
+    "title": "Alchemy Profession",
+    "content": "Alchemy is a primary profession that turns herbs and other reagents into healing and mana potions, elixirs, flasks, oils, and transmuted materials. An alchemist usually pairs it with Herbalism and must learn recipes from trainers, vendors, quests, and drops. High-level flasks and protection potions are important raid supplies, while transmutes can have cooldowns and economic value.",
+    "keywords": ["alchemy", "potions", "elixirs", "flasks", "herbs", "transmutation", "mana", "healing"],
+  "tags": ["profession", "crafting", "consumables", "raiding", "all classes"]
+  },
+  {
+    "id": "profession_blacksmithing",
+    "title": "Blacksmithing Profession",
+    "content": "Blacksmithing is a primary profession focused on creating weapons, armor, and tools from metal ores. Blacksmiths can craft swords, axes, maces, plate armor, shields, and various tools. Specializations include Armorsmithing and Weaponsmithing. High-level blacksmiths create epic weapons and armor sets essential for end-game content.",
+    "keywords": ["blacksmithing", "weapons", "armor", "plate", "tools", "metal", "ore", "warrior", "paladin"],
+    "tags": ["profession", "crafting", "weapons", "armor", "raiding", "warrior", "paladin"]
+  },
+  {
+    "id": "profession_enchanting",
+    "title": "Enchanting Profession",
+    "content": "Enchanting disenchants suitable uncommon-or-better equipment into dusts, essences, and shards, then applies permanent magical bonuses to weapons and armor. Vanilla enchanters normally apply most enchants directly through the trade window rather than selling enchant scrolls. Useful recipes improve attributes, armor, resistances, weapon damage, healing, and spell damage, and rare formulas can be valuable.",
+  "keywords": ["enchanting", "disenchant", "dust", "essences", "shards", "enchants", "spell power"],
+  "tags": ["profession", "crafting", "enhancements", "auction house", "all classes"]
+  },
+  {
+    "id": "profession_engineering",
+    "title": "Engineering Profession",
+    "content": "Engineering creates guns, ammunition, scopes, explosives, target dummies, trinkets, transporters, repair bots, and unusual gadgets. Many powerful devices require Engineering skill to use. Goblin Engineering emphasizes explosives, while Gnomish Engineering emphasizes experimental utility. Vanilla has no flying-machine mounts; Mining is the usual companion profession because recipes consume large amounts of ore and stone.",
+  "keywords": ["engineering", "guns", "explosives", "gadgets", "scopes", "repair bots", "devices"],
+  "tags": ["profession", "crafting", "devices", "specialized", "all classes"]
+  },
+  {
+    "id": "profession_herbalism",
+    "title": "Herbalism Profession",
+    "content": "Herbalism gathers plants used mainly by Alchemy. Vanilla herbs progress from Peacebloom, Silverleaf, and Earthroot through Briarthorn and Kingsblood to high-level herbs such as Dreamfoil, Mountain Silversage, Plaguebloom, and Black Lotus. Find Herbs marks one gathering type at a time on the minimap. Herbalism pairs naturally with Alchemy or can supply the auction house.",
+    "keywords": ["herbalism", "herbs", "gathering", "peacebloom", "silverleaf", "briarthorn", "dreamfoil", "plaguebloom", "black lotus", "alchemy"],
+    "tags": ["profession", "gathering", "materials", "alchemy", "vanilla"]
+  },
+  {
+    "id": "profession_survival",
+    "title": "Turtle WoW Survival Profession",
+    "content": "Survival is a Turtle WoW secondary profession for creating practical wilderness tools and campsite items. It is learned and raised separately from the two-primary-profession limit. One notable product is a tent, which creates a social rest area where nearby players can build rested experience. Recipes and materials are Vanilla-plus content, so use the server's current trainers and recipe descriptions.",
+    "keywords": ["survival", "survival profession", "turtle wow", "secondary profession", "tent", "tents", "camp", "campsite", "rested experience", "wilderness tools"],
+    "tags": ["profession", "secondary", "survival", "turtle_wow", "all classes"]
+  },
+  {
+    "id": "profession_skill_ranks",
+    "title": "Profession Limits and Skill Ranks",
+    "content": "Characters may learn at most two primary professions but can also learn secondary professions. Vanilla training progresses through Apprentice, Journeyman, Expert, and Artisan ranks, normally allowing maximum skills of 75, 150, 225, and 300. Higher ranks can require a particular trainer, level, book, or quest. Turtle WoW adds Survival as a secondary profession but does not use the later Jewelcrafting profession or socket-gem system.",
+    "keywords": ["profession limit", "two professions", "primary professions", "secondary professions", "apprentice", "journeyman", "expert", "artisan", "skill 300", "trainer", "survival", "jewelcrafting"],
+    "tags": ["profession", "training", "skill_ranks", "vanilla", "all classes"]
+  },
+  {
+    "id": "profession_leatherworking",
+    "title": "Leatherworking Profession",
+    "content": "Leatherworking turns hides and leather from Skinning into leather and mail armor, cloaks, quivers, ammunition pouches, and armor kits. At higher skill it branches into Dragonscale, Elemental, or Tribal Leatherworking, each with exclusive recipes. Vanilla does not use the later raid-wide drum system. It is useful for leather and mail wearers and pairs naturally with Skinning.",
+    "keywords": ["leatherworking", "leather", "armor", "armor kits", "quivers", "ammunition pouches", "mail", "dragonscale", "elemental", "tribal", "druid", "rogue", "hunter"],
+  "tags": ["profession", "crafting", "armor", "bags", "leather classes", "druid", "rogue", "hunter"]
+  },
+  {
+    "id": "profession_mining",
+    "title": "Mining Profession",
+    "content": "Mining gathers ore and stone for Blacksmithing and Engineering and can smelt many ores into bars. Vanilla progression includes copper, tin, silver, iron, gold, mithril, truesilver, thorium, and rare arcane crystals from rich thorium. Find Minerals tracks nearby nodes on the minimap. Mining pairs naturally with either metalworking profession and can also earn gold by selling materials.",
+    "keywords": ["mining", "ores", "stones", "copper", "tin", "iron", "mithril", "thorium", "arcane crystal", "blacksmithing", "engineering"],
+    "tags": ["profession", "gathering", "materials", "crafting", "blacksmithing", "engineering"]
+  },
+  {
+    "id": "profession_skinning",
+    "title": "Skinning Profession",
+    "content": "Skinning allows players to skin dead animal and humanoid corpses for leather and hides used in Leatherworking. Skinners can gather light leather, medium leather, heavy leather, and rare hides. It's often paired with Leatherworking for self-sufficiency and provides materials for armor crafting. Skinning is essential for leather-based professions.",
+  "keywords": ["skinning", "leather", "hides", "corpses", "light leather", "medium leather", "leatherworking"],
+    "tags": ["profession", "gathering", "materials", "leatherworking"]
+  },
+  {
+    "id": "profession_tailoring",
+    "title": "Tailoring Profession",
+    "content": "Tailoring turns cloth dropped mainly by humanoids into cloth armor, shirts, cloaks, and bags. It needs no gathering profession, so it pairs well with Enchanting. High-level tailors craft Mooncloth on a cooldown and learn rare sets and resistance pieces from vendors, reputations, quests, and drops. Vanilla has no Shadoweave or Spellfire tailoring specialization branches.",
+    "keywords": ["tailoring", "cloth", "armor", "bags", "robes", "cloaks", "mage", "priest", "warlock"],
+  "tags": ["profession", "crafting", "armor", "bags", "cloth classes", "mage", "priest", "warlock"]
+  },
+  {
+    "id": "profession_cooking",
+    "title": "Cooking Profession",
+    "content": "Cooking is a secondary profession that turns meat, fish, and other ingredients into food. Basic meals restore health, while well-fed recipes grant temporary personal stat bonuses. It complements Fishing and supplies useful leveling and raid food. Vanilla has no raid-wide feast items, so each player carries and eats individual food appropriate to the character's needs.",
+    "keywords": [
+      "cooking",
+      "food",
+      "recipes",
+      "feasts",
+      "buffs",
+      "stat bonuses",
+      "ingredients",
+      "consumables"
+    ],
+    "tags": [
+      "profession",
+      "secondary",
+      "consumables",
+      "buffs",
+      "raiding"
+    ]
+  },
+  {
+    "id": "profession_fishing",
+    "title": "Fishing Profession",
+    "content": "Fishing is a secondary gathering profession that lets players catch fish and other items from water sources. Fish are used as ingredients for Cooking and some crafting recipes. Fishing can also yield rare items, reagents, and collectibles. Specialized lures, poles, and fishing skills improve catch rates and access to rare catches.",
+    "keywords": [
+      "fishing","fish","gathering","poles","lures","catches","ingredients","cooking"],
+    "tags": [
+      "profession",
+      "secondary",
+      "gathering",
+      "materials",
+      "consumables"
+    ]
+  },
+  {
+    "id": "profession_first_aid",
+    "title": "First Aid Profession",
+    "content": "First Aid is a Vanilla secondary profession that turns cloth into bandages and also teaches anti-venom recipes. Bandages provide fast healing but apply Recently Bandaged, preventing another bandage for a short time. The skill is especially useful to classes with limited self-healing and can save mana between pulls or provide emergency healing when combat permits.",
+    "keywords": ["first aid","bandages","healing","consumables","out of combat","survival"],
+    "tags": ["profession","secondary","consumables","healing","solo"]
+  },
+  {
+    "id": "mage_professions_guide",
+    "title": "Best Professions for Mages",
+    "content": "For mages, the best professions are typically Tailoring (for cloth armor and bags), Enchanting (for spell power enchants and disenchanting), and Alchemy (for mana potions and flasks). Tailoring allows mages to create their own gear and is essential for cloth wearers. Enchanting provides valuable spell power enchants for weapons and armor. Alchemy creates mana regeneration items crucial for spellcasters.",
+    "keywords": ["mage", "professions", "profession", "tailoring", "enchanting", "alchemy", "cloth", "spell power", "mana"],
+    "tags": ["profession", "mage", "cloth classes", "spellcaster"]
+  },
+  {
+    "id": "warrior_professions_guide",
+    "title": "Best Professions for Warriors",
+    "content": "For warriors, the best professions are Blacksmithing (for plate armor and weapons), Mining (for ore materials), and Engineering (for utility items and repairs). Blacksmithing allows warriors to create their own plate armor and weapons. Mining provides the essential ores needed for blacksmithing. Engineering offers repair bots and other useful combat utilities.",
+    "keywords": ["warrior", "professions", "profession", "blacksmithing", "mining", "engineering", "plate", "armor", "weapons"],
+    "tags": ["profession", "warrior", "plate classes", "melee"]
+  },
+  {
+    "id": "paladin_professions_guide",
+    "title": "Best Professions for Paladins",
+    "content": "Paladins often choose Blacksmithing with Mining for plate armor and weapons, or a consumable combination such as Alchemy with Herbalism. Enchanting can support healing or damage gear, while Engineering adds PvP and utility tools. Vanilla has no Jewelcrafting profession. The best pair depends on whether the paladin values self-crafted gear, raid supplies, gold, or PvP utility.",
+    "keywords": ["paladin", "professions", "profession", "blacksmithing", "mining", "enchanting", "engineering", "alchemy", "herbalism", "plate", "holy", "healing"],
+    "tags": ["profession", "paladin", "plate classes", "healer", "tank"]
+  },
+  {
+    "id": "hunter_professions_guide",
+    "title": "Best Professions for Hunters",
+    "content": "For hunters, the best professions are Leatherworking (for leather armor), Skinning (for leather materials), Engineering (for guns, scopes, and ammo), and Mining (for engineering materials). Leatherworking allows hunters to create their own leather armor. Engineering provides guns, scopes for better ranged damage, and repair bots. Skinning pairs perfectly with leatherworking for self-sufficiency.",
+    "keywords": ["hunter", "professions", "profession", "leatherworking", "skinning", "engineering", "guns", "scopes", "ammo", "ranged"],
+    "tags": ["profession", "hunter", "leather classes", "ranged"]
+  },
+  {
+    "id": "rogue_professions_guide",
+    "title": "Best Professions for Rogues",
+    "content": "For rogues, the best professions are Leatherworking (for leather armor), Skinning (for materials), Engineering (for utility gadgets and lockpicking), and Enchanting (for agility and critical strike enchants). Leatherworking enables rogues to create their own leather armor. Engineering provides useful gadgets and potentially lockpicking tools. Enchanting offers agility and critical strike enhancements crucial for rogue damage.",
+    "keywords": ["rogue", "professions", "profession", "leatherworking", "skinning", "engineering", "enchanting", "agility", "critical strike", "stealth"],
+    "tags": ["profession", "rogue", "leather classes", "melee", "stealth"]
+  },
+  {
+    "id": "priest_professions_guide",
+    "title": "Best Professions for Priests",
+    "content": "Priests often choose Tailoring for cloth gear and bags, paired with Enchanting to use unwanted crafted items and improve healing or damage gear. Alchemy with Herbalism supplies mana, healing, and protection potions. Vanilla has no Inscription or glyph profession. Choose between self-supplied equipment, consumables, gold making, and Engineering utility according to the intended role.",
+    "keywords": ["priest", "professions", "profession", "tailoring", "enchanting", "alchemy", "herbalism", "engineering", "healing", "cloth", "spell damage"],
+    "tags": ["profession", "priest", "cloth classes", "healer", "caster"]
+  },
+  {
+    "id": "shaman_professions_guide",
+    "title": "Best Professions for Shamans",
+    "content": "For shamans, the best professions are Leatherworking (for leather/mail armor), Skinning (for materials), Mining (for blacksmithing/engineering materials), and Enchanting (for spell power enchants). Leatherworking enables shamans to create their own leather or mail armor. Mining provides materials for crafting professions. Enchanting offers spell power enchants crucial for shaman elemental and healing spells.",
+    "keywords": ["shaman", "professions", "profession", "leatherworking", "skinning", "mining", "enchanting", "elemental", "healing", "enhancement"],
+    "tags": ["profession", "shaman", "leather classes", "healer", "caster", "melee"]
+  },
+  {
+    "id": "warlock_professions_guide",
+    "title": "Best Professions for Warlocks",
+    "content": "Warlocks often choose Tailoring for cloth gear and bags, paired with Enchanting for item upgrades and disenchanting. Alchemy with Herbalism supplies potions and flasks, while Engineering offers strong PvP gadgets. Vanilla has no Jewelcrafting profession, and Soulstones are created by the warlock class from Soul Shards rather than by a profession. Choose according to raiding, PvP, or economy goals.",
+    "keywords": ["warlock", "professions", "profession", "tailoring", "enchanting", "alchemy", "herbalism", "engineering", "cloth", "spell damage", "demonology"],
+    "tags": ["profession", "warlock", "cloth classes", "caster"]
+  },
+  {
+    "id": "druid_professions_guide",
+    "title": "Best Professions for Druids",
+    "content": "For druids, the best professions are Leatherworking (for leather armor), Skinning (for materials), Herbalism (for alchemy materials), and Alchemy (for consumables and potions). Leatherworking enables druids to create their own leather armor. Skinning pairs with leatherworking for self-sufficiency. Alchemy provides potions useful for druid healing and mana regeneration in various forms.",
+    "keywords": ["druid", "professions", "profession", "leatherworking", "skinning", "herbalism", "alchemy", "healing", "restoration", "balance"],
+    "tags": ["profession", "druid", "leather classes", "healer", "caster", "melee"]
+  }
+]

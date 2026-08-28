@@ -59,6 +59,14 @@ namespace AzerothVoices
             }
         }
 
+        std::string RedactSecrets(Config const& config, std::string value)
+        {
+            std::string const apiKey = config.ResolveApiKey();
+            if (!apiKey.empty())
+                ReplaceAll(value, apiKey, "[REDACTED]");
+            return value;
+        }
+
         std::unordered_map<std::string, std::string> Placeholders(ChatRequest const& request)
         {
             std::unordered_map<std::string, std::string> values;
@@ -390,24 +398,28 @@ namespace AzerothVoices
         ChatCompletion completion;
         completion.request = request;
         auto const started = std::chrono::steady_clock::now();
+        auto finish = [&completion, started]() {
+            completion.elapsedMilliseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count());
+            return completion;
+        };
 
         ParsedEndpoint endpoint;
         if (!ParseEndpoint(config.endpoint, endpoint, completion.error))
-            return completion;
+            return finish();
         if (!endpoint.secure && !endpoint.local)
         {
             completion.error = "plain HTTP is allowed only for localhost endpoints";
-            return completion;
+            return finish();
         }
         if (!endpoint.secure && endpoint.local && !config.allowInsecureLocalHttp)
         {
             completion.error = "local HTTP endpoint is disabled by configuration";
-            return completion;
+            return finish();
         }
-
         std::string body = BuildBody(config, request, completion.error);
         if (body.empty())
-            return completion;
+            return finish();
 
         thread_local ThreadClient slot;
         if (!slot.client || slot.base != endpoint.base)
@@ -430,33 +442,33 @@ namespace AzerothVoices
         if (!apiKey.empty())
             headers.emplace("Authorization", "Bearer " + apiKey);
 
+        completion.httpAttemptCount = 1;
         auto result = slot.client->Post(endpoint.path, headers, body, "application/json");
-        completion.elapsedMilliseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - started).count());
 
         if (!result)
         {
             completion.error = std::string("HTTP transport error: ") + httplib::to_string(result.error());
-            return completion;
+            return finish();
         }
 
         completion.httpStatus = result->status;
         if (result->body.size() > config.maxResponseBytes)
         {
             completion.error = "provider response exceeded MaxResponseBytes";
-            return completion;
+            return finish();
         }
         completion.rawResponse = result->body;
         if (result->status < 200 || result->status >= 300)
         {
             std::string preview = result->body.substr(0, std::min<size_t>(result->body.size(), 512));
-            completion.error = "provider returned HTTP " + std::to_string(result->status) + ": " + preview;
-            return completion;
+            completion.error = "provider returned HTTP " + std::to_string(result->status) + ": " +
+                RedactSecrets(config, preview);
+            return finish();
         }
 
         completion.responseText = ParseResponse(config, request, result->body, completion.error);
         completion.success = !completion.responseText.empty();
-        return completion;
+        return finish();
     }
 
     std::vector<std::string> Provider::SplitReply(Config const& config, std::string text)
