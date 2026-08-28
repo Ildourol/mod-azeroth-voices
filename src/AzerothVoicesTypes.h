@@ -67,8 +67,6 @@ namespace AzerothVoices
         std::string guild;
         std::string groupStatus;
         uint32_t level = 0;
-        uint32_t groupId = 0;
-        uint32_t guildId = 0;
         bool isBot = false;
     };
 
@@ -77,22 +75,6 @@ namespace AzerothVoices
         std::string speakerMessage;
         std::string actorReply;
         std::chrono::steady_clock::time_point created;
-        uint64_t createdUnix = 0;
-    };
-
-    struct RecentChatLine
-    {
-        uint64_t speakerGuid = 0;
-        std::string speakerName;
-        std::string message;
-        std::chrono::steady_clock::time_point created;
-    };
-
-    struct SnapshotRecord
-    {
-        std::string text;
-        std::chrono::steady_clock::time_point created;
-        uint64_t createdUnix = 0;
     };
 
     struct ChatRequest
@@ -108,9 +90,7 @@ namespace AzerothVoices
         std::string systemPrompt;
         std::string userPrompt;
         std::string context;
-        std::string currentSnapshot;
         std::string historyKey;
-        std::string scopeKey;
         bool ambient = false;
         bool allowFollowup = false;
         uint32_t conversationDepth = 1;
@@ -127,7 +107,6 @@ namespace AzerothVoices
         std::string rawResponse;
         std::string error;
         uint32_t elapsedMilliseconds = 0;
-        uint32_t httpAttemptCount = 0;
     };
 
     struct ScheduledLine

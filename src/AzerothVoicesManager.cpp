@@ -8,33 +8,24 @@
 #include "ChannelMgr.h"
 #include "Chat.h"
 #include "Creature.h"
-#include "Database/DatabaseEnv.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Guild.h"
 #include "GuildMgr.h"
-#include "GameObject.h"
 #include "Item.h"
 #include "Log.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
-#include "ObjectMgr.h"
 #include "Player.h"
-#include "QuestDef.h"
 #include "ScriptMgr.h"
 #include "SharedDefines.h"
-#include "SpellMgr.h"
 #include "WorldPacket.h"
-#include "json.hpp"
 
 #include <algorithm>
 #include <cctype>
-#include <ctime>
 #include <fstream>
-#include <filesystem>
 #include <list>
-#include <memory>
 #include <random>
 #include <set>
 #include <sstream>
@@ -48,29 +39,15 @@ namespace AzerothVoices
         int score = 0;
     };
 
-    struct Manager::RagItem
+    struct Manager::KnowledgeItem
     {
-        std::string id;
-        std::string title;
-        std::string category;
-        std::string source;
         std::vector<std::string> keywords;
-        std::set<std::string> keywordWords;
-        std::set<std::string> headingWords;
-        std::set<std::string> contentWords;
         std::string text;
     };
 
     namespace
     {
         using Clock = std::chrono::steady_clock;
-        namespace fs = std::filesystem;
-        using Json = nlohmann::json;
-
-        uint64_t UnixNow()
-        {
-            return static_cast<uint64_t>(std::time(nullptr));
-        }
 
         std::mt19937& RandomEngine()
         {
@@ -89,67 +66,6 @@ namespace AzerothVoices
         {
             return chance >= 100 || (chance > 0 && RandomUInt(1, 100) <= chance);
         }
-
-        class BoundedCreatureRangeCheck
-        {
-        public:
-            BoundedCreatureRangeCheck(WorldObject const* focus, float range, size_t maximum)
-                : m_focus(focus), m_range(range), m_maximum(maximum) {}
-            WorldObject const& GetFocusObject() const { return *m_focus; }
-            bool operator()(Creature* creature)
-            {
-                if (!creature || m_accepted >= m_maximum || !m_focus->IsWithinDist(creature, m_range, false))
-                    return false;
-                ++m_accepted;
-                return true;
-            }
-        private:
-            WorldObject const* m_focus;
-            float m_range;
-            size_t m_maximum;
-            size_t m_accepted = 0;
-        };
-
-        class BoundedGameObjectRangeCheck
-        {
-        public:
-            BoundedGameObjectRangeCheck(WorldObject const* focus, float range, size_t maximum)
-                : m_focus(focus), m_range(range), m_maximum(maximum) {}
-            WorldObject const& GetFocusObject() const { return *m_focus; }
-            bool operator()(GameObject* object)
-            {
-                if (!object || m_accepted >= m_maximum || !m_focus->IsWithinDist(object, m_range, false))
-                    return false;
-                ++m_accepted;
-                return true;
-            }
-        private:
-            WorldObject const* m_focus;
-            float m_range;
-            size_t m_maximum;
-            size_t m_accepted = 0;
-        };
-
-        class BoundedPlayerRangeCheck
-        {
-        public:
-            BoundedPlayerRangeCheck(WorldObject const* focus, float range, size_t maximum)
-                : m_focus(focus), m_range(range), m_maximum(maximum) {}
-            WorldObject const& GetFocusObject() const { return *m_focus; }
-            bool operator()(Player* player)
-            {
-                if (!player || m_accepted >= m_maximum || !player->IsAlive() ||
-                    !m_focus->IsWithinDistInMap(player, m_range))
-                    return false;
-                ++m_accepted;
-                return true;
-            }
-        private:
-            WorldObject const* m_focus;
-            float m_range;
-            size_t m_maximum;
-            size_t m_accepted = 0;
-        };
 
         std::string Lower(std::string value)
         {
@@ -177,40 +93,6 @@ namespace AzerothVoices
                 value.replace(position, from.size(), to);
                 position += to.size();
             }
-        }
-
-        std::string SanitizeEndpoint(std::string endpoint)
-        {
-            size_t const scheme = endpoint.find("://");
-            size_t const authorityBegin = scheme == std::string::npos ? 0 : scheme + 3;
-            size_t const pathBegin = endpoint.find('/', authorityBegin);
-            size_t const authorityEnd = pathBegin == std::string::npos ? endpoint.size() : pathBegin;
-            size_t const at = endpoint.rfind('@', authorityEnd);
-            if (at != std::string::npos && at >= authorityBegin)
-                endpoint.erase(authorityBegin, at - authorityBegin + 1);
-            size_t const query = endpoint.find('?');
-            if (query != std::string::npos)
-                endpoint.replace(query, std::string::npos, "?[REDACTED]");
-            size_t const fragment = endpoint.find('#');
-            if (fragment != std::string::npos)
-                endpoint.erase(fragment);
-            return endpoint;
-        }
-
-        std::string RedactSecrets(Config const& config, std::string value)
-        {
-            std::string const apiKey = config.ResolveApiKey();
-            if (!apiKey.empty())
-                ReplaceAll(value, apiKey, "[REDACTED]");
-            return value;
-        }
-
-        bool IsLocalEndpoint(std::string endpoint)
-        {
-            endpoint = Lower(std::move(endpoint));
-            return endpoint.find("http://localhost") == 0 ||
-                   endpoint.find("http://127.0.0.1") == 0 ||
-                   endpoint.find("http://[::1]") == 0;
         }
 
         std::string RaceName(uint8_t race)
@@ -266,31 +148,6 @@ namespace AzerothVoices
             return "neutral";
         }
 
-        char const* GameObjectTypeName(GameobjectTypes type)
-        {
-            switch (type)
-            {
-                case GAMEOBJECT_TYPE_DOOR: return "door";
-                case GAMEOBJECT_TYPE_BUTTON: return "button";
-                case GAMEOBJECT_TYPE_QUESTGIVER: return "quest object";
-                case GAMEOBJECT_TYPE_CHEST: return "chest";
-                case GAMEOBJECT_TYPE_TRAP: return "trap";
-                case GAMEOBJECT_TYPE_CHAIR: return "chair";
-                case GAMEOBJECT_TYPE_SPELL_FOCUS: return "spell focus";
-                case GAMEOBJECT_TYPE_TEXT: return "readable object";
-                case GAMEOBJECT_TYPE_GOOBER: return "interactive object";
-                case GAMEOBJECT_TYPE_TRANSPORT:
-                case GAMEOBJECT_TYPE_MO_TRANSPORT: return "transport";
-                case GAMEOBJECT_TYPE_FISHINGNODE: return "fishing node";
-                case GAMEOBJECT_TYPE_SUMMONING_RITUAL: return "summoning ritual";
-                case GAMEOBJECT_TYPE_MAILBOX: return "mailbox";
-                case GAMEOBJECT_TYPE_AUCTIONHOUSE: return "auction house";
-                case GAMEOBJECT_TYPE_MEETINGSTONE: return "meeting stone";
-                case GAMEOBJECT_TYPE_FISHINGHOLE: return "fishing pool";
-                default: return "world object";
-            }
-        }
-
         std::string ScopeName(ChatScope scope)
         {
             switch (scope)
@@ -306,51 +163,6 @@ namespace AzerothVoices
                 case ChatScope::World: return "world";
             }
             return "say";
-        }
-
-        std::string ActorKindName(ActorKind kind)
-        {
-            return kind == ActorKind::Creature ? "npc" : "playerbot";
-        }
-
-        std::string SanitizeLogText(std::string const& value)
-        {
-            constexpr size_t maximumLength = 500;
-            std::string result;
-            result.reserve(std::min(value.size(), maximumLength));
-            bool previousSpace = false;
-            for (unsigned char input : value)
-            {
-                char output = static_cast<char>(input);
-                if (output == '\r' || output == '\n' || output == '\t' || std::iscntrl(input))
-                    output = ' ';
-                else if (output == '"')
-                    output = '\'';
-
-                bool const space = std::isspace(static_cast<unsigned char>(output)) != 0;
-                if (space && previousSpace)
-                    continue;
-                result.push_back(output);
-                previousSpace = space;
-                if (result.size() >= maximumLength)
-                {
-                    result += "...";
-                    break;
-                }
-            }
-            return Trim(result);
-        }
-
-        std::string JoinReplyLines(std::vector<std::string> const& lines)
-        {
-            std::string result;
-            for (std::string const& line : lines)
-            {
-                if (!result.empty())
-                    result += " / ";
-                result += line;
-            }
-            return SanitizeLogText(result);
         }
 
         bool IsScopeEnabled(Config const& config, ChatScope scope)
@@ -436,8 +248,6 @@ namespace AzerothVoices
             result.guild = GuildName(player);
             result.groupStatus = player->GetGroup() ? "in a group" : "solo";
             result.level = player->GetLevel();
-            result.groupId = player->GetGroup() ? player->GetGroup()->GetId() : 0;
-            result.guildId = player->GetGuildId();
             result.isBot = Script_IsAIControlled(player);
             return result;
         }
@@ -532,62 +342,6 @@ namespace AzerothVoices
             return key.str();
         }
 
-        std::string ActorKey(ActorSnapshot const& actor)
-        {
-            return std::to_string(static_cast<unsigned>(actor.kind)) + ':' + std::to_string(actor.guid);
-        }
-
-        std::string ScopeKey(ChatScope scope, std::string const& channel,
-                             ActorSnapshot const& location, SpeakerSnapshot const& speaker)
-        {
-            std::ostringstream key;
-            key << static_cast<unsigned>(scope) << ':';
-            switch (scope)
-            {
-                case ChatScope::Whisper:
-                    key << std::min(speaker.guid, location.guid) << ':'
-                        << std::max(speaker.guid, location.guid);
-                    break;
-                case ChatScope::Party:
-                case ChatScope::Raid:
-                    key << "group:" << speaker.groupId;
-                    break;
-                case ChatScope::Guild:
-                case ChatScope::Officer:
-                    key << "guild:" << speaker.guildId;
-                    break;
-                case ChatScope::Channel:
-                case ChatScope::World:
-                    key << "channel:" << Lower(channel);
-                    break;
-                case ChatScope::Say:
-                case ChatScope::Yell:
-                    key << "place:" << location.mapId << ':' << location.areaId;
-                    break;
-            }
-            return key.str();
-        }
-
-        std::string HeadBounded(std::string value, size_t maximum)
-        {
-            if (value.size() <= maximum)
-                return value;
-            if (maximum <= 3)
-                return value.substr(0, maximum);
-            value.resize(maximum - 3);
-            value += "...";
-            return value;
-        }
-
-        std::string TailBounded(std::string value, size_t maximum)
-        {
-            if (value.size() <= maximum)
-                return value;
-            if (maximum <= 3)
-                return value.substr(value.size() - maximum);
-            return "..." + value.substr(value.size() - (maximum - 3));
-        }
-
         std::vector<std::string> Words(std::string const& input)
         {
             std::vector<std::string> words;
@@ -673,9 +427,6 @@ namespace AzerothVoices
             return;
         }
 
-        if (m_config->ResolveApiKey().empty())
-            sLog.outError("[AzerothVoices] API key resolved empty; provider requests will omit the Authorization header.");
-
         std::string tlsError;
         if (!Provider::InitializeTls(tlsError))
         {
@@ -683,41 +434,29 @@ namespace AzerothVoices
             return;
         }
 
-        InitializeDatabaseStorage();
-        LoadRag();
+        LoadKnowledge();
         m_stopping = false;
         m_started = true;
         m_lastErrorLog = Clock::time_point();
         m_suppressedErrors = 0;
-        m_telemetryWindowStarted = Clock::now();
-        m_telemetryApiCalls = 0;
-        m_telemetrySuccessfulResults = 0;
-        m_telemetryFailedResults = 0;
-        m_telemetryGeneratedMessages = 0;
-        m_telemetryRecentMessages.clear();
-        m_nextHistoryPrune = Clock::now() + std::chrono::minutes(1);
-        m_nextDatabaseFlush = Clock::now() + std::chrono::seconds(m_config->historyDatabaseFlushSeconds);
-        m_nextDatabaseCleanup = Clock::now() + std::chrono::hours(1);
         for (uint32_t i = 0; i < m_config->workerThreads; ++i)
             m_workers.emplace_back(&Manager::WorkerLoop, this);
         ScheduleNextAmbient();
 
         sLog.outString("[AzerothVoices] Started with %u workers, endpoint %s, model %s.",
-            m_config->workerThreads, SanitizeEndpoint(m_config->endpoint).c_str(), m_config->model.c_str());
+            m_config->workerThreads, m_config->endpoint.c_str(), m_config->model.c_str());
         if (!m_config->legacyCharacterCardFile.empty())
-            sLog.outString("[AzerothVoices][CONFIG] AiPlayerbot.LLMDefaultPromptsFile is intentionally ignored; this module uses one global prompt and no per-bot personalities.");
+            sLog.outString("[AzerothVoices] AiPlayerbot.LLMDefaultPromptsFile is intentionally ignored; this module uses one global prompt and no per-bot personalities.");
     }
 
     void Manager::Reload()
     {
-        sLog.outString("[AzerothVoices][INIT] Reloading configuration and restarting workers.");
+        sLog.outString("[AzerothVoices] Reloading configuration.");
         Start();
     }
 
     void Manager::Stop()
     {
-        if (m_config)
-            FlushDatabaseWrites(true);
         m_started = false;
         m_stopping = true;
         m_queueReady.notify_all();
@@ -745,20 +484,6 @@ namespace AzerothVoices
         m_actorCooldowns.clear();
         m_speakerCooldowns.clear();
         m_eventCooldowns.clear();
-        m_history.clear();
-        m_surroundingChat.clear();
-        m_snapshotHistory.clear();
-        m_databaseLoadedHistoryKeys.clear();
-        m_databaseLoadedSnapshotKeys.clear();
-        m_pendingHistoryWrites.clear();
-        m_pendingSnapshotWrites.clear();
-        m_historyDatabaseAvailable = false;
-        m_snapshotDatabaseAvailable = false;
-        m_telemetryRecentMessages.clear();
-        m_telemetryApiCalls = 0;
-        m_telemetrySuccessfulResults = 0;
-        m_telemetryFailedResults = 0;
-        m_telemetryGeneratedMessages = 0;
         m_inFlight = 0;
     }
 
@@ -768,19 +493,8 @@ namespace AzerothVoices
             return;
         DrainIngress();
         DrainCompletions();
-        ReportTelemetry();
         DeliverScheduled();
-        FlushDatabaseWrites();
-        if (Clock::now() >= m_nextHistoryPrune)
-        {
-            PruneHistory();
-            m_nextHistoryPrune = Clock::now() + std::chrono::minutes(1);
-        }
-        if ((m_historyDatabaseAvailable || m_snapshotDatabaseAvailable) && Clock::now() >= m_nextDatabaseCleanup)
-        {
-            CleanupDatabase();
-            m_nextDatabaseCleanup = Clock::now() + std::chrono::hours(1);
-        }
+        PruneHistory();
         if (!m_paused && m_config->randomChatterEnabled && Clock::now() >= m_nextAmbient)
         {
             RunAmbient();
@@ -840,21 +554,18 @@ namespace AzerothVoices
 
             ++m_inFlight;
             ChatCompletion completion;
-            uint32_t retries = 0;
-            uint32_t httpAttempts = 0;
+            uint32_t attempts = 0;
             do
             {
                 completion = Provider::Execute(*m_config, request);
-                httpAttempts += completion.httpAttemptCount;
                 bool retryable = !completion.success &&
                     (completion.httpStatus == 0 || completion.httpStatus == 429 || completion.httpStatus >= 500);
-                if (!retryable || retries >= m_config->retryMaximum || m_stopping)
+                if (!retryable || attempts >= m_config->retryMaximum || m_stopping)
                     break;
-                ++retries;
+                ++attempts;
                 std::this_thread::sleep_for(std::chrono::milliseconds(
-                    m_config->retryBackoffMilliseconds * retries));
+                    m_config->retryBackoffMilliseconds * attempts));
             } while (Clock::now() <= request.expires);
-            completion.httpAttemptCount = httpAttempts;
             --m_inFlight;
 
             {
@@ -930,8 +641,7 @@ namespace AzerothVoices
             }
         }
 
-        if (!request.id)
-            request.id = m_nextRequestId++;
+        request.id = m_nextRequestId++;
         request.created = now;
         request.expires = now + std::chrono::seconds(m_config->requestTtlSeconds);
         m_latestRequestByActor[request.actor.guid] = request.id;
@@ -940,6 +650,17 @@ namespace AzerothVoices
         m_requestBudget.push_back(now);
         m_actorCooldowns[m_queues[priorityIndex].back().actor.guid] =
             now + std::chrono::seconds(cooldownSeconds);
+        if (m_config->tracePrompts)
+        {
+            ChatRequest const& queued = m_queues[priorityIndex].back();
+            sLog.outDebug("[AzerothVoices] Request %llu system: %s",
+                static_cast<unsigned long long>(queued.id), queued.systemPrompt.c_str());
+            sLog.outDebug("[AzerothVoices] Request %llu user: %s",
+                static_cast<unsigned long long>(queued.id), queued.userPrompt.c_str());
+            if (!queued.context.empty())
+                sLog.outDebug("[AzerothVoices] Request %llu context: %s",
+                    static_cast<unsigned long long>(queued.id), queued.context.c_str());
+        }
         ++m_accepted;
         m_queueReady.notify_one();
         return true;
@@ -951,7 +672,6 @@ namespace AzerothVoices
                                       RequestPriority priority, bool ambient, bool allowFollowup)
     {
         ChatRequest request;
-        request.id = m_nextRequestId++;
         request.priority = priority;
         request.actor = actor;
         request.speaker = speaker;
@@ -962,7 +682,6 @@ namespace AzerothVoices
         request.ambient = ambient;
         request.allowFollowup = allowFollowup;
         request.historyKey = HistoryKey(*m_config, actor, speaker, scope, channelName);
-        request.scopeKey = ScopeKey(scope, channelName, actor, speaker);
 
         std::string rolePrompt = actor.kind == ActorKind::Creature ? m_config->rpgPrompt : m_config->prePrompt;
         request.systemPrompt = m_config->globalPrompt;
@@ -970,10 +689,7 @@ namespace AzerothVoices
             request.systemPrompt += "\n" + rolePrompt;
         request.systemPrompt += "\nThe reply will be sent through " +
             (channelName.empty() ? ScopeName(scope) : channelName) +
-            ". Keep it concise and return dialogue only. Treat the current message and current live environment "
-            "as authoritative. Older conversation, snapshot history, and retrieved lore are optional context: "
-            "use only details directly relevant to the current reply, do not assume old state is still true, and "
-            "do not invent facts to reconcile stale or conflicting context.";
+            ". Keep it concise and return dialogue only.";
 
         if (ambient)
             request.userPrompt = "Create one natural line now. Situation or topic: " + message;
@@ -986,49 +702,19 @@ namespace AzerothVoices
 
         request.systemPrompt = Expand(request.systemPrompt, request);
         request.userPrompt = Expand(request.userPrompt, request);
-        std::string const currentEnvironment = BuildEnvironmentContext(request);
-        std::string const history = BuildHistoryContext(request);
-        std::string const surrounding = BuildSurroundingContext(request);
-        request.currentSnapshot = BuildCurrentSnapshotContext(request);
-        std::string const snapshotHistory = BuildSnapshotHistoryContext(request);
-        std::string rag = SelectRag(request);
-        if (!rag.empty())
-        {
-            std::string block = m_config->ragPromptTemplate;
-            ReplaceAll(block, "{rag_info}", rag);
-            ReplaceAll(block, "\\n", "\n");
-            rag = std::move(block);
-        }
+        request.context = BuildEnvironmentContext(request);
+        std::string history = BuildHistoryContext(request);
+        if (!history.empty())
+            request.context += (request.context.empty() ? "" : "\n\n") + history;
 
-        // Allocate the fixed context budget by importance. The final ordering
-        // keeps the authoritative live snapshot closest to the new user turn.
-        size_t remaining = m_config->contextLength;
-        auto reserveHead = [&](std::string const& value) {
-            std::string selected = HeadBounded(value, remaining);
-            remaining -= selected.size();
-            return selected;
-        };
-        auto reserveTail = [&](std::string const& value) {
-            std::string selected = TailBounded(value, remaining);
-            remaining -= selected.size();
-            return selected;
-        };
-        std::string keptCurrent = reserveHead(currentEnvironment);
-        std::string keptSnapshot = reserveHead(request.currentSnapshot);
-        std::string keptHistory = reserveTail(history);
-        std::string keptSurrounding = reserveTail(surrounding);
-        std::string keptSnapshotHistory = reserveTail(snapshotHistory);
-        std::string keptRag = reserveHead(rag);
-        auto appendBlock = [&](std::string const& block) {
-            if (!block.empty())
-                request.context += (request.context.empty() ? "" : "\n\n") + block;
-        };
-        appendBlock(keptHistory);
-        appendBlock(keptSurrounding);
-        appendBlock(keptSnapshotHistory);
-        appendBlock(keptRag);
-        appendBlock(keptCurrent);
-        appendBlock(keptSnapshot);
+        std::string knowledge = SelectKnowledge(request);
+        if (!knowledge.empty())
+        {
+            std::string block = m_config->knowledgePromptTemplate;
+            ReplaceAll(block, "<knowledge>", knowledge);
+            ReplaceAll(block, "\\n", "\n");
+            request.context += (request.context.empty() ? "" : "\n\n") + block;
+        }
         if (request.context.size() > m_config->contextLength)
             request.context.erase(0, request.context.size() - m_config->contextLength);
         return request;
@@ -1201,8 +887,6 @@ namespace AzerothVoices
         if (m_ingress.size() >= 2048)
         {
             ++m_dropped;
-            if (m_config)
-                sLog.outError("[AzerothVoices] World-thread ingress queue is full; chat signal dropped.");
             return;
         }
         m_ingress.push_back(std::move(signal));
@@ -1216,10 +900,6 @@ namespace AzerothVoices
             IsBlockedChannel(*m_config, scope, channelName) || IsBlacklisted(*m_config, message))
             return;
 
-        SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(speaker);
-        if (scope != ChatScope::Whisper)
-            RecordSurroundingChat(scope, channelName, SnapshotBot(speaker), speakerSnapshot, message);
-
         auto now = Clock::now();
         if (scope != ChatScope::Whisper && m_config->speakerCooldownSeconds)
         {
@@ -1231,9 +911,8 @@ namespace AzerothVoices
         std::vector<Candidate> candidates = CollectCandidates(speaker, scope, targetName, message, false);
         if (candidates.empty())
             return;
-        if (scope == ChatScope::Whisper)
-            RecordSurroundingChat(scope, channelName, candidates.front().actor, speakerSnapshot, message);
 
+        SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(speaker);
         bool accepted = false;
         uint32_t maximum = scope == ChatScope::Whisper ? 1 : m_config->maxResponders;
         for (size_t i = 0; i < candidates.size() && i < maximum; ++i)
@@ -1511,7 +1190,6 @@ namespace AzerothVoices
         auto const now = Clock::now();
         for (ChatCompletion& completion : completions)
         {
-            RecordApiResult(completion);
             bool current = false;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -1536,8 +1214,7 @@ namespace AzerothVoices
                         sLog.outError("[AzerothVoices] %u additional provider errors were suppressed.", m_suppressedErrors);
                     sLog.outError("[AzerothVoices] Request %llu for %s failed: %s",
                         static_cast<unsigned long long>(completion.request.id),
-                        SanitizeLogText(completion.request.actor.name).c_str(),
-                        RedactSecrets(*m_config, completion.error).c_str());
+                        completion.request.actor.name.c_str(), completion.error.c_str());
                     m_lastErrorLog = now;
                     m_suppressedErrors = 0;
                 }
@@ -1552,8 +1229,6 @@ namespace AzerothVoices
                 ++m_failed;
                 continue;
             }
-
-            RecordGeneratedMessage(completion, lines);
 
             uint64_t cumulativeDelay = m_config->typingSimulationEnabled
                 ? m_config->typingBaseDelayMilliseconds : 0;
@@ -1578,103 +1253,11 @@ namespace AzerothVoices
                     cumulativeDelay += 500;
             }
             ++m_completed;
+            if (m_config->debug)
+                sLog.outDebug("[AzerothVoices] Request %llu completed in %u ms; %u line(s) scheduled.",
+                    static_cast<unsigned long long>(completion.request.id), completion.elapsedMilliseconds,
+                    static_cast<unsigned>(lines.size()));
         }
-    }
-
-    void Manager::RecordApiResult(ChatCompletion const& completion)
-    {
-        if (!m_config || !m_config->consoleApiCallStats)
-            return;
-
-        m_telemetryApiCalls += completion.httpAttemptCount;
-        if (completion.success)
-            ++m_telemetrySuccessfulResults;
-        else
-            ++m_telemetryFailedResults;
-    }
-
-    void Manager::RecordGeneratedMessage(ChatCompletion const& completion,
-                                         std::vector<std::string> const& lines)
-    {
-        if (!m_config || (!m_config->consoleGeneratedMessages &&
-                          !m_config->consoleApiCallStats))
-            return;
-
-        TelemetryMessage message;
-        message.requestId = completion.request.id;
-        message.actorName = SanitizeLogText(completion.request.actor.name);
-        message.actorKind = ActorKindName(completion.request.actor.kind);
-        message.scope = ScopeName(completion.request.scope);
-        message.trigger = SanitizeLogText(completion.request.trigger);
-        message.speakerName = SanitizeLogText(completion.request.speaker.name);
-        if (message.speakerName.empty())
-            message.speakerName = "system";
-        message.text = JoinReplyLines(lines);
-        message.channelName = SanitizeLogText(completion.request.channelName);
-        message.model = SanitizeLogText(m_config->model);
-        message.actorGuid = completion.request.actor.guid;
-        message.httpStatus = completion.httpStatus;
-        message.elapsedMilliseconds = completion.elapsedMilliseconds;
-        message.apiAttempts = completion.httpAttemptCount;
-
-        if (m_config->consoleGeneratedMessages)
-            sLog.outString("[AzerothVoices][Generated] request=%llu actor=\"%s\" guid=%llu kind=%s scope=%s channel=\"%s\" trigger=%s speaker=\"%s\" model=\"%s\" http=%d attempts=%u latency=%u ms text=\"%s\"",
-                static_cast<unsigned long long>(message.requestId), message.actorName.c_str(),
-                static_cast<unsigned long long>(message.actorGuid), message.actorKind.c_str(),
-                message.scope.c_str(), message.channelName.c_str(), message.trigger.c_str(),
-                message.speakerName.c_str(), message.model.c_str(), message.httpStatus,
-                message.apiAttempts, message.elapsedMilliseconds,
-                message.text.c_str());
-
-        if (!m_config->consoleApiCallStats)
-            return;
-
-        ++m_telemetryGeneratedMessages;
-        if (!m_config->consoleRecentMessages)
-            return;
-        m_telemetryRecentMessages.push_back(std::move(message));
-        while (m_telemetryRecentMessages.size() > m_config->consoleRecentMessages)
-            m_telemetryRecentMessages.pop_front();
-    }
-
-    void Manager::ReportTelemetry()
-    {
-        if (!m_config || !m_config->consoleApiCallStats)
-            return;
-
-        auto const now = Clock::now();
-        if (m_telemetryWindowStarted == Clock::time_point())
-            m_telemetryWindowStarted = now;
-        auto const elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - m_telemetryWindowStarted).count();
-        if (elapsed < m_config->consoleApiCallStatsIntervalSeconds)
-            return;
-
-        sLog.outString("[AzerothVoices][Telemetry] past %lld seconds: API calls=%llu, successful results=%llu, failed results=%llu, generated messages=%llu.",
-            static_cast<long long>(elapsed),
-            static_cast<unsigned long long>(m_telemetryApiCalls),
-            static_cast<unsigned long long>(m_telemetrySuccessfulResults),
-            static_cast<unsigned long long>(m_telemetryFailedResults),
-            static_cast<unsigned long long>(m_telemetryGeneratedMessages));
-
-        if (!m_telemetryRecentMessages.empty())
-            sLog.outString("[AzerothVoices][Telemetry] Most recent %u generated message(s) in this window:",
-                static_cast<unsigned>(m_telemetryRecentMessages.size()));
-        for (TelemetryMessage const& message : m_telemetryRecentMessages)
-            sLog.outString("[AzerothVoices][Telemetry] request=%llu actor=\"%s\" guid=%llu kind=%s scope=%s channel=\"%s\" trigger=%s speaker=\"%s\" model=\"%s\" http=%d attempts=%u latency=%u ms text=\"%s\"",
-                static_cast<unsigned long long>(message.requestId), message.actorName.c_str(),
-                static_cast<unsigned long long>(message.actorGuid), message.actorKind.c_str(),
-                message.scope.c_str(), message.channelName.c_str(), message.trigger.c_str(),
-                message.speakerName.c_str(), message.model.c_str(), message.httpStatus,
-                message.apiAttempts, message.elapsedMilliseconds,
-                message.text.c_str());
-
-        m_telemetryWindowStarted = now;
-        m_telemetryApiCalls = 0;
-        m_telemetrySuccessfulResults = 0;
-        m_telemetryFailedResults = 0;
-        m_telemetryGeneratedMessages = 0;
-        m_telemetryRecentMessages.clear();
     }
 
     void Manager::DeliverScheduled()
@@ -1692,33 +1275,10 @@ namespace AzerothVoices
             if (delivered && it->firstLine)
             {
                 AddHistory(it->request, it->text);
-                AddSnapshotHistory(it->request, it->request.currentSnapshot);
-                SpeakerSnapshot actorSpeaker;
-                actorSpeaker.guid = it->request.actor.guid;
-                actorSpeaker.name = it->request.actor.name;
-                actorSpeaker.race = it->request.actor.race;
-                actorSpeaker.className = it->request.actor.className;
-                actorSpeaker.gender = it->request.actor.gender;
-                actorSpeaker.faction = it->request.actor.faction;
-                actorSpeaker.guild = it->request.actor.guild;
-                actorSpeaker.groupStatus = it->request.actor.groupStatus;
-                actorSpeaker.level = it->request.actor.level;
-                actorSpeaker.groupId = it->request.speaker.groupId;
-                actorSpeaker.guildId = it->request.speaker.guildId;
-                actorSpeaker.isBot = true;
-                ActorSnapshot replyLocation = it->request.actor;
-                if (it->request.scope == ChatScope::Whisper)
-                    replyLocation.guid = it->request.speaker.guid;
-                RecordSurroundingChat(it->request.scope, it->request.channelName,
-                    replyLocation, actorSpeaker, it->text);
                 MaybeQueueFollowup(it->request, it->text);
             }
             if (!delivered && m_config->debug)
-                sLog.outDebug("[AzerothVoices] Reply discarded because actor %s is unavailable.",
-                    SanitizeLogText(it->request.actor.name).c_str());
-            else if (delivered && m_config->debug)
-                sLog.outDebug("[AzerothVoices] %s replied through %s.",
-                    SanitizeLogText(it->request.actor.name).c_str(), ScopeName(it->request.scope).c_str());
+                sLog.outDebug("[AzerothVoices] Discarded reply for unavailable actor %s.", it->request.actor.name.c_str());
             it = m_scheduled.erase(it);
         }
     }
@@ -1832,24 +1392,19 @@ namespace AzerothVoices
         context << "Current environment: map=" << request.actor.map
                 << ", zone=" << request.actor.zone
                 << ", area=" << request.actor.area
-                << ", level=" << request.actor.level;
-        bool const detailedPlayerBot = m_config->snapshotEnabled && request.actor.kind == ActorKind::PlayerBot;
-        if (!detailedPlayerBot || !m_config->snapshotIncludeCombat)
-            context << ", state=" << (request.actor.inCombat ? "in combat" : "out of combat");
-        if (!detailedPlayerBot || !m_config->snapshotIncludeGroup)
-            context << ", group=" << request.actor.groupStatus;
+                << ", level=" << request.actor.level
+                << ", state=" << (request.actor.inCombat ? "in combat" : "out of combat")
+                << ", group=" << request.actor.groupStatus;
         if (!request.actor.guild.empty())
             context << ", guild=" << request.actor.guild;
         if (center && center->FindMap() && center->FindMap()->IsDungeon())
             context << ", inside a dungeon";
 
-        if (center && m_config->environmentMaximumCreatures &&
-            (!detailedPlayerBot || !m_config->snapshotIncludeLineOfSight))
+        if (center && m_config->environmentMaximumCreatures)
         {
-            size_t const candidateLimit = static_cast<size_t>(m_config->environmentMaximumCreatures) * 4 + 16;
-            BoundedCreatureRangeCheck check(center, m_config->environmentContextDistance, candidateLimit);
+            MaNGOS::AllCreaturesInRange check(center, m_config->environmentContextDistance);
             std::list<Creature*> creatures;
-            MaNGOS::CreatureListSearcher<BoundedCreatureRangeCheck> searcher(creatures, check);
+            MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesInRange> searcher(creatures, check);
             Cell::VisitGridObjects(center, searcher, m_config->environmentContextDistance);
             uint32_t count = 0;
             for (Creature* creature : creatures)
@@ -1883,943 +1438,137 @@ namespace AzerothVoices
         return context.str();
     }
 
-    std::string Manager::BuildCurrentSnapshotContext(ChatRequest const& request) const
-    {
-        if (!m_config->snapshotEnabled || request.actor.kind != ActorKind::PlayerBot)
-            return "";
-
-        Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.guid));
-        if (!bot || !bot->IsInWorld())
-            return "";
-
-        auto healthText = [](Unit const* unit) {
-            std::ostringstream value;
-            uint32_t const maximum = unit ? unit->GetMaxHealth() : 0;
-            uint32_t const current = unit ? unit->GetHealth() : 0;
-            uint32_t const percent = maximum ? static_cast<uint32_t>((static_cast<uint64_t>(current) * 100) / maximum) : 0;
-            value << current << '/' << maximum << " (" << percent << "%)";
-            return value.str();
-        };
-        auto distanceText = [bot](WorldObject const* object) {
-            return std::to_string(static_cast<uint32_t>(bot->GetDistance(object) + 0.5f)) + " yd";
-        };
-        auto appendSectionLine = [](std::string& section, std::string const& heading, std::string const& line) {
-            if (line.empty())
-                return;
-            if (section.empty())
-                section = heading + ":\n";
-            section += "- " + line + "\n";
-        };
-
-        std::string combat;
-        if (m_config->snapshotIncludeCombat)
-        {
-            std::ostringstream line;
-            line << "Bot health=" << healthText(bot)
-                 << ", state=" << (bot->IsInCombat() ? "in combat" : "out of combat");
-            Powers const power = bot->GetPowerType();
-            char const* powerName = "power";
-            switch (power)
-            {
-                case POWER_MANA: powerName = "mana"; break;
-                case POWER_RAGE: powerName = "rage"; break;
-                case POWER_ENERGY: powerName = "energy"; break;
-                default: break;
-            }
-            uint32_t currentPower = static_cast<uint32_t>(bot->GetPower(power));
-            uint32_t maximumPower = static_cast<uint32_t>(bot->GetMaxPower(power));
-            if (power == POWER_RAGE)
-            {
-                currentPower /= 10;
-                maximumPower /= 10;
-            }
-            line << ", " << powerName << '=' << currentPower << '/' << maximumPower;
-            Unit* target = bot->GetVictim();
-            char const* targetKind = "victim";
-            if (!target && !bot->GetSelectionGuid().IsEmpty())
-            {
-                target = ObjectAccessor::GetUnit(*bot, bot->GetSelectionGuid());
-                targetKind = "selected target";
-            }
-            if (target)
-                line << ", " << targetKind << '=' << target->GetName() << " (level " << target->GetLevel()
-                     << ", health " << healthText(target) << ')';
-            combat = "Combat and resources:\n- " + line.str() + "\n";
-        }
-
-        std::string group;
-        if (m_config->snapshotIncludeGroup && m_config->snapshotMaximumGroupMembers)
-        {
-            if (Group* botGroup = bot->GetGroup())
-            {
-                uint32_t count = 0;
-                for (GroupReference* reference = botGroup->GetFirstMember(); reference &&
-                     count < m_config->snapshotMaximumGroupMembers; reference = reference->next())
-                {
-                    Player* member = reference->getSource();
-                    if (!member || member == bot || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
-                        continue;
-                    std::ostringstream line;
-                    line << member->GetName() << ", level " << member->GetLevel() << ' '
-                         << RaceName(member->GetRace()) << ' ' << ClassName(member->GetClass())
-                         << ", health " << healthText(member) << ", distance " << distanceText(member);
-                    if (member->IsInCombat())
-                    {
-                        line << ", fighting";
-                        if (member->GetVictim())
-                            line << ' ' << member->GetVictim()->GetName();
-                    }
-                    appendSectionLine(group, "Nearby group members", line.str());
-                    ++count;
-                }
-            }
-        }
-
-        std::string spells;
-        if (m_config->snapshotIncludeSpells && m_config->snapshotMaximumSpells)
-        {
-            struct KnownSpell { uint8_t rank = 0; uint32_t id = 0; SpellEntry const* info = nullptr; };
-            std::map<std::string, KnownSpell> highestByName;
-            static std::set<std::string> const ignored = {
-                "attack", "opening", "closing", "stuck", "remove insignia", "opening - no text",
-                "grovel", "duel", "honorless target"
-            };
-            for (auto const& learned : bot->GetSpellMap())
-            {
-                uint32_t const spellId = learned.first;
-                if (learned.second.state == PLAYERSPELL_REMOVED || learned.second.disabled)
-                    continue;
-                SpellEntry const* info = sSpellMgr.GetSpellEntry(spellId);
-                if (!info || info->IsPassiveSpell() || info->SpellName[0].empty())
-                    continue;
-                std::string const name = info->SpellName[0];
-                uint8_t const rank = sSpellMgr.GetSpellRank(spellId);
-                if (ignored.count(Lower(name)) || (!rank && info->SpellFamilyName == SPELLFAMILY_GENERIC))
-                    continue;
-                KnownSpell& selected = highestByName[name];
-                if (!selected.info || rank > selected.rank || (rank == selected.rank && spellId > selected.id))
-                    selected = { rank, spellId, info };
-            }
-            uint32_t count = 0;
-            for (auto const& selected : highestByName)
-            {
-                if (count++ >= m_config->snapshotMaximumSpells)
-                    break;
-                std::ostringstream line;
-                line << selected.first;
-                KnownSpell const& spell = selected.second;
-                if (spell.rank)
-                    line << " (rank " << static_cast<uint32_t>(spell.rank) << ')';
-                if (spell.info->manaCost)
-                {
-                    char const* costName = spell.info->powerType == POWER_RAGE ? "rage" :
-                        (spell.info->powerType == POWER_ENERGY ? "energy" : "mana");
-                    uint32_t cost = spell.info->manaCost;
-                    if (spell.info->powerType == POWER_RAGE)
-                        cost /= 10;
-                    line << ", cost " << cost << ' ' << costName;
-                }
-                appendSectionLine(spells, "Known usable spells (highest known rank per name)", line.str());
-            }
-        }
-
-        std::string quests;
-        if (m_config->snapshotIncludeQuests && m_config->snapshotMaximumQuests)
-        {
-            uint32_t count = 0;
-            for (uint8_t slot = 0; slot < MAX_QUEST_LOG_SIZE && count < m_config->snapshotMaximumQuests; ++slot)
-            {
-                uint32_t const questId = bot->GetQuestSlotQuestId(slot);
-                if (!questId)
-                    continue;
-                Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
-                if (!quest)
-                    continue;
-                QuestStatus const status = bot->GetQuestStatus(questId);
-                std::string statusName = status == QUEST_STATUS_COMPLETE ? "complete" :
-                    (status == QUEST_STATUS_FAILED ? "failed" : "in progress");
-                appendSectionLine(quests, "Active quests", quest->GetTitle() + " (" + statusName + ")");
-                ++count;
-            }
-        }
-
-        std::string lineOfSight;
-        if (m_config->snapshotIncludeLineOfSight)
-        {
-            if (m_config->snapshotMaximumCreatures)
-            {
-                size_t const candidateLimit = static_cast<size_t>(m_config->snapshotMaximumCreatures) * 4 + 16;
-                BoundedCreatureRangeCheck check(bot, m_config->snapshotDistance, candidateLimit);
-                std::list<Creature*> creatures;
-                MaNGOS::CreatureListSearcher<BoundedCreatureRangeCheck> searcher(creatures, check);
-                Cell::VisitGridObjects(bot, searcher, m_config->snapshotDistance);
-                std::vector<std::pair<float, std::string>> visible;
-                for (Creature* creature : creatures)
-                {
-                    if (!creature || !creature->IsInWorld() || creature->IsPet() || creature->IsTotem() ||
-                        creature->IsCritter() || !bot->IsWithinLOSInMap(creature))
-                        continue;
-                    std::ostringstream line;
-                    line << creature->GetName() << ", level " << creature->GetLevel() << ", "
-                         << (creature->IsHostileTo(bot) ? "hostile" : (creature->IsFriendlyTo(bot) ? "friendly" : "neutral"))
-                         << ", " << distanceText(creature);
-                    if (creature->IsInCombat() || creature->IsHostileTo(bot))
-                        line << ", health " << healthText(creature);
-                    if (creature->IsInCombat())
-                        line << ", in combat";
-                    visible.emplace_back(bot->GetDistance(creature), line.str());
-                }
-                std::stable_sort(visible.begin(), visible.end(), [](auto const& left, auto const& right) {
-                    return left.first < right.first;
-                });
-                std::set<std::string> seen;
-                uint32_t count = 0;
-                for (auto const& value : visible)
-                    if (seen.insert(value.second).second && count++ < m_config->snapshotMaximumCreatures)
-                        appendSectionLine(lineOfSight, "Visible creatures and game objects", value.second);
-            }
-
-            if (m_config->snapshotMaximumGameObjects)
-            {
-                size_t const candidateLimit = static_cast<size_t>(m_config->snapshotMaximumGameObjects) * 4 + 16;
-                BoundedGameObjectRangeCheck check(bot, m_config->snapshotDistance, candidateLimit);
-                std::list<GameObject*> gameObjects;
-                MaNGOS::GameObjectListSearcher<BoundedGameObjectRangeCheck> searcher(gameObjects, check);
-                Cell::VisitGridObjects(bot, searcher, m_config->snapshotDistance);
-                std::vector<std::pair<float, std::string>> visible;
-                for (GameObject* object : gameObjects)
-                {
-                    if (!object || !object->IsInWorld() || !object->IsSpawned() || !object->GetGOInfo() ||
-                        object->GetGOInfo()->name.empty() || !bot->IsWithinLOSInMap(object))
-                        continue;
-                    visible.emplace_back(bot->GetDistance(object), object->GetGOInfo()->name +
-                        " (" + GameObjectTypeName(object->GetGoType()) + ", " + distanceText(object) + ")");
-                }
-                std::stable_sort(visible.begin(), visible.end(), [](auto const& left, auto const& right) {
-                    return left.first < right.first;
-                });
-                std::set<std::string> seen;
-                uint32_t count = 0;
-                for (auto const& value : visible)
-                    if (seen.insert(value.second).second && count++ < m_config->snapshotMaximumGameObjects)
-                        appendSectionLine(lineOfSight, "Visible creatures and game objects", value.second);
-            }
-        }
-
-        std::string nearbyPlayers;
-        if (m_config->snapshotIncludeNearbyPlayers && m_config->snapshotMaximumPlayers)
-        {
-            size_t const candidateLimit = static_cast<size_t>(m_config->snapshotMaximumPlayers) * 4 + 16;
-            BoundedPlayerRangeCheck check(bot, m_config->snapshotDistance, candidateLimit);
-            std::list<Player*> players;
-            MaNGOS::PlayerListSearcher<BoundedPlayerRangeCheck> searcher(players, check);
-            Cell::VisitWorldObjects(bot, searcher, m_config->snapshotDistance);
-            std::vector<std::pair<float, std::string>> visible;
-            for (Player* player : players)
-            {
-                if (!player || player == bot || !player->IsInWorld() || player->IsGameMaster() ||
-                    !bot->IsWithinLOSInMap(player))
-                    continue;
-                std::ostringstream line;
-                line << player->GetName() << ", level " << player->GetLevel() << ' '
-                     << RaceName(player->GetRace()) << ' ' << ClassName(player->GetClass())
-                     << ", " << TeamName(player->GetTeam())
-                     << ", " << (Script_IsAIControlled(player) ? "playerbot" : "player")
-                     << ", " << distanceText(player);
-                visible.emplace_back(bot->GetDistance(player), line.str());
-            }
-            std::stable_sort(visible.begin(), visible.end(), [](auto const& left, auto const& right) {
-                return left.first < right.first;
-            });
-            for (size_t i = 0; i < visible.size() && i < m_config->snapshotMaximumPlayers; ++i)
-                appendSectionLine(nearbyPlayers, "Nearby visible players", visible[i].second);
-        }
-
-        if (combat.empty() && group.empty() && spells.empty() && quests.empty() &&
-            lineOfSight.empty() && nearbyPlayers.empty())
-            return "";
-
-        std::string result = m_config->snapshotPromptTemplate;
-        ReplaceAll(result, "{combat}", Trim(combat));
-        ReplaceAll(result, "{group}", Trim(group));
-        ReplaceAll(result, "{spells}", Trim(spells));
-        ReplaceAll(result, "{quests}", Trim(quests));
-        ReplaceAll(result, "{line_of_sight}", Trim(lineOfSight));
-        ReplaceAll(result, "{nearby_players}", Trim(nearbyPlayers));
-        ReplaceAll(result, "\\n", "\n");
-        while (result.find("\n\n\n") != std::string::npos)
-            ReplaceAll(result, "\n\n\n", "\n\n");
-        return HeadBounded(Trim(result), m_config->snapshotMaximumCharacters);
-    }
-
     std::string Manager::BuildHistoryContext(ChatRequest const& request)
     {
-        if (!m_config->historyStorageMode)
+        if (!m_config->historyEnabled || m_config->historyMaximumTurns == 0)
             return "";
-        if (m_config->historyStorageMode == 2)
-            LoadDatabaseHistory(request);
         auto found = m_history.find(request.historyKey);
         if (found == m_history.end() || found->second.empty())
             return "";
 
         auto cutoff = Clock::now() - std::chrono::minutes(m_config->historyTtlMinutes);
-        std::string body;
-        size_t const maximumTurns = m_config->historyStorageMode == 2
-            ? m_config->historyDatabaseMaximumTurns : m_config->historyRamMaximumTurns;
-        size_t included = 0;
-        for (auto it = found->second.rbegin(); it != found->second.rend() && included < maximumTurns; ++it)
+        std::string context = Expand(m_config->historyHeaderTemplate, request) + "\n";
+        for (HistoryTurn const& turn : found->second)
         {
-            if (it->created < cutoff)
+            if (turn.created < cutoff)
                 continue;
             std::string line = m_config->historyLineTemplate;
-            ReplaceAll(line, "<sender message>", it->speakerMessage);
-            ReplaceAll(line, "<bot reply>", it->actorReply);
-            line = Expand(line, request);
-            ReplaceAll(line, "\\n", "\n");
-            if (!body.empty() && body.size() + line.size() > m_config->historyMaximumCharacters)
-                break;
-            body.insert(0, line);
-            ++included;
+            ReplaceAll(line, "<sender message>", turn.speakerMessage);
+            ReplaceAll(line, "<bot reply>", turn.actorReply);
+            context += Expand(line, request);
         }
-        if (body.empty())
-            return "";
-        std::string context = Expand(m_config->historyHeaderTemplate, request) + "\n" + body;
         context += Expand(m_config->historyFooterTemplate, request);
         ReplaceAll(context, "\\n", "\n");
-        return TailBounded(context, m_config->historyMaximumCharacters);
-    }
-
-    std::string Manager::BuildSurroundingContext(ChatRequest const& request) const
-    {
-        if (!m_config->surroundingChatEnabled || !m_config->surroundingChatMaximumLines)
-            return "";
-        auto found = m_surroundingChat.find(request.scopeKey);
-        if (found == m_surroundingChat.end())
-            return "";
-
-        auto cutoff = Clock::now() - std::chrono::minutes(m_config->surroundingChatTtlMinutes);
-        std::vector<std::string> lines;
-        for (auto it = found->second.rbegin(); it != found->second.rend() &&
-             lines.size() < m_config->surroundingChatMaximumLines; ++it)
-        {
-            if (it->created < cutoff)
-                continue;
-            if (it == found->second.rbegin() && it->speakerGuid == request.speaker.guid &&
-                it->message == request.incomingMessage)
-                continue;
-            lines.push_back(it->speakerName + ": " + it->message);
-        }
-        if (lines.empty())
-            return "";
-        std::string result = "Recent relevant chat in this same scope (older context only):\n";
-        for (auto it = lines.rbegin(); it != lines.rend(); ++it)
-            result += *it + "\n";
-        return TailBounded(result, m_config->surroundingChatMaximumCharacters);
-    }
-
-    std::string Manager::BuildSnapshotHistoryContext(ChatRequest const& request)
-    {
-        if (!m_config->snapshotEnabled || !m_config->snapshotStorageMode || request.actor.kind != ActorKind::PlayerBot)
-            return "";
-        if (m_config->snapshotStorageMode == 2)
-            LoadDatabaseSnapshot(request);
-        auto found = m_snapshotHistory.find(ActorKey(request.actor));
-        if (found == m_snapshotHistory.end())
-            return "";
-
-        auto cutoff = Clock::now() - std::chrono::minutes(m_config->snapshotHistoryTtlMinutes);
-        size_t const maximum = m_config->snapshotStorageMode == 2
-            ? m_config->snapshotDatabaseMaximumSnapshots : m_config->snapshotRamMaximumSnapshots;
-        std::vector<std::string> snapshots;
-        for (auto it = found->second.rbegin(); it != found->second.rend() && snapshots.size() < maximum; ++it)
-            if (it->created >= cutoff)
-                snapshots.push_back(it->text);
-        if (snapshots.empty())
-            return "";
-        std::string const header = "Earlier playerbot snapshots (possibly stale; the current snapshot below wins):\n";
-        std::string body;
-        for (auto it = snapshots.rbegin(); it != snapshots.rend(); ++it)
-            body += "- " + *it + "\n";
-        if (header.size() >= m_config->snapshotHistoryMaximumCharacters)
-            return header.substr(0, m_config->snapshotHistoryMaximumCharacters);
-        return header + TailBounded(body, m_config->snapshotHistoryMaximumCharacters - header.size());
+        if (context.size() > m_config->historyMaximumCharacters)
+            context.erase(0, context.size() - m_config->historyMaximumCharacters);
+        return context;
     }
 
     void Manager::AddHistory(ChatRequest const& request, std::string const& reply)
     {
-        if (!m_config->historyStorageMode)
-            return;
-        size_t const maximum = m_config->historyStorageMode == 2
-            ? m_config->historyDatabaseMaximumTurns : m_config->historyRamMaximumTurns;
-        if (!maximum)
+        if (!m_config->historyEnabled || m_config->historyMaximumTurns == 0)
             return;
         HistoryTurn turn;
         turn.speakerMessage = request.incomingMessage;
         turn.actorReply = reply;
         turn.created = Clock::now();
-        turn.createdUnix = UnixNow();
         auto& history = m_history[request.historyKey];
         history.push_back(std::move(turn));
-        while (history.size() > maximum)
+        while (history.size() > m_config->historyMaximumTurns)
             history.pop_front();
-
-        if (m_config->historyStorageMode == 2 && m_historyDatabaseAvailable)
-        {
-            PendingHistoryWrite write;
-            write.historyKey = request.historyKey;
-            write.request = request;
-            write.reply = reply;
-            write.createdUnix = UnixNow();
-            m_pendingHistoryWrites.push_back(std::move(write));
-        }
-    }
-
-    void Manager::AddSnapshotHistory(ChatRequest const& request, std::string const& snapshotText)
-    {
-        if (!m_config->snapshotEnabled || !m_config->snapshotStorageMode ||
-            request.actor.kind != ActorKind::PlayerBot || snapshotText.empty())
-            return;
-        size_t const maximum = m_config->snapshotStorageMode == 2
-            ? m_config->snapshotDatabaseMaximumSnapshots : m_config->snapshotRamMaximumSnapshots;
-        if (!maximum)
-            return;
-        std::string const key = ActorKey(request.actor);
-        auto& snapshots = m_snapshotHistory[key];
-        if (!snapshots.empty() && snapshots.back().text == snapshotText)
-            return;
-        SnapshotRecord snapshot;
-        snapshot.text = snapshotText;
-        snapshot.created = Clock::now();
-        snapshot.createdUnix = UnixNow();
-        snapshots.push_back(snapshot);
-        while (snapshots.size() > maximum)
-            snapshots.pop_front();
-
-        if (m_config->snapshotStorageMode == 2 && m_snapshotDatabaseAvailable)
-        {
-            PendingSnapshotWrite write;
-            write.actorKey = key;
-            write.request = request;
-            write.snapshot = snapshotText;
-            write.createdUnix = snapshot.createdUnix;
-            m_pendingSnapshotWrites.push_back(std::move(write));
-        }
-    }
-
-    void Manager::RecordSurroundingChat(ChatScope scope, std::string const& channelName,
-                                        ActorSnapshot const& location, SpeakerSnapshot const& speaker,
-                                        std::string const& message)
-    {
-        if (!m_config->surroundingChatEnabled || !m_config->surroundingChatMaximumLines || message.empty())
-            return;
-        std::string const key = ScopeKey(scope, channelName, location, speaker);
-        auto& lines = m_surroundingChat[key];
-        if (!lines.empty() && lines.back().speakerGuid == speaker.guid && lines.back().message == message)
-            return;
-        RecentChatLine line;
-        line.speakerGuid = speaker.guid;
-        line.speakerName = speaker.name.empty() ? "unknown" : speaker.name;
-        line.message = HeadBounded(message, 500);
-        line.created = Clock::now();
-        lines.push_back(std::move(line));
-        while (lines.size() > m_config->surroundingChatMaximumLines)
-            lines.pop_front();
-        while (m_surroundingChat.size() > m_config->surroundingChatMaximumScopes)
-            m_surroundingChat.erase(m_surroundingChat.begin());
     }
 
     void Manager::PruneHistory()
     {
-        if (!m_config)
+        if (!m_config || !m_config->historyEnabled)
             return;
-        auto const now = Clock::now();
-        auto cutoff = now - std::chrono::minutes(m_config->historyTtlMinutes);
+        auto cutoff = Clock::now() - std::chrono::minutes(m_config->historyTtlMinutes);
         for (auto mapIt = m_history.begin(); mapIt != m_history.end(); )
         {
             auto& turns = mapIt->second;
             while (!turns.empty() && turns.front().created < cutoff)
                 turns.pop_front();
             if (turns.empty())
-            {
-                m_databaseLoadedHistoryKeys.erase(mapIt->first);
                 mapIt = m_history.erase(mapIt);
-            }
             else
                 ++mapIt;
         }
-        while (m_history.size() > m_config->historyMaximumConversations)
-        {
-            m_databaseLoadedHistoryKeys.erase(m_history.begin()->first);
-            m_history.erase(m_history.begin());
-        }
-        while (m_databaseLoadedHistoryKeys.size() > m_config->historyMaximumConversations)
-            m_databaseLoadedHistoryKeys.erase(m_databaseLoadedHistoryKeys.begin());
-
-        auto surroundingCutoff = now - std::chrono::minutes(m_config->surroundingChatTtlMinutes);
-        for (auto mapIt = m_surroundingChat.begin(); mapIt != m_surroundingChat.end(); )
-        {
-            while (!mapIt->second.empty() && mapIt->second.front().created < surroundingCutoff)
-                mapIt->second.pop_front();
-            if (mapIt->second.empty())
-                mapIt = m_surroundingChat.erase(mapIt);
-            else
-                ++mapIt;
-        }
-
-        auto snapshotCutoff = now - std::chrono::minutes(m_config->snapshotHistoryTtlMinutes);
-        for (auto mapIt = m_snapshotHistory.begin(); mapIt != m_snapshotHistory.end(); )
-        {
-            while (!mapIt->second.empty() && mapIt->second.front().created < snapshotCutoff)
-                mapIt->second.pop_front();
-            if (mapIt->second.empty())
-            {
-                m_databaseLoadedSnapshotKeys.erase(mapIt->first);
-                mapIt = m_snapshotHistory.erase(mapIt);
-            }
-            else
-                ++mapIt;
-        }
-        while (m_snapshotHistory.size() > m_config->snapshotHistoryMaximumActors)
-        {
-            m_databaseLoadedSnapshotKeys.erase(m_snapshotHistory.begin()->first);
-            m_snapshotHistory.erase(m_snapshotHistory.begin());
-        }
-        while (m_databaseLoadedSnapshotKeys.size() > m_config->snapshotHistoryMaximumActors)
-            m_databaseLoadedSnapshotKeys.erase(m_databaseLoadedSnapshotKeys.begin());
     }
 
     void Manager::ClearHistory()
     {
         m_history.clear();
-        m_surroundingChat.clear();
-        m_snapshotHistory.clear();
-        m_databaseLoadedHistoryKeys.clear();
-        m_databaseLoadedSnapshotKeys.clear();
-        m_pendingHistoryWrites.clear();
-        m_pendingSnapshotWrites.clear();
-        if (m_historyDatabaseAvailable)
-        {
-            CharacterDatabase.PExecute("DELETE FROM `azeroth_voices_chat_history`");
-            sLog.outString("[AzerothVoices][HISTORY][SQL] Cached and persistent conversation history clear was queued.");
-        }
-        if (m_snapshotDatabaseAvailable)
-        {
-            CharacterDatabase.PExecute("DELETE FROM `azeroth_voices_environment_history`");
-            sLog.outString("[AzerothVoices][SNAPSHOT][SQL] Cached and persistent snapshot history clear was queued.");
-        }
     }
 
-    void Manager::InitializeDatabaseStorage()
+    void Manager::LoadKnowledge()
     {
-        m_historyDatabaseAvailable = false;
-        m_snapshotDatabaseAvailable = false;
-        if (!m_config)
+        m_knowledge.clear();
+        if (!m_config->knowledgeEnabled || m_config->knowledgeFile.empty())
             return;
 
-        if (m_config->historyStorageMode == 2)
+        std::ifstream input(m_config->knowledgeFile.c_str());
+        if (!input)
         {
-            std::unique_ptr<QueryResult> table(CharacterDatabase.Query(
-                "SHOW TABLES LIKE 'azeroth_voices_chat_history'"));
-            m_historyDatabaseAvailable = table != nullptr;
-            if (!m_historyDatabaseAvailable)
-                sLog.outError("[AzerothVoices] SQL conversation history table is missing; falling back to bounded RAM. Install data/sql/Char/20260827_01_azeroth_voices_history.sql.");
+            sLog.outError("[AzerothVoices] Could not open knowledge file %s.", m_config->knowledgeFile.c_str());
+            return;
+        }
+
+        std::string line;
+        while (std::getline(input, line))
+        {
+            line = Trim(line);
+            if (line.empty() || line.front() == '#')
+                continue;
+            KnowledgeItem item;
+            size_t separator = line.find("::");
+            if (separator == std::string::npos)
+            {
+                item.text = line;
+                item.keywords = Words(line);
+            }
             else
-                sLog.outString("[AzerothVoices][HISTORY][SQL] Persistent conversation history storage is available.");
-        }
-        if (m_config->snapshotStorageMode == 2)
-        {
-            std::unique_ptr<QueryResult> table(CharacterDatabase.Query(
-                "SHOW TABLES LIKE 'azeroth_voices_environment_history'"));
-            m_snapshotDatabaseAvailable = table != nullptr;
-            if (!m_snapshotDatabaseAvailable)
-                sLog.outError("[AzerothVoices] SQL snapshot history table is missing; falling back to bounded RAM. Install data/sql/Char/20260827_01_azeroth_voices_history.sql.");
-            else
-                sLog.outString("[AzerothVoices][SNAPSHOT][SQL] Persistent snapshot history storage is available.");
-        }
-        if (m_historyDatabaseAvailable || m_snapshotDatabaseAvailable)
-            CleanupDatabase();
-    }
-
-    void Manager::LoadDatabaseHistory(ChatRequest const& request)
-    {
-        if (!m_historyDatabaseAvailable || m_databaseLoadedHistoryKeys.count(request.historyKey))
-            return;
-        m_databaseLoadedHistoryKeys.insert(request.historyKey);
-        if (!m_config->historyDatabaseMaximumTurns)
-            return;
-
-        std::string key = request.historyKey;
-        CharacterDatabase.escape_string(key);
-        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
-            "SELECT `speaker_message`, `actor_reply`, UNIX_TIMESTAMP(`created_at`) "
-            "FROM `azeroth_voices_chat_history` WHERE `history_key`='%s' "
-            "AND `created_at` >= DATE_SUB(NOW(), INTERVAL %u MINUTE) "
-            "ORDER BY `id` DESC LIMIT %u",
-            key.c_str(), m_config->historyDatabaseTtlMinutes,
-            m_config->historyDatabaseMaximumTurns));
-        if (!result)
-            return;
-
-        uint64_t const nowUnix = UnixNow();
-        auto& history = m_history[request.historyKey];
-        do
-        {
-            Field* fields = result->Fetch();
-            HistoryTurn turn;
-            turn.speakerMessage = fields[0].GetCppString();
-            turn.actorReply = fields[1].GetCppString();
-            turn.createdUnix = fields[2].GetUInt64();
-            uint64_t age = nowUnix > turn.createdUnix ? nowUnix - turn.createdUnix : 0;
-            turn.created = Clock::now() - std::chrono::seconds(age);
-            history.push_front(std::move(turn));
-        } while (result->NextRow());
-    }
-
-    void Manager::LoadDatabaseSnapshot(ChatRequest const& request)
-    {
-        std::string const actorKey = ActorKey(request.actor);
-        if (!m_snapshotDatabaseAvailable || m_databaseLoadedSnapshotKeys.count(actorKey))
-            return;
-        m_databaseLoadedSnapshotKeys.insert(actorKey);
-        if (!m_config->snapshotDatabaseMaximumSnapshots)
-            return;
-
-        std::string key = actorKey;
-        CharacterDatabase.escape_string(key);
-        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
-            "SELECT `snapshot`, UNIX_TIMESTAMP(`created_at`) "
-            "FROM `azeroth_voices_environment_history` WHERE `actor_key`='%s' "
-            "AND `created_at` >= DATE_SUB(NOW(), INTERVAL %u MINUTE) "
-            "ORDER BY `id` DESC LIMIT %u",
-            key.c_str(), m_config->snapshotDatabaseTtlMinutes,
-            m_config->snapshotDatabaseMaximumSnapshots));
-        if (!result)
-            return;
-
-        uint64_t const nowUnix = UnixNow();
-        auto& snapshots = m_snapshotHistory[actorKey];
-        do
-        {
-            Field* fields = result->Fetch();
-            SnapshotRecord snapshot;
-            snapshot.text = fields[0].GetCppString();
-            snapshot.createdUnix = fields[1].GetUInt64();
-            uint64_t age = nowUnix > snapshot.createdUnix ? nowUnix - snapshot.createdUnix : 0;
-            snapshot.created = Clock::now() - std::chrono::seconds(age);
-            snapshots.push_front(std::move(snapshot));
-        } while (result->NextRow());
-    }
-
-    void Manager::FlushDatabaseWrites(bool force)
-    {
-        if (!m_config || (!m_historyDatabaseAvailable && !m_snapshotDatabaseAvailable))
-            return;
-        auto const now = Clock::now();
-        size_t pending = m_pendingHistoryWrites.size() + m_pendingSnapshotWrites.size();
-        if (!pending)
-            return;
-        if (!force && pending < m_config->historyDatabaseFlushBatchSize && now < m_nextDatabaseFlush)
-            return;
-
-        size_t const batch = force ? pending : std::min<size_t>(pending, m_config->historyDatabaseFlushBatchSize);
-        if (!CharacterDatabase.BeginTransaction())
-        {
-            sLog.outError("[AzerothVoices] Could not begin the asynchronous history transaction; retaining RAM history.");
-            m_historyDatabaseAvailable = false;
-            m_snapshotDatabaseAvailable = false;
-            return;
-        }
-
-        std::set<std::string> touchedHistoryKeys;
-        std::set<std::string> touchedActorKeys;
-        size_t written = 0;
-        while (written < batch && !m_pendingHistoryWrites.empty())
-        {
-            PendingHistoryWrite write = std::move(m_pendingHistoryWrites.front());
-            m_pendingHistoryWrites.pop_front();
-            std::string key = write.historyKey;
-            std::string channel = write.request.channelName;
-            std::string speakerName = write.request.speaker.name;
-            std::string speakerMessage = HeadBounded(write.request.incomingMessage, 4000);
-            std::string actorName = write.request.actor.name;
-            std::string reply = HeadBounded(write.reply, 4000);
-            CharacterDatabase.escape_string(key);
-            CharacterDatabase.escape_string(channel);
-            CharacterDatabase.escape_string(speakerName);
-            CharacterDatabase.escape_string(speakerMessage);
-            CharacterDatabase.escape_string(actorName);
-            CharacterDatabase.escape_string(reply);
-            CharacterDatabase.PExecute(
-                "INSERT INTO `azeroth_voices_chat_history` "
-                "(`history_key`,`actor_guid`,`speaker_guid`,`actor_kind`,`scope`,`channel_name`,"
-                "`speaker_name`,`speaker_message`,`actor_name`,`actor_reply`,`created_at`) "
-                "VALUES ('%s','%llu','%llu','%u','%u','%s','%s','%s','%s','%s',FROM_UNIXTIME('%llu'))",
-                key.c_str(), static_cast<unsigned long long>(write.request.actor.guid),
-                static_cast<unsigned long long>(write.request.speaker.guid),
-                static_cast<unsigned>(write.request.actor.kind), static_cast<unsigned>(write.request.scope),
-                channel.c_str(), speakerName.c_str(), speakerMessage.c_str(), actorName.c_str(), reply.c_str(),
-                static_cast<unsigned long long>(write.createdUnix));
-            touchedHistoryKeys.insert(write.historyKey);
-            ++written;
-        }
-        while (written < batch && !m_pendingSnapshotWrites.empty())
-        {
-            PendingSnapshotWrite write = std::move(m_pendingSnapshotWrites.front());
-            m_pendingSnapshotWrites.pop_front();
-            std::string key = write.actorKey;
-            std::string actorName = write.request.actor.name;
-            std::string snapshot = HeadBounded(write.snapshot, 8000);
-            CharacterDatabase.escape_string(key);
-            CharacterDatabase.escape_string(actorName);
-            CharacterDatabase.escape_string(snapshot);
-            CharacterDatabase.PExecute(
-                "INSERT INTO `azeroth_voices_environment_history` "
-                "(`actor_key`,`actor_guid`,`actor_kind`,`actor_name`,`map_id`,`zone_id`,`area_id`,`snapshot`,`created_at`) "
-                "VALUES ('%s','%llu','%u','%s','%u','%u','%u','%s',FROM_UNIXTIME('%llu'))",
-                key.c_str(), static_cast<unsigned long long>(write.request.actor.guid),
-                static_cast<unsigned>(write.request.actor.kind), actorName.c_str(),
-                write.request.actor.mapId, write.request.actor.zoneId, write.request.actor.areaId,
-                snapshot.c_str(), static_cast<unsigned long long>(write.createdUnix));
-            touchedActorKeys.insert(write.actorKey);
-            ++written;
-        }
-
-        for (std::string key : touchedHistoryKeys)
-        {
-            CharacterDatabase.escape_string(key);
-            CharacterDatabase.PExecute(
-                "DELETE FROM `azeroth_voices_chat_history` WHERE `history_key`='%s' AND `id` NOT IN "
-                "(SELECT `id` FROM (SELECT `id` FROM `azeroth_voices_chat_history` "
-                "WHERE `history_key`='%s' ORDER BY `id` DESC LIMIT %u) AS `av_keep`)",
-                key.c_str(), key.c_str(), m_config->historyDatabaseMaximumTurns);
-        }
-        for (std::string key : touchedActorKeys)
-        {
-            CharacterDatabase.escape_string(key);
-            CharacterDatabase.PExecute(
-                "DELETE FROM `azeroth_voices_environment_history` WHERE `actor_key`='%s' AND `id` NOT IN "
-                "(SELECT `id` FROM (SELECT `id` FROM `azeroth_voices_environment_history` "
-                "WHERE `actor_key`='%s' ORDER BY `id` DESC LIMIT %u) AS `av_keep`)",
-                key.c_str(), key.c_str(), m_config->snapshotDatabaseMaximumSnapshots);
-        }
-        CharacterDatabase.CommitTransaction();
-        m_nextDatabaseFlush = now + std::chrono::seconds(m_config->historyDatabaseFlushSeconds);
-    }
-
-    void Manager::CleanupDatabase()
-    {
-        if (!m_config || (!m_historyDatabaseAvailable && !m_snapshotDatabaseAvailable))
-            return;
-        if (m_historyDatabaseAvailable)
-            CharacterDatabase.PExecute(
-                "DELETE FROM `azeroth_voices_chat_history` WHERE `created_at` < DATE_SUB(NOW(), INTERVAL %u MINUTE)",
-                m_config->historyDatabaseTtlMinutes);
-        if (m_snapshotDatabaseAvailable)
-            CharacterDatabase.PExecute(
-                "DELETE FROM `azeroth_voices_environment_history` WHERE `created_at` < DATE_SUB(NOW(), INTERVAL %u MINUTE)",
-                m_config->snapshotDatabaseTtlMinutes);
-    }
-
-    void Manager::LoadRag()
-    {
-        if (!m_config->ragEnabled)
-        {
-            m_rag.clear();
-            m_ragFiles = 0;
-            m_ragParseFailures = 0;
-            return;
-        }
-        if (!m_config->ragReloadOnRestart && !m_rag.empty())
-            return;
-        m_ragFiles = 0;
-        m_ragParseFailures = 0;
-        m_rag.clear();
-
-        try
-        {
-        fs::path directory(m_config->ragDirectory);
-        std::vector<fs::path> candidates = { directory, fs::path("modules/mod-azeroth-voices/data/rag") };
-#ifdef TW_SOURCE_MODULES_DIR
-        candidates.push_back(fs::path(TW_SOURCE_MODULES_DIR) / "mod-azeroth-voices" / "data" / "rag");
-#endif
-        for (fs::path const& candidate : candidates)
-            if (fs::exists(candidate) && fs::is_directory(candidate))
             {
-                directory = candidate;
-                break;
+                item.keywords = Split(Lower(line.substr(0, separator)), ',');
+                item.text = Trim(line.substr(separator + 2));
             }
-        if (!fs::exists(directory) || !fs::is_directory(directory))
-        {
-            sLog.outError("[AzerothVoices] RAG directory was not found: %s", m_config->ragDirectory.c_str());
-            return;
+            if (!item.text.empty() && !item.keywords.empty())
+                m_knowledge.push_back(std::move(item));
         }
-
-        auto appendItem = [&](Json const& value, std::string const& fileName) {
-            if (!value.is_object())
-                return;
-            RagItem item;
-            auto stringField = [&](char const* name) -> std::string {
-                return value.count(name) && value[name].is_string() ? value[name].get<std::string>() : "";
-            };
-            item.id = stringField("id");
-            item.title = stringField("title");
-            item.category = stringField("category");
-            item.source = stringField("source");
-            item.text = stringField("text");
-            if (item.text.empty())
-                item.text = stringField("content");
-            auto appendKeywords = [&](char const* name) {
-                if (!value.count(name))
-                    return;
-                Json const& field = value[name];
-                if (field.is_array())
-                    for (Json const& keyword : field)
-                        if (keyword.is_string())
-                            item.keywords.push_back(Lower(Trim(keyword.get<std::string>())));
-                else if (field.is_string())
-                {
-                    std::vector<std::string> values = Split(field.get<std::string>(), ',');
-                    item.keywords.insert(item.keywords.end(), values.begin(), values.end());
-                }
-            };
-            appendKeywords("keywords");
-            appendKeywords("tags");
-            if (item.keywords.empty())
-                item.keywords = Words(item.title + " " + item.category + " " + item.text);
-            if (!item.text.empty())
-            {
-                for (std::string const& keyword : item.keywords)
-                    for (std::string const& word : Words(keyword))
-                        item.keywordWords.insert(word);
-                for (std::string const& word : Words(item.title + " " + item.category))
-                    item.headingWords.insert(word);
-                for (std::string const& word : Words(item.text))
-                    item.contentWords.insert(word);
-                if (item.source.empty())
-                    item.source = fileName;
-                m_rag.push_back(std::move(item));
-            }
-        };
-
-        std::vector<fs::path> ragFiles;
-        for (fs::directory_entry const& entry : fs::directory_iterator(directory))
-            if (entry.is_regular_file() && Lower(entry.path().extension().string()) == ".json")
-                ragFiles.push_back(entry.path());
-        std::sort(ragFiles.begin(), ragFiles.end());
-
-        size_t loadedFiles = 0;
-        for (fs::path const& path : ragFiles)
-        {
-            try
-            {
-                std::ifstream input(path);
-                Json root;
-                input >> root;
-                if (root.is_array())
-                    for (Json const& value : root)
-                        appendItem(value, path.filename().string());
-                else if (root.is_object() && root.count("entries") && root["entries"].is_array())
-                    for (Json const& value : root["entries"])
-                        appendItem(value, path.filename().string());
-                else if (root.is_object() && root.count("items") && root["items"].is_array())
-                    for (Json const& value : root["items"])
-                        appendItem(value, path.filename().string());
-                else
-                    appendItem(root, path.filename().string());
-                ++loadedFiles;
-            }
-            catch (std::exception const& exception)
-            {
-                ++m_ragParseFailures;
-                sLog.outError("[AzerothVoices] Could not load RAG file %s: %s",
-                    path.string().c_str(), exception.what());
-            }
-        }
-        m_ragFiles = loadedFiles;
-        sLog.outString("[AzerothVoices][RAG] Loaded %u structured RAG entries from %u JSON files in %s; parse failures=%u.",
-            static_cast<unsigned>(m_rag.size()), static_cast<unsigned>(loadedFiles), directory.string().c_str(),
-            static_cast<unsigned>(m_ragParseFailures));
-        }
-        catch (std::exception const& exception)
-        {
-            ++m_ragParseFailures;
-            sLog.outError("[AzerothVoices] RAG directory scan failed for %s: %s",
-                m_config->ragDirectory.c_str(), exception.what());
-        }
+        sLog.outString("[AzerothVoices] Loaded %u knowledge entries.", static_cast<unsigned>(m_knowledge.size()));
     }
 
-    std::string Manager::SelectRag(ChatRequest const& request) const
+    std::string Manager::SelectKnowledge(ChatRequest const& request) const
     {
-        if (!m_config->ragEnabled || m_rag.empty())
+        if (!m_config->knowledgeEnabled || m_knowledge.empty())
             return "";
         std::set<std::string> inputWords;
-        for (std::string const& word : Words(request.incomingMessage + " " + request.trigger + " " +
-                                              request.actor.area + " " + request.actor.zone + " " + request.actor.map))
+        for (std::string const& word : Words(request.incomingMessage + " " + request.actor.area + " " +
+                                              request.actor.zone + " " + request.trigger))
             inputWords.insert(word);
-        if (inputWords.empty())
-            return "";
 
-        std::vector<std::pair<float, size_t>> scores;
-        for (size_t i = 0; i < m_rag.size(); ++i)
+        std::vector<std::pair<uint32_t, size_t>> scores;
+        for (size_t i = 0; i < m_knowledge.size(); ++i)
         {
-            std::vector<float> matchedWeights;
-            matchedWeights.reserve(inputWords.size());
-            for (std::string const& word : inputWords)
-            {
-                if (m_rag[i].keywordWords.count(word))
-                    matchedWeights.push_back(1.0f);
-                else if (m_rag[i].headingWords.count(word))
-                    matchedWeights.push_back(0.8f);
-                else if (m_rag[i].contentWords.count(word))
-                    matchedWeights.push_back(0.35f);
-            }
-            std::sort(matchedWeights.begin(), matchedWeights.end(), std::greater<float>());
-            size_t const comparisonTerms = std::min<size_t>(3, inputWords.size());
-            float similarity = 0.0f;
-            for (size_t match = 0; match < std::min(comparisonTerms, matchedWeights.size()); ++match)
-                similarity += matchedWeights[match];
-            similarity /= static_cast<float>(comparisonTerms);
-            if (similarity >= m_config->ragSimilarityThreshold)
-                scores.emplace_back(similarity, i);
+            uint32_t score = 0;
+            for (std::string const& keyword : m_knowledge[i].keywords)
+                if (inputWords.count(Lower(Trim(keyword))))
+                    ++score;
+            if (score >= m_config->knowledgeMinimumScore)
+                scores.emplace_back(score, i);
         }
-        std::stable_sort(scores.begin(), scores.end(), [](auto const& left, auto const& right) {
+        std::sort(scores.begin(), scores.end(), [](auto const& left, auto const& right) {
             return left.first > right.first;
         });
 
-        std::vector<std::pair<float, size_t>> selected;
-        selected.reserve(std::min<size_t>(scores.size(), m_config->ragMaximumItems));
-        std::set<std::string> selectedTitles;
-        for (std::pair<float, size_t> const& score : scores)
-        {
-            RagItem const& item = m_rag[score.second];
-            std::string const identity = Lower(Trim(item.title.empty() ? item.text : item.title));
-            if (!identity.empty() && !selectedTitles.insert(identity).second)
-                continue;
-            selected.push_back(score);
-            if (selected.size() >= m_config->ragMaximumItems)
-                break;
-        }
-        if (m_config->debug)
-            sLog.outDebug("[AzerothVoices] RAG selected %u of %u loaded entries.",
-                static_cast<unsigned>(selected.size()), static_cast<unsigned>(m_rag.size()));
-
         std::string result;
-        for (size_t i = 0; i < selected.size(); ++i)
+        size_t count = std::min<size_t>(scores.size(), m_config->knowledgeMaximumItems);
+        for (size_t i = 0; i < count; ++i)
         {
-            RagItem const& item = m_rag[selected[i].second];
-            std::string line = "- ";
-            if (!item.title.empty())
-                line += item.title + ": ";
-            line += item.text;
             if (!result.empty())
-                line = "\n" + line;
-            if (result.size() + line.size() > m_config->ragMaximumCharacters)
-            {
-                if (result.empty())
-                    result = HeadBounded(line, m_config->ragMaximumCharacters);
-                break;
-            }
-            result += line;
+                result += "\n- ";
+            else
+                result = "- ";
+            result += m_knowledge[scores[i].second].text;
         }
         return result;
     }
@@ -2837,7 +1586,6 @@ namespace AzerothVoices
     StatusSnapshot Manager::GetStatus() const
     {
         StatusSnapshot status;
-        status.configurationLoaded = m_config != nullptr;
         status.enabled = m_started && m_config && m_config->enabled;
         status.paused = m_paused;
         status.workers = static_cast<uint32_t>(m_workers.size());
@@ -2847,27 +1595,12 @@ namespace AzerothVoices
         status.failed = m_failed;
         status.dropped = m_dropped;
         status.conversations = m_history.size();
-        status.surroundingScopes = m_surroundingChat.size();
-        status.snapshotHistories = m_snapshotHistory.size();
-        status.historyDatabaseAvailable = m_historyDatabaseAvailable;
-        status.snapshotDatabaseAvailable = m_snapshotDatabaseAvailable;
-        status.ragEntries = m_rag.size();
-        status.ragFiles = m_ragFiles;
-        status.ragParseFailures = m_ragParseFailures;
         status.scheduledLines = m_scheduled.size();
         if (m_config)
         {
-            status.endpoint = SanitizeEndpoint(m_config->endpoint);
+            status.endpoint = m_config->endpoint;
             status.model = m_config->model;
             status.worldChannelName = m_config->worldChannelName;
-            status.historyStorageMode = m_config->historyStorageMode;
-            status.snapshotStorageMode = m_config->snapshotStorageMode;
-            status.ragEnabled = m_config->ragEnabled;
-            status.environmentEnabled = m_config->environmentContextEnabled;
-            status.snapshotEnabled = m_config->snapshotEnabled;
-            status.apiConfigured = !m_config->endpoint.empty() &&
-                (!m_config->model.empty() || !m_config->apiJsonTemplate.empty()) &&
-                (!m_config->ResolveApiKey().empty() || IsLocalEndpoint(m_config->endpoint));
         }
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);

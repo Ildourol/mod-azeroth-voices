@@ -60,23 +60,12 @@ namespace AzerothVoices
         Config c;
         c.enabled = sConfig.GetBoolDefault("AzerothVoices.Enable", true);
         c.debug = sConfig.GetBoolDefault("AzerothVoices.Debug", false);
-        c.consoleGeneratedMessages = sConfig.GetBoolDefault(
-            "AzerothVoices.Console.GeneratedMessages",
-            sConfig.GetBoolDefault("AzerothVoices.Telemetry.LogGeneratedMessages", false));
-        c.consoleApiCallStats = sConfig.GetBoolDefault(
-            "AzerothVoices.Console.ApiCallStats",
-            sConfig.GetBoolDefault("AzerothVoices.Telemetry.Summary.Enable", false));
-        c.consoleApiCallStatsIntervalSeconds = Positive(
-            "AzerothVoices.Console.ApiCallStatsIntervalSeconds",
-            Positive("AzerothVoices.Telemetry.Summary.IntervalSeconds", 60, 5), 5);
-        c.consoleRecentMessages = std::min<uint32_t>(50, Positive(
-            "AzerothVoices.Console.RecentMessages",
-            Positive("AzerothVoices.Telemetry.Summary.RecentMessages", 5)));
+        c.tracePrompts = sConfig.GetBoolDefault("AzerothVoices.TracePrompts", false);
 
         c.providerMode = Trim(sConfig.GetStringDefault("AzerothVoices.ProviderMode", "ChatCompletions"));
         c.endpoint = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMApiEndpoint", "https://api.openai.com/v1/chat/completions"));
-        c.apiKey = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMApiKey", "env:OPENAI_API_KEY"));
-        c.model = Trim(sConfig.GetStringDefault("AzerothVoices.Model", "gpt-4.1-mini"));
+        c.apiKey = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMApiKey", ""));
+        c.model = Trim(sConfig.GetStringDefault("AzerothVoices.Model", "gpt-4o-mini"));
         c.apiJsonTemplate = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMApiJson", ""));
         c.caCertFile = Trim(sConfig.GetStringDefault("AzerothVoices.CACertFile", ""));
         c.allowInsecureLocalHttp = sConfig.GetBoolDefault("AzerothVoices.AllowLocalHttp", true);
@@ -178,12 +167,9 @@ namespace AzerothVoices
             "Ask world chat a brief useful question.|Make a short public observation that could start a conversation."), '|');
 
         c.environmentContextEnabled = sConfig.GetBoolDefault("AzerothVoices.Environment.Enable", true);
-        c.environmentContextDistance = std::min(100.0f, std::max(1.0f,
-            sConfig.GetFloatDefault("AzerothVoices.Environment.Distance", 25.0f)));
-        c.environmentMaximumCreatures = std::min<uint32_t>(50,
-            Positive("AzerothVoices.Environment.MaximumCreatures", 5));
-        c.environmentMaximumItems = std::min<uint32_t>(50,
-            Positive("AzerothVoices.Environment.MaximumItems", 8));
+        c.environmentContextDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Environment.Distance", 25.0f));
+        c.environmentMaximumCreatures = Positive("AzerothVoices.Environment.MaximumCreatures", 5);
+        c.environmentMaximumItems = Positive("AzerothVoices.Environment.MaximumItems", 8);
         c.environmentIncludeEquipment = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeEquipment", true);
         c.environmentIncludeBackpack = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeBackpack", false);
 
@@ -226,18 +212,10 @@ namespace AzerothVoices
         c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 220, 1);
         c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 3, 1);
 
-        bool const legacyHistoryEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);
-        c.historyStorageMode = std::min<uint32_t>(2, Positive(
-            "AzerothVoices.History.StorageMode", legacyHistoryEnabled ? 2 : 0));
-        c.historyRamMaximumTurns = Positive("AzerothVoices.History.RamMaximumTurns",
-            Positive("AzerothVoices.History.MaximumTurns", 6));
-        c.historyDatabaseMaximumTurns = Positive("AzerothVoices.History.DatabaseMaximumTurns", 20);
+        c.historyEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);
+        c.historyMaximumTurns = Positive("AzerothVoices.History.MaximumTurns", 6);
         c.historyTtlMinutes = Positive("AzerothVoices.History.TTLMinutes", 30, 1);
-        c.historyDatabaseTtlMinutes = Positive("AzerothVoices.History.DatabaseTTLMinutes", 10080, 1);
         c.historyMaximumCharacters = Positive("AzerothVoices.History.MaximumCharacters", 2500, 128);
-        c.historyMaximumConversations = Positive("AzerothVoices.History.MaximumConversations", 2048, 1);
-        c.historyDatabaseFlushSeconds = Positive("AzerothVoices.History.DatabaseFlushSeconds", 5, 1);
-        c.historyDatabaseFlushBatchSize = Positive("AzerothVoices.History.DatabaseFlushBatchSize", 20, 1);
         c.historyHeaderTemplate = sConfig.GetStringDefault("AzerothVoices.History.HeaderTemplate",
             "Recent conversation with <sender name>, use it only as context:");
         c.historyLineTemplate = sConfig.GetStringDefault("AzerothVoices.History.LineTemplate",
@@ -245,60 +223,12 @@ namespace AzerothVoices
         c.historyFooterTemplate = sConfig.GetStringDefault("AzerothVoices.History.FooterTemplate",
             "New message from <sender name>: <initial message>");
 
-        c.surroundingChatEnabled = sConfig.GetBoolDefault("AzerothVoices.SurroundingChat.Enable", true);
-        c.surroundingChatMaximumLines = Positive("AzerothVoices.SurroundingChat.MaximumLines", 8);
-        c.surroundingChatTtlMinutes = Positive("AzerothVoices.SurroundingChat.TTLMinutes", 5, 1);
-        c.surroundingChatMaximumCharacters = Positive("AzerothVoices.SurroundingChat.MaximumCharacters", 1200, 128);
-        c.surroundingChatMaximumScopes = Positive("AzerothVoices.SurroundingChat.MaximumScopes", 512, 1);
-
-        // Older V0.1 configurations used Environment.History* for a much
-        // smaller snapshot. Read those keys only as silent migration fallbacks.
-        uint32_t const legacySnapshotMode = std::min<uint32_t>(2, Positive(
-            "AzerothVoices.Environment.HistoryStorageMode", 0));
-        c.snapshotEnabled = sConfig.GetBoolDefault("AzerothVoices.Snapshot.Enable", legacySnapshotMode > 0);
-        c.snapshotIncludeCombat = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeCombat", true);
-        c.snapshotIncludeGroup = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeGroup", true);
-        c.snapshotIncludeSpells = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeSpells", true);
-        c.snapshotIncludeQuests = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeQuests", true);
-        c.snapshotIncludeLineOfSight = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeLineOfSight", true);
-        c.snapshotIncludeNearbyPlayers = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeNearbyPlayers", true);
-        c.snapshotDistance = std::min(100.0f, std::max(1.0f,
-            sConfig.GetFloatDefault("AzerothVoices.Snapshot.Distance", 40.0f)));
-        c.snapshotMaximumGroupMembers = std::min<uint32_t>(40, Positive("AzerothVoices.Snapshot.MaximumGroupMembers", 5));
-        c.snapshotMaximumSpells = std::min<uint32_t>(100, Positive("AzerothVoices.Snapshot.MaximumSpells", 20));
-        c.snapshotMaximumQuests = std::min<uint32_t>(20, Positive("AzerothVoices.Snapshot.MaximumQuests", 10));
-        c.snapshotMaximumCreatures = std::min<uint32_t>(50, Positive("AzerothVoices.Snapshot.MaximumCreatures", 10));
-        c.snapshotMaximumGameObjects = std::min<uint32_t>(50, Positive("AzerothVoices.Snapshot.MaximumGameObjects", 8));
-        c.snapshotMaximumPlayers = std::min<uint32_t>(50, Positive("AzerothVoices.Snapshot.MaximumPlayers", 8));
-        c.snapshotMaximumCharacters = std::min<uint32_t>(16000,
-            Positive("AzerothVoices.Snapshot.MaximumCharacters", 3500, 256));
-        c.snapshotPromptTemplate = Trim(sConfig.GetStringDefault("AzerothVoices.Snapshot.PromptTemplate",
-            "CURRENT PLAYERBOT SNAPSHOT:\\n{combat}\\n{group}\\n{spells}\\n{quests}\\n{line_of_sight}\\n{nearby_players}"));
-        c.snapshotStorageMode = std::min<uint32_t>(2, Positive(
-            "AzerothVoices.Snapshot.StorageMode", legacySnapshotMode));
-        c.snapshotRamMaximumSnapshots = Positive("AzerothVoices.Snapshot.RamMaximumSnapshots",
-            Positive("AzerothVoices.Environment.RamMaximumSnapshots", 3));
-        c.snapshotDatabaseMaximumSnapshots = Positive("AzerothVoices.Snapshot.DatabaseMaximumSnapshots",
-            Positive("AzerothVoices.Environment.DatabaseMaximumSnapshots", 10));
-        c.snapshotHistoryTtlMinutes = Positive("AzerothVoices.Snapshot.HistoryTTLMinutes",
-            Positive("AzerothVoices.Environment.HistoryTTLMinutes", 30, 1), 1);
-        c.snapshotDatabaseTtlMinutes = Positive("AzerothVoices.Snapshot.DatabaseTTLMinutes",
-            Positive("AzerothVoices.Environment.DatabaseTTLMinutes", 10080, 1), 1);
-        c.snapshotHistoryMaximumCharacters = Positive("AzerothVoices.Snapshot.HistoryMaximumCharacters",
-            Positive("AzerothVoices.Environment.HistoryMaximumCharacters", 1600, 128), 128);
-        c.snapshotHistoryMaximumActors = Positive("AzerothVoices.Snapshot.HistoryMaximumActors",
-            Positive("AzerothVoices.Environment.HistoryMaximumActors", 2048, 1), 1);
-
-        c.ragEnabled = sConfig.GetBoolDefault("AzerothVoices.RAG.Enable", false);
-        c.ragDirectory = Trim(sConfig.GetStringDefault("AzerothVoices.RAG.Directory",
-            "modules/mod-azeroth-voices/data/rag/"));
-        c.ragMaximumItems = Positive("AzerothVoices.RAG.MaximumItems", 3, 1);
-        c.ragSimilarityThreshold = std::max(0.0f, std::min(1.0f,
-            sConfig.GetFloatDefault("AzerothVoices.RAG.SimilarityThreshold", 0.3f)));
-        c.ragMaximumCharacters = Positive("AzerothVoices.RAG.MaximumCharacters", 1200, 128);
-        c.ragReloadOnRestart = sConfig.GetBoolDefault("AzerothVoices.RAG.ReloadOnRestart", true);
-        c.ragPromptTemplate = Trim(sConfig.GetStringDefault("AzerothVoices.RAG.PromptTemplate",
-            "RELEVANT INFORMATION:\\n{rag_info}\\nUse this information to provide accurate and detailed responses when applicable."));
+        c.knowledgeEnabled = sConfig.GetBoolDefault("AzerothVoices.Knowledge.Enable", false);
+        c.knowledgeFile = Trim(sConfig.GetStringDefault("AzerothVoices.Knowledge.File", "modules/azeroth_voices_knowledge.txt"));
+        c.knowledgeMaximumItems = Positive("AzerothVoices.Knowledge.MaximumItems", 3, 1);
+        c.knowledgeMinimumScore = Positive("AzerothVoices.Knowledge.MinimumScore", 1, 1);
+        c.knowledgePromptTemplate = sConfig.GetStringDefault("AzerothVoices.Knowledge.PromptTemplate",
+            "Relevant optional world knowledge:\n<knowledge>");
 
         return c;
     }

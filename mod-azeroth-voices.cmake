@@ -18,9 +18,4 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
       target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_LIBRARIES})
     endif()
   endforeach()
-
-  install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/data/"
-    DESTINATION "modules/mod-azeroth-voices/data")
-  install(FILES "${CMAKE_CURRENT_LIST_DIR}/README.md"
-    DESTINATION "modules/mod-azeroth-voices")
 endif()

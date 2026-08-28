@@ -1,0 +1,7 @@
+# Optional lightweight knowledge file. Copy this to the path configured by
+# AzerothVoices.Knowledge.File. One entry per line:
+# comma,separated,keywords::Text supplied to the model when keywords match.
+
+stormwind,elwynn,alliance::Stormwind is the human capital north of Elwynn Forest.
+orgrimmar,durotar,horde::Orgrimmar is the orcish capital in Durotar.
+dungeon,group,tank,healer::A normal dungeon group usually needs a tank, a healer, and damage dealers.
