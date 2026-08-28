@@ -1,0 +1,100 @@
+[
+  {
+    "id": "mechanic_reputation",
+    "title": "Reputation System",
+    "content": "Reputation tracks standing with factions from Hated through Hostile, Unfriendly, Neutral, Friendly, Honored, Revered, and Exalted. Vanilla reputation comes from specific quests, repeatable turn-ins, enemy kills, and selected dungeon activities rather than universal reputation tabards. Higher standing can unlock recipes, equipment, mounts, discounts, and vendors. Each faction has its own sources and limits, so check the desired reward before grinding.",
+    "keywords": ["reputation", "faction", "standing", "hated", "exalted", "rewards", "mounts", "titles", "quests", "killing enemies", "faction specific tasks", "levels", "unlocking", "unique", "tabards", "exclusive vendors", "managing", "endgame progression", "rare items"],
+    "tags": ["mechanic", "reputation", "factions", "progression"]
+  },
+  {
+    "id": "mechanic_auction_house",
+    "title": "Auction House",
+    "content": "The Auction House is a player-driven marketplace where players can buy and sell items, materials, and equipment. Located in major cities, it allows players to post auctions with custom prices and durations. Players can search for specific items, place bids, or buyout items immediately. The Auction House is essential for obtaining rare materials, selling crafted goods, and managing the in-game economy. Understanding market prices and timing auctions properly is key to successful trading.",
+    "keywords": ["auction", "house", "marketplace", "buy", "sell", "bid", "buyout", "economy"],
+    "tags": ["mechanic", "economy", "trading", "market"]
+  },
+  {
+    "id": "mechanic_quests",
+    "title": "Quest System",
+    "content": "Quests are the primary way players progress through World of Warcraft. Quests are obtained from NPCs and involve various objectives like killing enemies, gathering items, or exploring areas. Completing quests rewards experience, gold, items, and reputation. Quests are color-coded by difficulty: gray (too low level), green (easy), yellow (appropriate level), orange (challenging), and red (too high level). Quest chains tell stories and guide players through zones and storylines.",
+    "keywords": ["quests", "objectives", "experience", "gold", "rewards", "quest chains", "storylines", "npcs", "killing enemies", "gathering items", "exploring areas", "completing", "color coded", "difficulty", "gray", "green", "yellow", "orange", "red", "tell stories", "guide players", "zones"],
+    "tags": ["mechanic", "progression", "story", "objectives"]
+  },
+  {
+    "id": "mechanic_talents",
+    "title": "Talent System",
+    "content": "The talent system allows players to specialize their characters by spending talent points in three trees: one for each specialization. Talent points are earned every level starting from level 10. Each talent provides unique abilities, stat bonuses, or ability improvements. Players can respec (reset) their talents at class trainers for gold. Choosing the right talents is crucial for optimizing character performance in different content types like PvP, raiding, or solo play.",
+    "keywords": ["talents", "specialization", "talent points", "trees", "respec", "optimization", "characters", "spending", "earned every level", "level 10", "unique abilities", "stat bonuses", "ability improvements", "reset", "class trainers", "gold", "character performance", "content types", "pvp", "raiding", "solo play"],
+    "tags": ["mechanic", "character", "specialization", "progression"]
+  },
+  {
+    "id": "mechanic_weapon_skills",
+    "title": "Weapon Skill and Defense",
+    "content": "Vanilla has no glyph system or Inscription profession. Characters instead train permitted weapon types from weapon masters and raise each weapon skill by using it against suitable enemies. Weapon skill affects misses, glancing blows, and enemy avoidance, while Defense rises when the character is attacked and helps reduce incoming critical hits. A newly learned weapon should be trained safely before difficult content.",
+    "keywords": ["weapon skill", "defense", "weapon master", "train weapons", "miss", "glancing blows", "sword", "axe", "mace", "bow", "gun", "dagger", "staff", "glyphs"],
+    "tags": ["mechanic", "weapon_skill", "defense", "vanilla"]
+  },
+  {
+    "id": "mechanic_rested_experience",
+    "title": "Rested Experience and Tents",
+    "content": "Rested experience grants double experience from eligible creature kills until the rested pool is consumed. Logging out in an inn or capital accumulates rest faster than logging out elsewhere. Turtle WoW's Survival profession adds tents that let nearby players build rested experience while gathered at a campsite. This Vanilla-plus system rewards social breaks and can make later leveling sessions more efficient.",
+    "keywords": ["rested experience", "rest xp", "rested", "double experience", "inn", "capital city", "tent", "tents", "survival profession", "camp", "leveling", "turtle wow"],
+    "tags": ["mechanic", "leveling", "rested_experience", "turtle_wow"]
+  },
+  {
+    "id": "mechanic_pvp",
+    "title": "Player vs Player Combat",
+    "content": "Player versus player combat occurs in the open world, duels, and battlegrounds; Burning Crusade-style rated arenas are not part of the Vanilla ruleset. Honorable kills and battleground objectives contribute to weekly standing and rank progression, while battleground marks and rank requirements unlock rewards. Warsong Gulch, Arathi Basin, and Alterac Valley emphasize objectives, crowd control, focused damage, survivability, and coordination.",
+    "keywords": ["pvp", "player vs player", "battlegrounds", "honor", "ranking", "combat", "open world", "honorable kills", "battleground marks", "rank rewards", "weapons", "warsong gulch", "arathi basin", "alterac valley", "strategies", "pve", "crowd control", "burst damage", "survivability"],
+    "tags": ["mechanic", "combat", "pvp", "battlegrounds"]
+  },
+  {
+    "id": "mechanic_mounts",
+    "title": "Mount System",
+    "content": "Mounts provide faster ground travel across Azeroth. Standard racial riding and mounts become available at level 40, while faster epic ground riding becomes available at level 60 and is expensive. Vanilla has no player flying-mount or aquatic-mount system. Additional mounts can come from factions, PvP ranks, rare drops, quests, and Turtle WoW custom content, but they remain ground travel unless a server-specific description says otherwise.",
+    "keywords": ["mounts", "riding", "travel", "ground", "flying", "aquatic", "epic"],
+    "tags": ["mechanic", "travel", "collection", "mounts"]
+  },
+  {
+    "id": "mechanic_pets",
+    "title": "Pet System",
+    "content": "Hunter pets and summoned demons assist in combat, while companion pets are cosmetic. Hunters tame beasts, manage loyalty and happiness, feed suitable food, and teach abilities through Beast Training after learning some ranks from other beasts. Warlock demons have distinct combat roles and require class quests for several summons. Vanilla has no turn-based pet battle system.",
+    "keywords": ["pets", "companion pets", "hunter pets", "warlock demons", "tame beasts", "pet loyalty", "pet happiness", "feed pet", "beast training", "cosmetic companions", "assist in combat", "wild beasts", "pet abilities", "stable master", "utility"],
+    "tags": ["mechanic", "companions", "pets", "collection"]
+  },
+  {
+    "id": "mechanic_guilds",
+    "title": "Guild System",
+    "content": "Guilds are player-run communities with a shared name, tabard, chat channel, ranks, and officer permissions. They organize dungeons, raids, PvP, crafting, and social events. This TortoiseWoW core includes a custom guild-bank system when enabled, with access controlled by guild rank, but it does not use later guild levels, guild achievements, or guild reputation. Clear rules, fair loot handling, and reliable communication keep a guild healthy.",
+    "keywords": ["guilds", "organizations", "guild bank", "ranks", "community", "player organizations", "social structure", "guild members", "guild chat", "guild leaders", "promote members", "permissions", "activities", "shared goals", "raids", "crafting"],
+    "tags": ["mechanic", "social", "guilds", "community"]
+  },
+  {
+    "id": "mechanic_instances",
+    "title": "Instance System",
+    "content": "Instances create a private copy of a dungeon, raid, or battleground for a group. Most leveling and level-60 dungeons use five-player parties, while Vanilla raids use larger fixed limits such as 10, 20, or 40 players depending on the raid. There is no normal/heroic selector or lockout extension system. Dungeon instances can be reset subject to core limits; raid bosses use saved lockouts until the scheduled reset.",
+    "keywords": ["instances", "dungeons", "raids", "lockout", "difficulty", "coordination"],
+    "tags": ["mechanic", "instances", "group_content", "difficulty"]
+  },
+  {
+    "id": "mechanic_world_events",
+    "title": "World Events",
+    "content": "World events temporarily change activities across Azeroth. Vanilla examples include the Ahn'Qiraj War Effort, Scourge Invasion, Darkmoon Faire, Hallow's End, Feast of Winter Veil, Lunar Festival, and Stranglethorn Fishing Extravaganza. Events can add quests, bosses, vendors, turn-ins, and limited rewards. Turtle WoW may run additional custom events, whose active schedule and rules should be checked in current server information.",
+    "keywords": ["world events", "scourge invasion", "ahnqiraj", "seasonal", "hallows end", "winter veil", "lunar festival", "darkmoon faire", "fishing extravaganza", "large scale events", "ahn qiraj war effort", "special quests", "bosses", "rewards", "coordinated effort", "unique items", "game history"],
+    "tags": ["mechanic", "events", "world", "seasonal"]
+  },
+  {
+    "id": "mechanic_profession_specializations",
+    "title": "Profession Specializations",
+    "content": "Several Vanilla professions offer specialization quests. Blacksmithing branches into Armorsmithing or Weaponsmithing, with weapon sub-specialties; Leatherworking offers Dragonscale, Elemental, or Tribal; Engineering offers Goblin or Gnomish. Vanilla Tailoring and Alchemy do not use the later Burning Crusade specialization branches. Switching can be costly or require relearning, so inspect the recipes needed for the intended character before choosing.",
+    "keywords": ["profession specializations", "blacksmithing", "leatherworking", "tailoring", "engineering", "alchemy", "unique recipes", "abilities", "armorsmithing", "weaponsmithing", "dragonscale", "elemental", "tribal", "mooncloth", "shadoweave", "spellfire", "goblin", "gnomish", "potions", "elixirs", "transmutation", "choosing", "focuses", "specific types", "exclusive recipes"],
+    "tags": ["mechanic", "professions", "specializations", "crafting"]
+  },
+  {
+    "id": "mechanic_currency",
+    "title": "Currency Systems",
+    "content": "Vanilla uses copper, silver, and gold for normal trade, plus purpose-specific items rather than later currency tabs. Battleground marks, raid tokens, reputation turn-ins, Darkmoon tickets, and custom Turtle WoW tokens can buy or unlock particular rewards. There are no arena, justice, valor, or emblem currencies in this level-60 ruleset. Keep tokens until their vendor and reputation requirements are understood.",
+    "keywords": ["currency", "copper", "silver", "gold", "honor", "battleground marks", "raid tokens", "darkmoon tickets", "reputation turn ins", "custom tokens", "vendors", "rewards", "gearing", "economy"],
+    "tags": ["mechanic", "currency", "gearing", "progression"]
+  }
+]

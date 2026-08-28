@@ -1,0 +1,258 @@
+#include "AzerothVoicesManager.h"
+
+#include "Chat.h"
+#include "Player.h"
+#include "ScriptObjects.h"
+#include "WorldSession.h"
+
+#include <cstring>
+#include <sstream>
+#include <string>
+
+namespace AzerothVoices
+{
+    namespace
+    {
+        std::string TakeWord(std::string& input)
+        {
+            size_t begin = input.find_first_not_of(' ');
+            if (begin == std::string::npos)
+            {
+                input.clear();
+                return "";
+            }
+            size_t end = input.find(' ', begin);
+            std::string word = input.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+            input = end == std::string::npos ? "" : input.substr(end + 1);
+            return word;
+        }
+
+        char const* HistoryModeName(uint32_t mode)
+        {
+            switch (mode)
+            {
+                case 0: return "Disabled";
+                case 1: return "RAM";
+                case 2: return "SQL";
+                default: return "Invalid";
+            }
+        }
+
+        void SendGlobalTest(ChatHandler* handler)
+        {
+            StatusSnapshot const status = Manager::Instance().GetStatus();
+            bool errors = false;
+            auto send = [&](std::string const& line) { handler->SendSysMessage(line.c_str()); };
+
+            handler->SendSysMessage("## Azeroth Voices Global Test");
+            if (!status.configurationLoaded)
+            {
+                handler->SendSysMessage("Module: ERROR - configuration unavailable");
+                errors = true;
+            }
+            else if (!status.enabled)
+            {
+                handler->SendSysMessage("Module: Disabled");
+                errors = true;
+            }
+            else
+                handler->SendSysMessage("Module: OK");
+
+            if (status.apiConfigured)
+                handler->SendSysMessage("API: OK - configuration available");
+            else
+            {
+                handler->SendSysMessage("API: ERROR - endpoint, model/template, or authentication is missing");
+                errors = true;
+            }
+
+            if (status.endpoint.empty())
+            {
+                handler->SendSysMessage("Endpoint: ERROR - not configured");
+                errors = true;
+            }
+            else
+                send("Endpoint: Configured - " + status.endpoint);
+
+            send("History: " + std::string(HistoryModeName(status.historyStorageMode)));
+            if (status.historyStorageMode == 1)
+            {
+                handler->SendSysMessage("RAM: OK");
+                handler->SendSysMessage("SQL: Not active");
+            }
+            else if (status.historyStorageMode == 2)
+            {
+                if (status.historyDatabaseAvailable)
+                    handler->SendSysMessage("SQL: OK");
+                else
+                {
+                    handler->SendSysMessage("SQL: ERROR - history table unavailable; runtime fallback is RAM");
+                    handler->SendSysMessage("RAM: OK - fallback active");
+                    errors = true;
+                }
+                if (status.historyDatabaseAvailable)
+                    handler->SendSysMessage("RAM: Not active");
+            }
+            else
+            {
+                handler->SendSysMessage("RAM: Not active");
+                handler->SendSysMessage("SQL: Not active");
+                if (status.historyStorageMode > 2)
+                    errors = true;
+            }
+
+            if (!status.ragEnabled)
+                handler->SendSysMessage("RAG: Disabled");
+            else if (!status.ragEntries)
+            {
+                send("RAG: ERROR - no entries loaded (" + std::to_string(status.ragFiles) + " files)");
+                errors = true;
+            }
+            else if (status.ragParseFailures)
+            {
+                send("RAG: ERROR - " + std::to_string(status.ragFiles) + " files / " +
+                    std::to_string(status.ragEntries) + " entries / " +
+                    std::to_string(status.ragParseFailures) + " parse failures");
+                errors = true;
+            }
+            else
+                send("RAG: OK - " + std::to_string(status.ragFiles) + " files / " +
+                    std::to_string(status.ragEntries) + " entries");
+
+            send(std::string("Environment: ") + (status.environmentEnabled ? "Enabled" : "Disabled"));
+            send(std::string("Snapshot System: ") + (status.snapshotEnabled ? "Enabled" : "Disabled"));
+            send(std::string("Chat system: ") + (status.enabled ? "OK" : "Not active"));
+            if (status.workers)
+                send("Workers: OK - " + std::to_string(status.workers) + " active");
+            else if (status.enabled)
+            {
+                handler->SendSysMessage("Workers: ERROR - not initialized");
+                errors = true;
+            }
+            else
+                handler->SendSysMessage("Workers: Not active");
+
+            handler->SendSysMessage("-----------");
+            handler->SendSysMessage(errors ? "Result: ERRORS FOUND" : "Result: OK");
+        }
+
+        class AzerothVoicesCommandScript final : public AllCommandScript
+        {
+        public:
+            AzerothVoicesCommandScript() : AllCommandScript("AzerothVoicesCommandScript") {}
+
+            bool CanExecuteCommand(ChatHandler* handler, char const* command, char const* arguments) override
+            {
+                bool const longCommand = command && std::strcmp(command, "azerothvoices") == 0;
+                bool const shortCommand = command && std::strcmp(command, "av") == 0;
+                if (!longCommand && !shortCommand)
+                    return true;
+
+                bool const console = !handler->GetSession();
+                bool const gameMaster = console || handler->GetSession()->GetSecurity() >= SEC_MODERATOR;
+                if (!gameMaster)
+                {
+                    handler->SendSysMessage("You are not allowed to use Azeroth Voices commands.");
+                    return false;
+                }
+
+                std::string rest = arguments ? arguments : "";
+                std::string subcommand = TakeWord(rest);
+                if (longCommand)
+                {
+                    if (subcommand != "test" || !TakeWord(rest).empty())
+                        handler->SendSysMessage("Usage: .azerothvoices test");
+                    else
+                        SendGlobalTest(handler);
+                    return false;
+                }
+
+                if (subcommand.empty() || subcommand == "status")
+                {
+                    StatusSnapshot status = Manager::Instance().GetStatus();
+                    std::ostringstream text;
+                    text << "Azeroth Voices: " << (status.enabled ? "enabled" : "disabled")
+                         << (status.paused ? " (paused)" : "")
+                         << ", workers=" << status.workers
+                         << ", queued=" << status.queued
+                         << ", in-flight=" << status.inFlight
+                         << ", accepted=" << status.accepted
+                         << ", completed=" << status.completed
+                         << ", failed=" << status.failed
+                         << ", dropped=" << status.dropped
+                         << ", history-mode=" << status.historyStorageMode
+                         << ", histories=" << status.conversations
+                         << ", surrounding-scopes=" << status.surroundingScopes
+                         << ", snapshot-mode=" << status.snapshotStorageMode
+                         << ", snapshot-histories=" << status.snapshotHistories
+                         << ", history-db=" << (status.historyStorageMode != 2 ? "not-requested" :
+                            (status.historyDatabaseAvailable ? "available" : "unavailable"))
+                         << ", snapshot-db=" << (status.snapshotStorageMode != 2 ? "not-requested" :
+                            (status.snapshotDatabaseAvailable ? "available" : "unavailable"))
+                         << ", rag=" << (status.ragEnabled ? "enabled" : "disabled")
+                         << ", rag-entries=" << status.ragEntries
+                         << ", model=" << status.model
+                         << ", endpoint=" << status.endpoint;
+                    handler->SendSysMessage(text.str());
+                    return false;
+                }
+
+                if (subcommand == "pause")
+                {
+                    Manager::Instance().SetPaused(true);
+                    handler->SendSysMessage("Azeroth Voices paused. Queued replies can still finish delivery.");
+                    return false;
+                }
+                if (subcommand == "resume")
+                {
+                    Manager::Instance().SetPaused(false);
+                    handler->SendSysMessage("Azeroth Voices resumed.");
+                    return false;
+                }
+                if (subcommand == "clearhistory")
+                {
+                    Manager::Instance().ClearHistory();
+                    handler->SendSysMessage("Azeroth Voices chat, surrounding-chat, and snapshot history cleared; persistent module rows are also queued for deletion when database storage is available.");
+                    return false;
+                }
+                if (subcommand == "restart")
+                {
+                    Manager::Instance().Reload();
+                    handler->SendSysMessage("Azeroth Voices workers restarted. Use the core config reload command first if the file changed.");
+                    return false;
+                }
+
+                Player* issuer = console ? nullptr : handler->GetSession()->GetPlayer();
+                if (!issuer)
+                {
+                    handler->SendSysMessage("This Azeroth Voices command requires an in-game GM.");
+                    return false;
+                }
+                if (subcommand == "chatter")
+                {
+                    bool queued = Manager::Instance().ForceAmbient(issuer, rest);
+                    handler->SendSysMessage(queued ? "Ambient chatter queued." : "No eligible nearby/world actor was available.");
+                    return false;
+                }
+                if (subcommand == "live")
+                {
+                    std::string actor = TakeWord(rest);
+                    if (actor == "-")
+                        actor.clear();
+                    bool queued = Manager::Instance().QueueTest(issuer, actor, rest);
+                    handler->SendSysMessage(queued ? "Live generation test queued; the result will be delivered in game."
+                                                   : "Live test was not queued. Check module status and the bot name.");
+                    return false;
+                }
+
+                handler->SendSysMessage("av: status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt]");
+                return false;
+            }
+        };
+    }
+
+    void RegisterAzerothVoicesCommand()
+    {
+        new AzerothVoicesCommandScript();
+    }
+}

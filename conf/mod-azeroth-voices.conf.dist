@@ -1,0 +1,431 @@
+###################################################################################################
+# Azeroth Voices - provider-neutral LLM chat for TortoiseWoW/vMaNGOS
+###################################################################################################
+
+[worldserver]
+
+#
+# This is a TortoiseWoW/vMaNGOS worldserver module configuration.
+# Legacy AiPlayerbot.LLM* names are retained where their meaning is compatible.
+# The module does not read etc/aiplayerbot.conf automatically: copy wanted compatible values here.
+# Percentages use 0 (never) through 100 (always) and are clamped to that range.
+
+###################################################################################################
+# Module ownership and diagnostics
+###################################################################################################
+
+# Master switch for every module feature and HTTP request. (Boolean (0/1); default 1.)
+AzerothVoices.Enable = 1
+# Enables lightweight Azeroth Voices activity messages for administrators; 0 = disabled, 1 = enabled. (Boolean (0/1); default 0.)
+AzerothVoices.Debug = 0
+# Logs each cleaned reply with request ID, actor, actor kind, scope, trigger, speaker, HTTP status, generation time, and text; this may expose private chat in server logs. (Boolean (0/1); default 0.)
+AzerothVoices.Console.GeneratedMessages = 0
+# Logs HTTP-attempt, success, failure, and generated-message totals every configured interval; each retry counts as another API call. (Boolean (0/1); default 0.)
+AzerothVoices.Console.ApiCallStats = 0
+# Length of each terminal reporting window. (Integer seconds, minimum 5; default 60.)
+AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
+# Includes the newest N generated messages in each statistics report; 0 reports only counts and retains no message samples. (Integer 0-50; default 5.)
+AzerothVoices.Console.RecentMessages = 5
+
+###################################################################################################
+# Provider and HTTPS
+###################################################################################################
+
+# ChatCompletions supports OpenAI, Gemini's OpenAI-compatible endpoint, OpenRouter, and compatible gateways; Responses uses OpenAI's /v1/responses request shape. (Enum ChatCompletions/Responses; default ChatCompletions.)
+AzerothVoices.ProviderMode = ChatCompletions
+# Full provider endpoint. Remote plain HTTP is rejected. (URL; default OpenAI chat/completions.)
+AiPlayerbot.LLMApiEndpoint = https://api.openai.com/v1/chat/completions
+# Supplies the Bearer API token. (Secret or env:VARIABLE; default env:OPENAI_API_KEY.)
+AiPlayerbot.LLMApiKey = env:OPENAI_API_KEY
+# Exact model identifier accepted by the selected endpoint. (String; default gpt-4.1-mini.)
+AzerothVoices.Model = gpt-4.1-mini
+# Empty lets the module generate provider-safe JSON; a custom legacy template may use <pre prompt>, <context>, <prompt>, <model>, and documented chat placeholders. (JSON template; default empty.)
+AiPlayerbot.LLMApiJson =
+# ProviderJson parses OpenAI chat/Responses, Gemini candidates, and Ollama JSON; LegacyRegex uses the regex settings below. (Enum ProviderJson/LegacyRegex; default ProviderJson.)
+AzerothVoices.ParserMode = ProviderJson
+# Empty uses system CAs; otherwise uses this custom CA bundle. (File path; default empty.)
+AzerothVoices.CACertFile =
+# Allows plain HTTP only for local/loopback providers, never remote HTTP. (Boolean; default 1.)
+AzerothVoices.AllowLocalHttp = 1
+# TCP/TLS connection timeout. (Integer seconds, minimum 1; default 10.)
+AzerothVoices.ConnectTimeoutSeconds = 10
+# Provider read/write generation timeout. (Integer seconds, minimum 1; default 60.)
+AiPlayerbot.LLMGenerationTimeout = 60
+# Rejects oversized HTTP responses. (Integer bytes, minimum 1024; default 65536.)
+AzerothVoices.MaxResponseBytes = 65536
+# Requested output limit in generated provider JSON. (Integer tokens, minimum 1; default 80.)
+AzerothVoices.MaxTokens = 80
+# Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default 0.8.)
+AzerothVoices.Temperature = 0.8
+# Nucleus sampling; invalid values are clamped. (Decimal 0.0-1.0; default 0.95.)
+AzerothVoices.TopP = 0.95
+
+###################################################################################################
+# Worker pool, queue, limits, and cooldowns
+###################################################################################################
+
+# Fixed background HTTP workers; core objects stay on world thread. (Integer 1-32; default 8.)
+AzerothVoices.WorkerThreads = 8
+# Legacy misspelled fallback used only if WorkerThreads is absent. (Integer 1-32; default 8.)
+AiPlayerbot.LLMMaxSimultaniousGenerations = 8
+# Hard pending-queue memory bound. (Integer requests, minimum 1; default 128.)
+AzerothVoices.QueueMaximum = 128
+# Queue capacity reserved for direct/group replies. (Integer 0-QueueMaximum; default 32.)
+AzerothVoices.HighPriorityReserve = 32
+# Global budget shared by all workers. (Integer requests/minute, minimum 1; default 60.)
+AzerothVoices.GlobalRequestsPerMinute = 60
+# Drops queued requests that are no longer timely. (Integer seconds, minimum 1; default 90.)
+AzerothVoices.RequestTTLSeconds = 90
+# Cooldown before an actor gives another normal reply. (Integer seconds, minimum 0; default 10.)
+AzerothVoices.ActorCooldownSeconds = 10
+# Longer per-actor random-chatter cooldown. (Integer seconds, minimum 0; default 120.)
+AzerothVoices.AmbientActorCooldownSeconds = 120
+# Coalesces rapid non-whispers from one speaker. (Integer seconds, minimum 0; default 3.)
+AzerothVoices.SpeakerCooldownSeconds = 3
+# Retries transient connection, 429, and 5xx failures. (Integer retries, minimum 0; default 1.)
+AzerothVoices.RetryMaximum = 1
+# Base increasing delay between retries. (Integer milliseconds, minimum 0; default 500.)
+AzerothVoices.RetryBackoffMilliseconds = 500
+
+###################################################################################################
+# Shared prompts and PlayerBots-compatible prompt names
+###################################################################################################
+
+# Sets one shared behavior/personality instruction for every bot and NPC; the module intentionally has no per-character personality cards. (Text; default below.)
+AzerothVoices.GlobalPrompt = You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says.
+# Describes a PlayerBot before a normal response. (Text template; default below.)
+AiPlayerbot.LLMPrePrompt = You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>.
+# Formats incoming chat for the provider. (Text template; default below.)
+AiPlayerbot.LLMPrompt = <receiver name>: <initial message>
+# Adds a short response cue after incoming chat. (Text template; default below.)
+AiPlayerbot.LLMPostPrompt = <bot name>:
+# Shared prompt for a nearby NPC speaker. (Text template; default below.)
+AiPlayerbot.LLMRpgPrompt = You are <bot name>, an NPC in <bot subzone>, <bot zone>. Reply briefly in character.
+# Caps the combined live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Integer characters, minimum 0; default 4096.)
+AiPlayerbot.LLMContextLength = 4096
+# 0 isolates history by speaker/scope; 1 shares actor-wide history. (Boolean; default 0.)
+AiPlayerbot.LLMGlobalContext = 0
+# Accepted for migration diagnostics but intentionally not loaded. (File path; default empty.)
+AiPlayerbot.LLMDefaultPromptsFile =
+# LegacyRegex-only response start matcher. (ECMAScript regex; default below.)
+AiPlayerbot.LLMResponseStartPattern = ("content":\s*")
+# LegacyRegex-only response end matcher. (ECMAScript regex; default below.)
+AiPlayerbot.LLMResponseEndPattern = ("|\b(?!<sender name>\b)(\w+):)
+# LegacyRegex-only unwanted-fragment remover. (ECMAScript regex; default below.)
+AiPlayerbot.LLMResponseDeletePattern = (\\n|<sender name>:|\\[^ ]+)
+# Optional LegacyRegex multi-line split matcher. (ECMAScript regex; default empty.)
+AiPlayerbot.LLMResponseSplitPattern =
+# Blocks matching replies, ignoring case. (Comma-separated scope/channel names; default empty.)
+AiPlayerbot.LLMBlockedReplyChannels =
+
+###################################################################################################
+# Chat scopes, NPCs, distances, and response selection
+###################################################################################################
+
+# Enables direct PlayerBot whisper replies. (Boolean; default 1.)
+AzerothVoices.Replies.Whisper = 1
+# Enables nearby PlayerBot and eligible friendly NPC say replies. (Boolean; default 1.)
+AzerothVoices.Replies.Say = 1
+# Enables nearby PlayerBot and eligible friendly NPC yell replies. (Boolean; default 1.)
+AzerothVoices.Replies.Yell = 1
+# Enables PlayerBot party-subgroup replies. (Boolean; default 1.)
+AzerothVoices.Replies.Party = 1
+# Enables PlayerBot raid replies. (Boolean; default 1.)
+AzerothVoices.Replies.Raid = 1
+# Enables guild replies, guild ambient chatter, and guild events. (Boolean; default 1.)
+AzerothVoices.Replies.Guild = 1
+# Enables officer-channel replies for suitably ranked bots. (Boolean; default 0.)
+AzerothVoices.Replies.Officer = 0
+# Enables replies and ambient/event lines in WorldChannelName. (Boolean; default 1.)
+AzerothVoices.Replies.World = 1
+# Enables replies in channels other than WorldChannelName. (Boolean; default 0.)
+AzerothVoices.Replies.CustomChannels = 0
+# Used to classify and deliver world-chat messages. (Channel name; default World.)
+AzerothVoices.WorldChannelName = World
+# Allows alive friendly non-pet/non-totem/non-critter NPC speakers. (Boolean; default 1.)
+AzerothVoices.NPC.Enable = 1
+# Search distance for eligible NPC speakers. (Decimal yards, minimum 1; default 25.)
+AzerothVoices.NPC.Distance = 25
+# Prevents actors currently in combat from being selected. (Boolean; default 1.)
+AzerothVoices.DisableRepliesInCombat = 1
+# Maximum responders to one incoming message. (Integer actors, minimum 1; default 2.)
+AzerothVoices.MaxResponders = 2
+# Local say listener/responder distance. (Decimal yards, minimum 1; default 30.)
+AzerothVoices.SayDistance = 30
+# Local yell listener/responder distance. (Decimal yards, minimum SayDistance; default 100.)
+AzerothVoices.YellDistance = 100
+
+# Chance a selected or directly whispered actor answers. (Percentage; default 100.)
+AzerothVoices.Chance.DirectAddress = 100
+# Chance an actor named in the message answers. (Percentage; default 70.)
+AzerothVoices.Chance.NameMention = 70
+# Chance an otherwise eligible nearby actor joins in. (Percentage; default 8.)
+AzerothVoices.Chance.Overhear = 8
+# Bot response chance to a real player's say/yell. (Percentage; default 90.)
+AzerothVoices.PlayerReplyChance.Say = 90
+# Bot response chance to another bot's say/yell. (Percentage; default 10.)
+AzerothVoices.BotReplyChance.Say = 10
+# Bot response chance to a real player in world/custom chat. (Percentage; default 60.)
+AzerothVoices.PlayerReplyChance.Channel = 60
+# Bot response chance to another bot in world/custom chat. (Percentage; default 3.)
+AzerothVoices.BotReplyChance.Channel = 3
+# Bot response chance to a real player in party/raid. (Percentage; default 90.)
+AzerothVoices.PlayerReplyChance.Party = 90
+# Bot response chance to another bot in party/raid. (Percentage; default 25.)
+AzerothVoices.BotReplyChance.Party = 25
+# Bot response chance to a real player in guild/officer chat. (Percentage; default 70.)
+AzerothVoices.PlayerReplyChance.Guild = 70
+# Bot response chance to another bot in guild/officer chat. (Percentage; default 5.)
+AzerothVoices.BotReplyChance.Guild = 5
+# Global upper cap for all PlayerBot-to-PlayerBot replies. (Percentage; default 10.)
+AiPlayerbot.LLMBotToBotChatChance = 10
+# Global upper cap for NPC replies to PlayerBot messages. (Percentage; default 30.)
+AiPlayerbot.LLMRpgAIChatChance = 30
+# Messages beginning with any listed PlayerBots command or addon prefix are never sent to the provider; add local prefixes as needed. (Comma-separated case-insensitive prefixes; default below.)
+AzerothVoices.CommandBlacklist = .,! ,/,autogear,talents,summon,release,revive,attack,follow,stay,cast,quest,trainer,teleport,addon,DBM,Recount,Questie
+
+###################################################################################################
+# Random nearby, guild, and world chatter
+###################################################################################################
+
+# Enables scheduled ambient chatter around online real players. (Boolean; default 1.)
+AzerothVoices.Random.Enable = 1
+# Lower bound before the next ambient attempt. (Integer seconds, minimum 5; default 90.)
+AzerothVoices.Random.MinimumIntervalSeconds = 90
+# Upper interval bound. (Integer seconds, at least MinimumIntervalSeconds; default 240.)
+AzerothVoices.Random.MaximumIntervalSeconds = 240
+# Local speaker search radius around a real player. (Decimal yards, minimum 1; default 150.)
+AzerothVoices.Random.RealPlayerDistance = 150
+# Chance another actor replies to an ambient generated line. (Percentage; default 15.)
+AzerothVoices.Random.FollowupChance = 15
+# Ambient chain cap; 1 disables follow-ups. (Integer generated turns, minimum 1; default 2.)
+AzerothVoices.Random.MaximumActors = 2
+# Chooses ambient-chat delivery scopes; a disabled or unavailable group scope safely falls back to say. (Comma-separated say/yell/guild/officer/world/channel; default say,guild,world.)
+AzerothVoices.Random.Scopes = say,guild,world
+# General ambient topic instructions. (Pipe-separated text choices; default below.)
+AzerothVoices.Random.Prompts = Make a casual observation about the current zone.|Complain briefly about leveling or grinding.|Comment on loot, repairs, travel, professions, quests, dungeons, or battlegrounds.|Make a short joke that fits World of Warcraft.|Mention what you want to do next in the game.
+# Question-style ambient instructions. (Pipe-separated text choices; default below.)
+AzerothVoices.Random.Questions = Ask whether anyone wants to group.|Ask for an opinion about the current zone.|Ask which dungeon people like.|Ask what people are farming.|Ask about professions, gear, or PvP.
+# Instructions that use live surroundings. (Pipe-separated text choices; default below.)
+AzerothVoices.Random.EnvironmentPrompts = React to something nearby.|Comment on the weather or surroundings.|Mention a creature, object, quest, spell, item, vendor, dungeon, or unfinished task that fits the location.
+# Topics used for guild ambient chatter. (Pipe-separated text choices; default below.)
+AzerothVoices.Random.GuildPrompts = Ask whether guild members want a dungeon group.|Congratulate the guild on recent progress.|Talk about raids, PvP, professions, loot, the guild bank, or helping another member.
+# Topics used for world/channel ambient chatter. (Pipe-separated text choices; default below.)
+AzerothVoices.Random.WorldPrompts = Start a short world-chat topic about zones, dungeons, loot, professions, PvP, quests, travel, or server life.|Ask world chat a brief useful question.|Make a short public observation that could start a conversation.
+
+###################################################################################################
+# Lightweight live environment context
+###################################################################################################
+
+# Adds map/zone/area/dungeon/combat/group/guild and bounded context. (Boolean; default 1.)
+AzerothVoices.Environment.Enable = 1
+# Radius for bounded nearby alive creature names, including friendly, neutral, or hostile creatures. (Decimal yards, clamped 1-100; default 25.)
+AzerothVoices.Environment.Distance = 25
+# Maximum nearby creature names after bounded collection; 0 disables them. (Integer entries, clamped 0-50; default 5.)
+AzerothVoices.Environment.MaximumCreatures = 5
+# Combined equipment/backpack item-name cap; 0 disables item names. (Integer entries, clamped 0-50; default 8.)
+AzerothVoices.Environment.MaximumItems = 8
+# Includes bounded PlayerBot equipment names in context. (Boolean; default 1.)
+AzerothVoices.Environment.IncludeEquipment = 1
+# Includes bounded backpack names; off keeps prompts lightweight. (Boolean; default 0.)
+AzerothVoices.Environment.IncludeBackpack = 0
+
+###################################################################################################
+# Event chatter
+###################################################################################################
+#
+# Automatic vMaNGOS hooks: creature/player kill, death, loot, quest complete, spell learned,
+# duel request/start/win, level-up, login, guild join, and guild leave.
+# Adapter events: achievement, pet_defeated, used_object, guild promotion/demotion,
+# dungeon_completed, and game_event_started/stopped. See README.md for HandleEvent examples.
+# Guild-related events use guild chat when membership is available; game events use World.
+
+# Master switch for automatic and adapter event reactions. (Boolean; default 1.)
+AzerothVoices.Events.Enable = 1
+# Radius for local-say event responders only. (Decimal yards, minimum 1; default 40.)
+AzerothVoices.Events.RealPlayerDistance = 40
+# Second-stage chance that other actors react to an event. (Percentage; default 25.)
+AzerothVoices.Events.ResponderChance = 25
+# Chance an AI PlayerBot comments on its own event. (Percentage; default 5.)
+AzerothVoices.Events.SelfCommentChance = 5
+# Maximum other responders to one event. (Integer actors, minimum 1; default 2.)
+AzerothVoices.Events.MaximumResponders = 2
+# Per-subject/per-event repeat cooldown. (Integer seconds, minimum 0; default 60.)
+AzerothVoices.Events.CooldownSeconds = 60
+# Initial chance for an automatic creature-kill event. (Percentage; default 8.)
+AzerothVoices.Events.Chance.CreatureDefeated = 8
+# Initial chance for an automatic PvP-kill event. (Percentage; default 40.)
+AzerothVoices.Events.Chance.PlayerDefeated = 40
+# Initial chance for an automatic player-death event. (Percentage; default 25.)
+AzerothVoices.Events.Chance.Died = 25
+# Initial chance for automatic non-rare loot chatter. (Percentage; default 8.)
+AzerothVoices.Events.Chance.ItemLooted = 8
+# Initial chance for automatic quest-completion chatter. (Percentage; default 25.)
+AzerothVoices.Events.Chance.QuestCompleted = 25
+# Initial chance for automatic spell-learning chatter. (Percentage; default 15.)
+AzerothVoices.Events.Chance.SpellLearned = 15
+# Initial chance for automatic duel-request chatter. (Percentage; default 25.)
+AzerothVoices.Events.Chance.DuelRequested = 25
+# Initial chance for automatic duel-start chatter. (Percentage; default 20.)
+AzerothVoices.Events.Chance.DuelStarted = 20
+# Initial chance for automatic duel-victory chatter. (Percentage; default 35.)
+AzerothVoices.Events.Chance.DuelWon = 35
+# Initial chance for level-up chatter; guild scope if available. (Percentage; default 50.)
+AzerothVoices.Events.Chance.LevelUp = 50
+# Initial chance for automatic guild-join chatter. (Percentage; default 60.)
+AzerothVoices.Events.Chance.GuildJoin = 60
+# Initial chance for guild-leave chatter; falls back to say if cleared. (Percentage; default 40.)
+AzerothVoices.Events.Chance.GuildLeave = 40
+# Initial chance for automatic guild-login chatter. (Percentage; default 10.)
+AzerothVoices.Events.Chance.GuildLogin = 10
+# Initial chance for adapter-supplied guild promotion. (Percentage; default 50.)
+AzerothVoices.Events.Chance.GuildPromotion = 50
+# Initial chance for adapter-supplied guild demotion. (Percentage; default 30.)
+AzerothVoices.Events.Chance.GuildDemotion = 30
+# Initial chance for adapter-supplied achievement chatter. (Percentage; default 60.)
+AzerothVoices.Events.Chance.Achievement = 60
+# Initial chance for adapter-supplied pet-defeat chatter. (Percentage; default 20.)
+AzerothVoices.Events.Chance.PetDefeated = 20
+# Initial chance for adapter-supplied object-use chatter. (Percentage; default 10.)
+AzerothVoices.Events.Chance.UsedObject = 10
+# Initial chance for automatic rare-loot guild chatter. (Percentage; default 45.)
+AzerothVoices.Events.Chance.RareItem = 45
+# Initial chance for automatic epic-loot guild chatter. (Percentage; default 75.)
+AzerothVoices.Events.Chance.EpicItem = 75
+# Initial chance for adapter-supplied dungeon completion. (Percentage; default 70.)
+AzerothVoices.Events.Chance.DungeonCompleted = 70
+# Initial chance for adapter game-event start in World. (Percentage; default 50.)
+AzerothVoices.Events.Chance.GameEventStarted = 50
+# Initial chance for adapter game-event stop in World. (Percentage; default 30.)
+AzerothVoices.Events.Chance.GameEventStopped = 30
+
+###################################################################################################
+# Reply length and PlayerBots-compatible typing delay
+###################################################################################################
+
+# Delays delivery so generated chat appears naturally typed. (Boolean; default 1.)
+AzerothVoices.Typing.Enable = 1
+# Fixed delay added to each line. (Integer milliseconds, minimum 0; default 0.)
+AzerothVoices.Typing.BaseDelayMilliseconds = 0
+# Main natural typing delay. (Integer ms/character, minimum 0; default 200.)
+AzerothVoices.Typing.DelayPerCharacterMilliseconds = 200
+# Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Boolean (0/1); default 1.)
+AzerothVoices.Typing.SubtractGenerationTime = 1
+# Truncates cleaned in-game output. (Integer characters, minimum 1; default 220.)
+AzerothVoices.Reply.MaximumCharacters = 220
+# Maximum delivered lines per request. (Integer lines, minimum 1; default 3.)
+AzerothVoices.Reply.MaximumLines = 3
+
+###################################################################################################
+# Bounded conversation and surrounding-chat history
+###################################################################################################
+
+# 0 disables conversation history, 1 keeps bounded history only in RAM until restart, and 2 persists it in the character database with a bounded lazy-loaded RAM cache (falling back to RAM if the module tables are unavailable). (Integer mode 0/1/2; default 2.)
+AzerothVoices.History.StorageMode = 2
+# --- SQL MODE SETTINGS (StorageMode = 2) ---
+# Used only when StorageMode = 2 (SQL); integer turns, default 20. Caps persistent rows and lazy-loaded hot-cache turns per conversation.
+AzerothVoices.History.DatabaseMaximumTurns = 20
+# Used only when StorageMode = 2 (SQL); integer minutes, default 10080 (7 days). Older persistent conversation turns are not loaded and are deleted by cleanup.
+AzerothVoices.History.DatabaseTTLMinutes = 10080
+# Used only when a StorageMode = 2 (SQL) feature has queued rows; integer seconds, default 5. Sets the maximum delay before batched history/snapshot writes flush.
+AzerothVoices.History.DatabaseFlushSeconds = 5
+# Used only when a StorageMode = 2 (SQL) feature has queued rows; integer rows, default 20. Flushes the shared history/snapshot transaction when this many rows wait.
+AzerothVoices.History.DatabaseFlushBatchSize = 20
+# --- RAM MODE SETTINGS (StorageMode = 1) ---
+# Used only when StorageMode = 1 (RAM); integer turns, default 6. Caps retained turns per conversation until worldserver restarts.
+AzerothVoices.History.RamMaximumTurns = 6
+# Prompt-age limit for conversation turns in RAM or the SQL hot cache. (Integer minutes, minimum 1; default 30.)
+AzerothVoices.History.TTLMinutes = 30
+# Hard rendered conversation-history cap per provider request. (Integer characters, minimum 128; default 2500.)
+AzerothVoices.History.MaximumCharacters = 2500
+# Hard bound on in-memory conversation buckets in StorageMode 1 or 2. (Integer keys, minimum 1; default 2048.)
+AzerothVoices.History.MaximumConversations = 2048
+# Introduces previous conversation context. (Text template; default below.)
+AzerothVoices.History.HeaderTemplate = Recent conversation with <sender name>, use it only as context:
+# Renders each stored exchange. (Text template with \n escapes; default below.)
+AzerothVoices.History.LineTemplate = <sender name>: <sender message>\n<bot name>: <bot reply>\n
+# Separates history from the new incoming message. (Text template; default below.)
+AzerothVoices.History.FooterTemplate = New message from <sender name>: <initial message>
+
+# Adds recent lines only from the same whisper, group, guild, channel, or local map-area scope so references such as "him" or "that" retain context. (Boolean (0/1); default 1.)
+AzerothVoices.SurroundingChat.Enable = 1
+# Hard per-scope recent-line cap. (Integer lines, minimum 0; default 8.)
+AzerothVoices.SurroundingChat.MaximumLines = 8
+# Discards stale surrounding lines. (Integer minutes, minimum 1; default 5.)
+AzerothVoices.SurroundingChat.TTLMinutes = 5
+# Rendered surrounding-context cap. (Integer characters, minimum 128; default 1200.)
+AzerothVoices.SurroundingChat.MaximumCharacters = 1200
+# Hard bound on RAM scope buckets. (Integer scopes, minimum 1; default 512.)
+AzerothVoices.SurroundingChat.MaximumScopes = 512
+
+###################################################################################################
+# SNAPSHOT SYSTEM
+###################################################################################################
+
+# When enabled, adds a richer PlayerBot-only world-thread block with combat, group, spells, quests, visible objects, and nearby players; disabling omits it, while enabling increases prompt tokens and may increase provider response time. (Boolean (0/1); default 0.)
+AzerothVoices.Snapshot.Enable = 0
+# Adds current health, active power resource, combat state, victim name/level/health, and whether the bot is fighting. (Boolean (0/1); default 1.)
+AzerothVoices.Snapshot.IncludeCombat = 1
+# Adds bounded same-map group members with class, race, health, distance, and current fighting state. (Boolean (0/1); default 1.)
+AzerothVoices.Snapshot.IncludeGroup = 1
+# Adds bounded active known spells after removing passive/internal entries and keeping the highest useful rank for each spell name. (Boolean (0/1); default 1.)
+AzerothVoices.Snapshot.IncludeSpells = 1
+# Adds bounded quest-log titles and whether each active quest is in progress, complete, or failed. (Boolean (0/1); default 1.)
+AzerothVoices.Snapshot.IncludeQuests = 1
+# Adds bounded nearby creatures and spawned game objects that pass the bot's live line-of-sight check. (Boolean (0/1); default 1.)
+AzerothVoices.Snapshot.IncludeLineOfSight = 1
+# Adds bounded non-GM players and PlayerBots within range and line of sight with level, race, class, faction, distance, and actor type. (Boolean (0/1); default 1.)
+AzerothVoices.Snapshot.IncludeNearbyPlayers = 1
+# Shared bounded search radius for snapshot creature, game-object, and nearby-player collection; group distance is reported for same-map members. (Decimal yards, clamped 1-100; default 40.)
+AzerothVoices.Snapshot.Distance = 40
+# Maximum other group members rendered in the current snapshot; 0 omits the group-member list. (Integer entries, clamped 0-40; default 5.)
+AzerothVoices.Snapshot.MaximumGroupMembers = 5
+# Maximum deduplicated highest-rank usable spell names rendered in the current snapshot; 0 omits spells. (Integer entries, clamped 0-100; default 20.)
+AzerothVoices.Snapshot.MaximumSpells = 20
+# Maximum occupied quest-log entries rendered in the current snapshot; 0 omits quests. (Integer entries, clamped 0-20; default 10.)
+AzerothVoices.Snapshot.MaximumQuests = 10
+# Maximum line-of-sight creatures rendered after bounded collection and nearest-first sorting; 0 omits creatures. (Integer entries, clamped 0-50; default 10.)
+AzerothVoices.Snapshot.MaximumCreatures = 10
+# Maximum spawned line-of-sight game objects rendered after bounded collection and nearest-first sorting; 0 omits game objects. (Integer entries, clamped 0-50; default 8.)
+AzerothVoices.Snapshot.MaximumGameObjects = 8
+# Maximum non-GM nearby players rendered after bounded collection and nearest-first sorting; 0 omits players. (Integer entries, clamped 0-50; default 8.)
+AzerothVoices.Snapshot.MaximumPlayers = 8
+# Hard cap on the complete current detailed snapshot before it enters the request context budget. (Integer characters, clamped 256-16000; default 3500.)
+AzerothVoices.Snapshot.MaximumCharacters = 3500
+# Replaces {combat}, {group}, {spells}, {quests}, {line_of_sight}, and {nearby_players}; disabled or empty sections insert no text. (Text template with literal \n line breaks; default below.)
+AzerothVoices.Snapshot.PromptTemplate = "CURRENT PLAYERBOT SNAPSHOT:\n{combat}\n{group}\n{spells}\n{quests}\n{line_of_sight}\n{nearby_players}"
+# Controls only older delivered snapshots: 0 stores none while the current snapshot still works, 1 stores bounded RAM until restart, and 2 persists SQL plus a lazy RAM cache (falling back to bounded RAM if tables are unavailable). (Integer mode 0/1/2; default 0.)
+AzerothVoices.Snapshot.StorageMode = 0
+# --- SQL MODE SETTINGS (StorageMode = 2) ---
+# Used only when StorageMode = 2 (SQL); integer snapshots, default 10. Caps persistent rows and lazy-loaded hot-cache snapshots per PlayerBot.
+AzerothVoices.Snapshot.DatabaseMaximumSnapshots = 10
+# Used only when StorageMode = 2 (SQL); integer minutes, default 10080 (7 days). Older persistent snapshots are not loaded and are deleted by cleanup.
+AzerothVoices.Snapshot.DatabaseTTLMinutes = 10080
+# --- RAM MODE SETTINGS (StorageMode = 1) ---
+# Used only when StorageMode = 1 (RAM); integer snapshots, default 3. Caps retained snapshots per PlayerBot until worldserver restarts.
+AzerothVoices.Snapshot.RamMaximumSnapshots = 3
+# Prompt-age limit for older snapshots in RAM or the SQL hot cache; the current live snapshot is never aged out. (Integer minutes, minimum 1; default 30.)
+AzerothVoices.Snapshot.HistoryTTLMinutes = 30
+# Hard combined prompt cap for older snapshots, separate from the richer current-snapshot cap. (Integer characters, minimum 128; default 1600.)
+AzerothVoices.Snapshot.HistoryMaximumCharacters = 1600
+# Hard bound on in-memory PlayerBot snapshot-history buckets in StorageMode 1 or 2. (Integer actors, minimum 1; default 2048.)
+AzerothVoices.Snapshot.HistoryMaximumActors = 2048
+
+###################################################################################################
+# Structured local RAG (optional, no embeddings or extra provider call)
+###################################################################################################
+
+# Loads cached local JSON lore and retrieves by keywords. (Boolean (0/1); default 0.)
+AzerothVoices.RAG.Enable = 0
+# Loads every .json file here and also checks the installed and source-tree module data paths so one value works in both deployments. (Directory path; default below.)
+AzerothVoices.RAG.Directory = modules/mod-azeroth-voices/data/rag/
+# Maximum RAG excerpts per provider request. (Integer entries, minimum 1; default 3.)
+AzerothVoices.RAG.MaximumItems = 3
+# Minimum local weighted similarity required to include an entry; lower values increase coverage and noise, higher values increase precision and may miss useful lore, with 0.2-0.4 recommended. (Decimal 0.0-1.0; default 0.3.)
+AzerothVoices.RAG.SimilarityThreshold = 0.3
+# Total structured RAG prompt cap. (Integer characters, minimum 128; default 1200.)
+AzerothVoices.RAG.MaximumCharacters = 1200
+# Reloads JSON when the module restarts via `.av restart`. (Boolean (0/1); default 1.)
+AzerothVoices.RAG.ReloadOnRestart = 1
+# The required {rag_info} placeholder is replaced with the selected local RAG excerpts before the provider request. (Text template with literal \n line breaks; default below.)
+AzerothVoices.RAG.PromptTemplate = "RELEVANT INFORMATION:\n{rag_info}\nUse this information to provide accurate and detailed responses when applicable."
