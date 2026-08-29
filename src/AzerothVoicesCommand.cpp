@@ -1,4 +1,5 @@
 #include "AzerothVoicesManager.h"
+#include "AzerothVoicesPersonality.h"
 
 #include "Chat.h"
 #include "Player.h"
@@ -121,6 +122,17 @@ namespace AzerothVoices
 
             send(std::string("Environment: ") + (status.environmentEnabled ? "Enabled" : "Disabled"));
             send(std::string("Snapshot System: ") + (status.snapshotEnabled ? "Enabled" : "Disabled"));
+            if (!status.personalityEnabled)
+                handler->SendSysMessage("Personality: Disabled");
+            else
+            {
+                send("Personality: " + std::string(status.personalityDatabaseAvailable
+                    ? "OK - SQL persistent" : "RAM fallback - SQL table unavailable") +
+                    ", cached=" + std::to_string(status.personalities) +
+                    ", pending=" + std::to_string(status.personalityGenerationsPending));
+                if (!status.personalityDatabaseAvailable)
+                    errors = true;
+            }
             send(std::string("Chat system: ") + (status.enabled ? "OK" : "Not active"));
             if (status.workers)
                 send("Workers: OK - " + std::to_string(status.workers) + " active");
@@ -134,6 +146,54 @@ namespace AzerothVoices
 
             handler->SendSysMessage("-----------");
             handler->SendSysMessage(errors ? "Result: ERRORS FOUND" : "Result: OK");
+        }
+
+        char const* BackgroundModeName(uint32_t mode)
+        {
+            return mode == 1 ? "normal real-world WoW player" : "roleplay Azeroth character";
+        }
+
+        void HandlePersonalityCommand(ChatHandler* handler, std::string rest)
+        {
+            std::string action = TakeWord(rest);
+            std::string actor = TakeWord(rest);
+            if (action.empty() || actor.empty() || !TakeWord(rest).empty() ||
+                (action != "show" && action != "regenerate" && action != "delete"))
+            {
+                handler->SendSysMessage("Usage: .azerothvoices personality show <online-bot> | regenerate <online-bot> | delete <online-bot> | delete all");
+                return;
+            }
+
+            std::string message;
+            if (action == "show")
+            {
+                BotPersonality personality;
+                if (!Manager::Instance().GetPersonality(actor, personality, message))
+                {
+                    handler->SendSysMessage(message.c_str());
+                    return;
+                }
+                handler->SendSysMessage("## Azeroth Voices PlayerBot Personality");
+                handler->SendSysMessage(("Bot: " + personality.botName).c_str());
+                handler->SendSysMessage(("Character GUID: " + std::to_string(personality.characterGuid)).c_str());
+                handler->SendSysMessage(("Traits: " + JoinPersonalityTraits(personality.traits)).c_str());
+                handler->SendSysMessage(("Tone: " + (personality.tone.empty() ? std::string("disabled/not generated") : personality.tone)).c_str());
+                handler->SendSysMessage(("Background mode: " + std::string(BackgroundModeName(personality.backgroundMode))).c_str());
+                handler->SendSysMessage(("Background: " + (personality.background.empty() ? std::string("disabled/not generated") : personality.background)).c_str());
+                handler->SendSysMessage(("Generation version: " + std::to_string(personality.generationVersion)).c_str());
+                return;
+            }
+            if (action == "regenerate")
+            {
+                Manager::Instance().RegeneratePersonality(actor, message);
+                handler->SendSysMessage(message.c_str());
+                return;
+            }
+            if (actor == "all")
+                Manager::Instance().DeleteAllPersonalities(message);
+            else
+                Manager::Instance().DeletePersonality(actor, message);
+            handler->SendSysMessage(message.c_str());
         }
 
         class AzerothVoicesCommandScript final : public AllCommandScript
@@ -160,10 +220,18 @@ namespace AzerothVoices
                 std::string subcommand = TakeWord(rest);
                 if (longCommand)
                 {
-                    if (subcommand != "test" || !TakeWord(rest).empty())
-                        handler->SendSysMessage("Usage: .azerothvoices test");
-                    else
+                    if (subcommand == "test" && TakeWord(rest).empty())
                         SendGlobalTest(handler);
+                    else if (subcommand == "personality")
+                        HandlePersonalityCommand(handler, rest);
+                    else
+                        handler->SendSysMessage("Usage: .azerothvoices test | personality show/regenerate/delete <online-bot> | personality delete all");
+                    return false;
+                }
+
+                if (subcommand == "personality")
+                {
+                    HandlePersonalityCommand(handler, rest);
                     return false;
                 }
 
@@ -189,6 +257,10 @@ namespace AzerothVoices
                             (status.historyDatabaseAvailable ? "available" : "unavailable"))
                          << ", snapshot-db=" << (status.snapshotStorageMode != 2 ? "not-requested" :
                             (status.snapshotDatabaseAvailable ? "available" : "unavailable"))
+                         << ", personality=" << (status.personalityEnabled ? "enabled" : "disabled")
+                         << ", personality-db=" << (status.personalityDatabaseAvailable ? "available" : "unavailable")
+                         << ", personalities=" << status.personalities
+                         << ", personality-pending=" << status.personalityGenerationsPending
                          << ", rag=" << (status.ragEnabled ? "enabled" : "disabled")
                          << ", rag-entries=" << status.ragEntries
                          << ", model=" << status.model
@@ -245,7 +317,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt]");
+                handler->SendSysMessage("av: status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/regenerate/delete <bot> | personality delete all");
                 return false;
             }
         };

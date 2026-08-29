@@ -42,6 +42,10 @@ namespace AzerothVoices
         uint32_t snapshotStorageMode = 0;
         bool historyDatabaseAvailable = false;
         bool snapshotDatabaseAvailable = false;
+        bool personalityEnabled = false;
+        bool personalityDatabaseAvailable = false;
+        size_t personalities = 0;
+        size_t personalityGenerationsPending = 0;
         bool ragEnabled = false;
         bool environmentEnabled = false;
         bool snapshotEnabled = false;
@@ -70,6 +74,10 @@ namespace AzerothVoices
 
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
+        bool GetPersonality(std::string const& actorName, BotPersonality& personality, std::string& message);
+        bool RegeneratePersonality(std::string const& actorName, std::string& message);
+        bool DeletePersonality(std::string const& actorName, std::string& message);
+        bool DeleteAllPersonalities(std::string& message);
         void ClearHistory();
         void SetPaused(bool paused);
         bool IsPaused() const;
@@ -153,6 +161,17 @@ namespace AzerothVoices
         std::string BuildEnvironmentContext(ChatRequest const& request) const;
         std::string BuildCurrentSnapshotContext(ChatRequest const& request) const;
         std::string BuildSnapshotHistoryContext(ChatRequest const& request);
+        bool LoadPersonality(ActorSnapshot const& actor, BotPersonality& personality,
+                             bool requireCurrent = true);
+        bool IsPersonalityCurrent(BotPersonality const& personality) const;
+        void CachePersonality(BotPersonality personality);
+        bool QueuePersonalityGeneration(ActorSnapshot const& actor, bool forced);
+        void HandlePersonalityCompletion(ChatCompletion const& completion);
+        void PersistPersonality(BotPersonality const& personality);
+        bool ResolvePersonalityActor(std::string const& actorName, ActorSnapshot& actor,
+                                     std::string& message) const;
+        void CancelPersonalityGeneration(uint64_t characterGuid);
+        void DeletePersonalityRecord(uint64_t characterGuid);
         std::string SelectRag(ChatRequest const& request) const;
         void AddHistory(ChatRequest const& request, std::string const& reply);
         void AddSnapshotHistory(ChatRequest const& request, std::string const& snapshot);
@@ -179,15 +198,21 @@ namespace AzerothVoices
         std::map<std::string, std::deque<HistoryTurn>> m_history;
         std::map<std::string, std::deque<RecentChatLine>> m_surroundingChat;
         std::map<std::string, std::deque<SnapshotRecord>> m_snapshotHistory;
+        std::map<uint64_t, BotPersonality> m_personalities;
+        std::deque<uint64_t> m_personalityCacheOrder;
         std::vector<RagItem> m_rag;
         size_t m_ragFiles = 0;
         size_t m_ragParseFailures = 0;
         std::set<std::string> m_databaseLoadedHistoryKeys;
         std::set<std::string> m_databaseLoadedSnapshotKeys;
+        std::set<uint64_t> m_databaseLoadedPersonalityGuids;
+        std::unordered_map<uint64_t, uint64_t> m_pendingPersonalityRequests;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_personalityRetryAfter;
         std::deque<PendingHistoryWrite> m_pendingHistoryWrites;
         std::deque<PendingSnapshotWrite> m_pendingSnapshotWrites;
         bool m_historyDatabaseAvailable = false;
         bool m_snapshotDatabaseAvailable = false;
+        bool m_personalityDatabaseAvailable = false;
 
         mutable std::mutex m_queueMutex;
         mutable std::mutex m_ingressMutex;

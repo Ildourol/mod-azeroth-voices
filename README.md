@@ -1,10 +1,10 @@
 # Azeroth Voices
 
-Current development milestone: **V0.2**.
+Current development milestone: **V0.3**.
 
 `mod-azeroth-voices` is a standalone, provider-neutral conversation and ambient-chatter module for TortoiseWoW. It observes PlayerBots through the core's generic AI-control hook, so it does not modify anything under `src/modules/PlayerBots`.
 
-It is inspired by `mod-ollama-chat`, but it does not copy its detached-thread model, Ollama-only request format, personality system, sentiment system, or disabled TLS verification. The module uses the HTTP and JSON libraries already shipped by TortoiseWoW (`cpp-httplib` and `nlohmann/json`) with OpenSSL certificate verification enabled.
+It is inspired by `mod-ollama-chat`, while V0.3's persistent identity methodology is adapted from `mod-llm-chatter`: stable GUID identities, distinct traits, a derived speaking tone, a persistent background, and versioned regeneration. It does not copy either reference project's Python bridge, database polling, detached-thread model, AzerothCore APIs, unrelated chatter/memory systems, or disabled TLS behavior. The module uses the HTTP and JSON libraries already shipped by TortoiseWoW (`cpp-httplib` and `nlohmann/json`) with OpenSSL certificate verification enabled.
 
 The local `mod-ollama-chat-main` tree was treated strictly as a feature reference. All registration, script hooks, chat delivery, object lookup, configuration loading, CMake discovery, and PlayerBot detection in this module use the APIs and names present in the local `tortoise-wow-playerbots-integration-gh` vMaNGOS fork. No AzerothCore headers, script loaders, configuration sections, database APIs, or playerbot classes are imported.
 
@@ -27,11 +27,13 @@ The local `mod-ollama-chat-main` tree was treated strictly as a feature referenc
 - Optional rich PlayerBot snapshots containing combat/resources/target, group members, highest useful spell ranks, active quests, line-of-sight creatures/game objects, and nearby players, all captured through bounded world-thread searches.
 - Optional older snapshot retention in bounded RAM or SQL under the same Snapshot system; the current snapshot and lightweight live environment always override stale records.
 - Optional structured local JSON RAG with deterministic weighted similarity and the complete adapted Vanilla/Turtle corpus; the former text-file knowledge subsystem has been removed.
+- Persistent per-PlayerBot personalities keyed by character GUID, with 1-5 generated traits, optional speaking tone and background, roleplay or fictional real-world-player mode, lazy generation, SQL persistence, and a bounded RAM hot cache.
+- Dynamic current talent specialization and point-split context derived on the world thread; talent changes affect later prompts without rewriting persistent identity.
 - Typing delay compatible with the restored PlayerBots behavior: generation time can be subtracted from the character-based delay.
 - Optional terminal telemetry for per-message details and periodic API-call/result summaries with a bounded recent-message sample.
 - GM commands for status, one lightweight global sanity check, explicit generation and ambient tests, pause/resume, restart, and history clearing.
 
-There are intentionally no per-bot personalities and no sentiment tracking. `AzerothVoices.GlobalPrompt` is the one shared style/personality prompt for every PlayerBot and NPC.
+Personality is an additional PlayerBot prompt layer. It does not replace directed chat, random/ambient chatter, world/guild/group delivery, history, Environment, Snapshot, RAG, provider scheduling, or cooldown behavior. NPCs continue to use the shared NPC prompt without PlayerBot personality records. There is still no sentiment-tracking subsystem.
 
 ## Thread-safety model
 
@@ -51,11 +53,13 @@ completion queue (strings/GUIDs only)
 WorldScript::OnUpdate resolves GUIDs and sends chat
 ```
 
+Missing PlayerBot personalities use the same bounded worker/provider/completion pipeline as dialogue. The accepted dialogue request is queued first and proceeds without blocking; one low-priority personality job is then queued on demand. Its value-owned completion is validated, cached, and persisted on the world thread and influences subsequent prompts.
+
 Workers never retain or manipulate `Player`, `Creature`, `Unit`, `Guild`, `Group`, or `WorldSession` pointers. All object lookup and chat delivery happens after map updates in the world update hook.
 
 ## Dependencies
 
-No Python, Ollama daemon, vector database, or extra HTTP/JSON package is needed. Database history uses two module-owned tables in the existing character database. Use the normal TortoiseWoW build dependencies:
+No Python, Python proxy, Ollama daemon, vector database, embedding service, or extra HTTP/JSON package is needed. History, snapshots, and personalities use three distinct module-owned tables in the existing character database. Use the normal TortoiseWoW build dependencies:
 
 ```bash
 sudo apt update
@@ -203,7 +207,7 @@ These legacy key names are read directly from `mod-azeroth-voices.conf`, so an e
 - response regex/split patterns when `ParserMode = LegacyRegex`;
 - blocked channels and bot-to-bot/RPG chat chances.
 
-For the safer built-in JSON path, leave `AiPlayerbot.LLMApiJson` blank and keep `AzerothVoices.ParserMode = ProviderJson`. `AiPlayerbot.LLMDefaultPromptsFile` is intentionally not loaded because per-character personalities were explicitly excluded.
+For the safer built-in JSON path, leave `AiPlayerbot.LLMApiJson` blank and keep `AzerothVoices.ParserMode = ProviderJson`. `AiPlayerbot.LLMDefaultPromptsFile` remains intentionally ignored because V0.3 identities are generated, validated, and stored by the module rather than loaded as foreign character-card files.
 
 ## Database
 
@@ -213,7 +217,7 @@ For the safer built-in JSON path, leave `AiPlayerbot.LLMApiJson` blank and keep 
 - `1`: bounded RAM only; data is lost on worldserver restart.
 - `2`: persistent character-database storage with a bounded lazy-loaded RAM hot cache; conversation history defaults to 2 while older snapshot storage defaults to 0.
 
-The schema is [data/sql/Char/20260827_01_azeroth_voices_history.sql](data/sql/Char/20260827_01_azeroth_voices_history.sql). TortoiseWoW's database updater discovers enabled-module migrations under `data/sql/Char` when `Database.AutoUpdate.Enabled = 1` and the module is allowed by `Database.AutoUpdate.AllowedModules` (the normal default is `all`). Look for the module migration in the database-updater startup log.
+The current source template sets `Database.AutoUpdate.CharUpdateName = "character"`, so updater-ready migrations are under [data/sql/character](data/sql/character). The original `data/sql/Char/20260827_01_azeroth_voices_history.sql` is retained for installations that still use the core C++ fallback folder name. TortoiseWoW discovers enabled-module migrations when `Database.AutoUpdate.Enabled = 1` and the module is allowed by `Database.AutoUpdate.AllowedModules` (the normal default is `all`). Look for both Azeroth Voices migrations in the updater startup log.
 
 If automatic updates are disabled, import it manually into the same character database named by `mangosd.conf`:
 
@@ -221,14 +225,51 @@ If automatic updates are disabled, import it manually into the same character da
 cd /root/TWoWServerBots/Source/tortoise-wow
 CHARACTER_DB=mangoscharacters
 mysql -u root -p "$CHARACTER_DB" < \
-  modules/mod-azeroth-voices/data/sql/Char/20260827_01_azeroth_voices_history.sql
+  modules/mod-azeroth-voices/data/sql/character/20260827_01_azeroth_voices_history.sql
+
+mysql -u root -p "$CHARACTER_DB" < \
+  modules/mod-azeroth-voices/data/sql/character/20260829_01_azeroth_voices_personality.sql
 ```
 
-Change `mangoscharacters` to the database name from your `CharacterDatabaseInfo` setting. The migration creates only `azeroth_voices_chat_history` and `azeroth_voices_environment_history`. The second table name is retained for V0.1 database compatibility but now stores optional Azeroth Voices Snapshot records. If a feature selects mode 2 but its own table is missing, the module logs one clear startup error and only that feature safely falls back to bounded RAM for that run.
+Change `mangoscharacters` to the database name from your `CharacterDatabaseInfo` setting. The history migration creates only `azeroth_voices_chat_history` and `azeroth_voices_environment_history`; the second legacy name stores optional Snapshot records. The V0.3 migration creates only `azeroth_voices_bot_personality`. If a requested table is missing, only that storage feature falls back to bounded RAM and dialogue continues.
 
-Writes are queued in small transactions and executed through vMaNGOS's asynchronous database queue. Reads happen lazily once per hot-cache key instead of once per message. Per-key row limits and TTL cleanup keep SQL bounded. `.av clearhistory` clears RAM, surrounding chat, and only these two module-owned SQL tables.
+History/snapshot writes use small transactions through vMaNGOS's database queue. Personality upserts and deletions use the same character-database API on the world thread. Reads happen lazily once per hot-cache key instead of once per message. `.av clearhistory` clears only conversation, surrounding-chat, and snapshot history; it never deletes personality rows.
 
 Persistent mode stores player message and generated reply text, including whispers. It never stores API keys. Treat the character database and backups as private data; use mode 0 or 1 if conversation retention is inappropriate.
+
+## Persistent PlayerBot personalities
+
+`AzerothVoices.Personality.Enable = 1` adds one persistent identity per AI-controlled PlayerBot character GUID. A missing identity is generated only after that bot receives an accepted dialogue request; the first dialogue is not delayed and may use no personality, while later dialogue uses the completed record. The module never bulk-generates identities at startup. `GenerateOnDemand = 0` simply omits missing personality context until a GM explicitly regenerates that online bot.
+
+The generated JSON contains exactly the configured number of distinct traits plus optional tone and background fields. It is strictly parsed with `nlohmann/json`; unknown fields, wrong trait counts, duplicates, empty required fields, and oversized values are rejected. A failed job may retry only after `GenerationRetrySeconds`. Stored identities survive worldserver restarts in `azeroth_voices_bot_personality`; a bounded 2,048-entry RAM cache avoids per-line SQL reads. If SQL is unavailable, personality remains fail-soft and cache-only for that run.
+
+Configuration defaults are:
+
+```ini
+AzerothVoices.Personality.Enable = 1
+AzerothVoices.Personality.BackgroundMode = 0
+AzerothVoices.Personality.GenerateBackground = 1
+AzerothVoices.Personality.TraitCount = 3
+AzerothVoices.Personality.GenerateTone = 1
+AzerothVoices.Personality.GenerateOnDemand = 1
+AzerothVoices.Personality.GenerationRetrySeconds = 300
+AzerothVoices.Personality.MaxBackgroundChars = 500
+AzerothVoices.Personality.MaxPromptChars = 700
+```
+
+Background mode `0` creates a fictional character who lives in Azeroth, grounded in Vanilla/Turtle-compatible race, class, faction, upbringing, formative events, and motivations. Mode `1` creates a fictional real-world WoW player persona with believable work/school/family, schedule, guild, raid, PvE/PvP, and MMO-culture details; it never impersonates a real person. The modes are mutually exclusive. Disabling background or tone generation does not automatically delete existing stored fields, and disabling the personality master toggle neither generates nor inserts personality context and does not delete SQL data.
+
+All PlayerBot dialogue reaches the common `BuildRequest` path, so the same identity naturally affects whisper, say/yell, party/raid, guild/officer, world/custom channel, event, random/ambient, follow-up, and GM live-generation prompts. Traits are instructions for vocabulary, opinions, humor, emotions, confidence, caution, and social behavior—not text the bot should recite. The live talent tree and point split are recalculated from the current character spellbook for every actor snapshot, so a respec changes later prompts without modifying the persistent row.
+
+Available prompt placeholders are:
+
+- `<bot personality>` — comma-separated traits;
+- `<bot tone>` — stored speaking style or empty;
+- `<bot background>` — stored background or empty;
+- `<bot personality block>` — a bounded grammatical block that omits absent fields safely;
+- `<bot specialization>` — current dominant talent tree, class, and three-tree point split.
+
+`MaxPromptChars` bounds the personality block, and its size is charged against `AiPlayerbot.LLMContextLength` before history, surrounding chat, snapshots, Environment, and RAG are selected. Existing custom PlayerBot pre-prompts that lack the new placeholders still receive one appended personality block and specialization line, so prompt coverage does not depend on replacing an operator's live template.
 
 ## Context layers and storage
 
@@ -266,9 +307,15 @@ Retrieval is entirely local and cached—no embeddings, Python, vector database,
 .av live <exact-bot-name> [optional prompt]
 .av live - [optional prompt]       # choose a nearby eligible actor
 .azerothvoices test
+.azerothvoices personality show <exact-online-bot-name>
+.azerothvoices personality regenerate <exact-online-bot-name>
+.azerothvoices personality delete <exact-online-bot-name>
+.azerothvoices personality delete all
 ```
 
 `.azerothvoices test` performs one lightweight, read-only global status check. It reports the loaded/enabled state, API and sanitized endpoint configuration, selected History backend and its already-known availability, loaded RAG file/entry counts, Environment and Snapshot switches, chat readiness, and the current worker count. It does not generate a reply, enqueue a synthetic worker job, create history, modify SQL rows, scan the world, or expose credentials. `.av live` remains the explicit generation-and-delivery test.
+
+Personality `show`, `regenerate`, and single-bot `delete` require an exact online AI-controlled PlayerBot name so the command cannot attach identity data to an unrelated character. Regeneration deletes only that identity, invalidates any older queued completion, and asynchronously creates a replacement. Single and `delete all` operations affect only `azeroth_voices_bot_personality` plus its cache and pending personality jobs; conversation history, snapshots, Environment, RAG, character records, and PlayerBots data remain untouched. `delete all` is intentionally explicit and destructive.
 
 All commands require the existing vMaNGOS moderator/GM security level. After editing the config, use the core's config reload command and then `.av restart`, or restart `mangosd`. `.av status` and `.azerothvoices test` sanitize the endpoint and never display the API key.
 

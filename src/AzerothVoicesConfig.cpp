@@ -1,6 +1,7 @@
 #include "AzerothVoicesConfig.h"
 
 #include "Config/Config.h"
+#include "Log.h"
 
 #undef sConfig
 // Config/Config.h defines sConfig with an unqualified Config type. This file
@@ -52,6 +53,18 @@ namespace AzerothVoices
         {
             int32 value = sConfig.GetIntDefault(key, static_cast<int32>(fallback));
             return static_cast<uint32_t>(std::max<int32>(static_cast<int32>(minimum), value));
+        }
+
+        uint32_t Bounded(char const* key, uint32_t fallback, uint32_t minimum, uint32_t maximum)
+        {
+            int32 value = sConfig.GetIntDefault(key, static_cast<int32>(fallback));
+            if (value < static_cast<int32>(minimum) || value > static_cast<int32>(maximum))
+            {
+                sLog.outError("[AzerothVoices][CONFIG] %s=%d is outside %u-%u; using default %u.",
+                    key, value, minimum, maximum, fallback);
+                return fallback;
+            }
+            return static_cast<uint32_t>(value);
         }
     }
 
@@ -106,7 +119,8 @@ namespace AzerothVoices
             "You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. "
             "Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says."));
         c.prePrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrePrompt",
-            "You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>."));
+            "You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. "
+            "<bot personality block>"));
         c.prompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrompt", "<receiver name>: <initial message>"));
         c.postPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPostPrompt", "<bot name>:"));
         c.rpgPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMRpgPrompt",
@@ -120,6 +134,21 @@ namespace AzerothVoices
         c.responseSplitPattern = sConfig.GetStringDefault("AiPlayerbot.LLMResponseSplitPattern", "");
         c.legacyCharacterCardFile = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMDefaultPromptsFile", ""));
         c.blockedChannels = Split(sConfig.GetStringDefault("AiPlayerbot.LLMBlockedReplyChannels", ""), ',');
+
+        c.personalityEnabled = Bounded("AzerothVoices.Personality.Enable", 1, 0, 1) != 0;
+        c.personalityBackgroundMode = Bounded("AzerothVoices.Personality.BackgroundMode", 0, 0, 1);
+        c.personalityGenerateBackground = Bounded(
+            "AzerothVoices.Personality.GenerateBackground", 1, 0, 1) != 0;
+        c.personalityTraitCount = Bounded("AzerothVoices.Personality.TraitCount", 3, 1, 5);
+        c.personalityGenerateTone = Bounded("AzerothVoices.Personality.GenerateTone", 1, 0, 1) != 0;
+        c.personalityGenerateOnDemand = Bounded(
+            "AzerothVoices.Personality.GenerateOnDemand", 1, 0, 1) != 0;
+        c.personalityGenerationRetrySeconds = Bounded(
+            "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
+        c.personalityMaxBackgroundCharacters = Bounded(
+            "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
+        c.personalityMaxPromptCharacters = Bounded(
+            "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
 
         c.whisperReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Whisper", true);
         c.sayReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Say", true);

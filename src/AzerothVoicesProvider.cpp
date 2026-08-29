@@ -1,5 +1,7 @@
 #include "AzerothVoicesProvider.h"
 
+#include "AzerothVoicesPersonality.h"
+
 #include "httplib.h"
 #include "json.hpp"
 
@@ -80,6 +82,11 @@ namespace AzerothVoices
             values["<bot subzone>"] = request.actor.area;
             values["<bot map>"] = request.actor.map;
             values["<bot guild>"] = request.actor.guild;
+            values["<bot specialization>"] = request.actor.talentBuild;
+            values["<bot personality>"] = JoinPersonalityTraits(request.personality.traits);
+            values["<bot background>"] = request.personality.background;
+            values["<bot tone>"] = request.personality.tone;
+            values["<bot personality block>"] = request.personalityBlock;
             values["<bot type>"] = request.actor.kind == ActorKind::Creature ? "NPC" : "playerbot";
             values["<expansion name>"] = "Turtle WoW";
             values["<sender name>"] = request.speaker.name;
@@ -343,7 +350,8 @@ namespace AzerothVoices
                 body["model"] = config.model;
                 body["instructions"] = request.systemPrompt;
                 body["input"] = request.context.empty() ? request.userPrompt : request.context + "\n\n" + request.userPrompt;
-                body["max_output_tokens"] = config.maxTokens;
+                body["max_output_tokens"] = request.maxTokensOverride
+                    ? request.maxTokensOverride : config.maxTokens;
             }
             else
             {
@@ -353,7 +361,8 @@ namespace AzerothVoices
                 if (!request.context.empty())
                     body["messages"].push_back({ { "role", "system" }, { "content", request.context } });
                 body["messages"].push_back({ { "role", "user" }, { "content", request.userPrompt } });
-                body["max_tokens"] = config.maxTokens;
+                body["max_tokens"] = request.maxTokensOverride
+                    ? request.maxTokensOverride : config.maxTokens;
                 body["temperature"] = config.temperature;
                 body["top_p"] = config.topP;
             }

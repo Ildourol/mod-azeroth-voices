@@ -91,17 +91,17 @@ AzerothVoices.RetryBackoffMilliseconds = 500
 # Shared prompts and PlayerBots-compatible prompt names
 ###################################################################################################
 
-# Sets one shared behavior/personality instruction for every bot and NPC; the module intentionally has no per-character personality cards. (Text; default below.)
+# Sets shared behavior and anti-meta rules for every bot and NPC; persistent PlayerBot identity is added separately. (Text; default below.)
 AzerothVoices.GlobalPrompt = You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says.
 # Describes a PlayerBot before a normal response. (Text template; default below.)
-AiPlayerbot.LLMPrePrompt = You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>.
+AiPlayerbot.LLMPrePrompt = You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. <bot personality block>
 # Formats incoming chat for the provider. (Text template; default below.)
 AiPlayerbot.LLMPrompt = <receiver name>: <initial message>
 # Adds a short response cue after incoming chat. (Text template; default below.)
 AiPlayerbot.LLMPostPrompt = <bot name>:
 # Shared prompt for a nearby NPC speaker. (Text template; default below.)
 AiPlayerbot.LLMRpgPrompt = You are <bot name>, an NPC in <bot subzone>, <bot zone>. Reply briefly in character.
-# Caps the combined live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Integer characters, minimum 0; default 4096.)
+# Caps the combined personality, live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Integer characters, minimum 0; default 4096.)
 AiPlayerbot.LLMContextLength = 4096
 # 0 isolates history by speaker/scope; 1 shares actor-wide history. (Default 0.)
 AiPlayerbot.LLMGlobalContext = 0
@@ -117,6 +117,29 @@ AiPlayerbot.LLMResponseDeletePattern = (\\n|<sender name>:|\\[^ ]+)
 AiPlayerbot.LLMResponseSplitPattern =
 # Blocks matching replies, ignoring case. (Comma-separated scope/channel names; default empty.)
 AiPlayerbot.LLMBlockedReplyChannels =
+
+###################################################################################################
+# Persistent PlayerBot personalities
+###################################################################################################
+
+# Enables persistent PlayerBot personalities and backgrounds; accepted values 0/1; default 1; disabling preserves stored data and previous chat behavior.
+AzerothVoices.Personality.Enable = 1
+# Selects background style; 0 = roleplay Azeroth character, 1 = fictional real-world WoW player persona; default 0.
+AzerothVoices.Personality.BackgroundMode = 0
+# Generates and persists a background story for missing personalities; accepted values 0/1; default 1; disabling preserves stored backgrounds.
+AzerothVoices.Personality.GenerateBackground = 1
+# Sets persistent traits generated per PlayerBot; accepted range 1-5 traits; default 3.
+AzerothVoices.Personality.TraitCount = 3
+# Generates a persistent speaking tone derived from traits and background; accepted values 0/1; default 1.
+AzerothVoices.Personality.GenerateTone = 1
+# Generates missing personalities when a PlayerBot first enters an accepted dialogue request; accepted values 0/1; default 1.
+AzerothVoices.Personality.GenerateOnDemand = 1
+# Sets the minimum delay after failed generation before the same bot can retry; accepted range 10-86400 seconds; default 300.
+AzerothVoices.Personality.GenerationRetrySeconds = 300
+# Bounds a generated stored background; accepted range 100-1500 characters; default 500.
+AzerothVoices.Personality.MaxBackgroundChars = 500
+# Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 700.
+AzerothVoices.Personality.MaxPromptChars = 700
 
 ###################################################################################################
 # Chat scopes, NPCs, distances, and response selection

@@ -1,5 +1,6 @@
 #include "AzerothVoicesManager.h"
 
+#include "AzerothVoicesPersonality.h"
 #include "AzerothVoicesProvider.h"
 
 #include "Cell.h"
@@ -9,6 +10,7 @@
 #include "Chat.h"
 #include "Creature.h"
 #include "Database/DatabaseEnv.h"
+#include "Database/DBCStores.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
@@ -66,6 +68,7 @@ namespace AzerothVoices
         using Clock = std::chrono::steady_clock;
         namespace fs = std::filesystem;
         using Json = nlohmann::json;
+        constexpr size_t MaximumPersonalityCacheEntries = 2048;
 
         uint64_t UnixNow()
         {
@@ -246,6 +249,71 @@ namespace AzerothVoices
                 case CLASS_DRUID: return "druid";
                 default: return "adventurer";
             }
+        }
+
+        char const* TalentTreeName(uint8_t playerClass, uint32_t tab)
+        {
+            static char const* const warrior[] = { "arms", "fury", "protection" };
+            static char const* const paladin[] = { "holy", "protection", "retribution" };
+            static char const* const hunter[] = { "beast mastery", "marksmanship", "survival" };
+            static char const* const rogue[] = { "assassination", "combat", "subtlety" };
+            static char const* const priest[] = { "discipline", "holy", "shadow" };
+            static char const* const shaman[] = { "elemental", "enhancement", "restoration" };
+            static char const* const mage[] = { "arcane", "fire", "frost" };
+            static char const* const warlock[] = { "affliction", "demonology", "destruction" };
+            static char const* const druid[] = { "balance", "feral combat", "restoration" };
+            if (tab > 2)
+                return "undeveloped";
+            switch (playerClass)
+            {
+                case CLASS_WARRIOR: return warrior[tab];
+                case CLASS_PALADIN: return paladin[tab];
+                case CLASS_HUNTER: return hunter[tab];
+                case CLASS_ROGUE: return rogue[tab];
+                case CLASS_PRIEST: return priest[tab];
+                case CLASS_SHAMAN: return shaman[tab];
+                case CLASS_MAGE: return mage[tab];
+                case CLASS_WARLOCK: return warlock[tab];
+                case CLASS_DRUID: return druid[tab];
+                default: return "undeveloped";
+            }
+        }
+
+        std::string TalentBuild(Player const* player)
+        {
+            if (!player)
+                return "unknown";
+            std::array<uint32_t, 3> points = { 0, 0, 0 };
+            uint32_t const classMask = player->getClassMask();
+            for (uint32_t i = 0; i < sTalentStore.GetNumRows(); ++i)
+            {
+                TalentEntry const* talent = sTalentStore.LookupEntry(i);
+                if (!talent)
+                    continue;
+                TalentTabEntry const* tab = sTalentTabStore.LookupEntry(talent->TalentTab);
+                if (!tab || !(classMask & tab->ClassMask) || tab->tabpage > 2)
+                    continue;
+                for (int rank = MAX_TALENT_RANK - 1; rank >= 0; --rank)
+                    if (talent->RankID[rank] && player->HasSpell(talent->RankID[rank]))
+                    {
+                        points[tab->tabpage] += static_cast<uint32_t>(rank + 1);
+                        break;
+                    }
+            }
+
+            uint32_t dominant = 0;
+            if (points[1] > points[dominant])
+                dominant = 1;
+            if (points[2] > points[dominant])
+                dominant = 2;
+            std::ostringstream result;
+            uint32_t const total = points[0] + points[1] + points[2];
+            if (!total)
+                result << "no developed " << ClassName(player->GetClass()) << " specialization yet";
+            else
+                result << TalentTreeName(player->GetClass(), dominant) << ' ' << ClassName(player->GetClass());
+            result << " (" << points[0] << '/' << points[1] << '/' << points[2] << ')';
+            return result.str();
         }
 
         std::string GenderName(uint8_t gender)
@@ -457,6 +525,7 @@ namespace AzerothVoices
             result.faction = TeamName(player->GetTeam());
             result.guild = GuildName(player);
             result.groupStatus = player->GetGroup() ? "in a group" : "solo";
+            result.talentBuild = TalentBuild(player);
             result.level = player->GetLevel();
             result.inCombat = player->IsInCombat();
             FillLocation(player, result.area, result.zone, result.map,
@@ -497,6 +566,11 @@ namespace AzerothVoices
             ReplaceAll(value, "<bot subzone>", request.actor.area);
             ReplaceAll(value, "<bot map>", request.actor.map);
             ReplaceAll(value, "<bot guild>", request.actor.guild);
+            ReplaceAll(value, "<bot specialization>", request.actor.talentBuild);
+            ReplaceAll(value, "<bot personality>", JoinPersonalityTraits(request.personality.traits));
+            ReplaceAll(value, "<bot background>", request.personality.background);
+            ReplaceAll(value, "<bot tone>", request.personality.tone);
+            ReplaceAll(value, "<bot personality block>", request.personalityBlock);
             ReplaceAll(value, "<bot type>", request.actor.kind == ActorKind::Creature ? "NPC" : "playerbot");
             ReplaceAll(value, "<expansion name>", "Turtle WoW");
             ReplaceAll(value, "<sender name>", request.speaker.name);
@@ -705,7 +779,7 @@ namespace AzerothVoices
         sLog.outString("[AzerothVoices] Started with %u workers, endpoint %s, model %s.",
             m_config->workerThreads, SanitizeEndpoint(m_config->endpoint).c_str(), m_config->model.c_str());
         if (!m_config->legacyCharacterCardFile.empty())
-            sLog.outString("[AzerothVoices][CONFIG] AiPlayerbot.LLMDefaultPromptsFile is intentionally ignored; this module uses one global prompt and no per-bot personalities.");
+            sLog.outString("[AzerothVoices][CONFIG] AiPlayerbot.LLMDefaultPromptsFile is ignored; V0.3 personalities use module-owned SQL records.");
     }
 
     void Manager::Reload()
@@ -748,12 +822,18 @@ namespace AzerothVoices
         m_history.clear();
         m_surroundingChat.clear();
         m_snapshotHistory.clear();
+        m_personalities.clear();
+        m_personalityCacheOrder.clear();
         m_databaseLoadedHistoryKeys.clear();
         m_databaseLoadedSnapshotKeys.clear();
+        m_databaseLoadedPersonalityGuids.clear();
+        m_pendingPersonalityRequests.clear();
+        m_personalityRetryAfter.clear();
         m_pendingHistoryWrites.clear();
         m_pendingSnapshotWrites.clear();
         m_historyDatabaseAvailable = false;
         m_snapshotDatabaseAvailable = false;
+        m_personalityDatabaseAvailable = false;
         m_telemetryRecentMessages.clear();
         m_telemetryApiCalls = 0;
         m_telemetrySuccessfulResults = 0;
@@ -818,6 +898,8 @@ namespace AzerothVoices
                 {
                     request = std::move(queue.front());
                     queue.pop_front();
+                    if (request.kind == RequestKind::PersonalityGeneration)
+                        return true;
                     auto latest = m_latestRequestByActor.find(request.actor.guid);
                     if (latest != m_latestRequestByActor.end() && latest->second == request.id)
                         return true;
@@ -834,6 +916,15 @@ namespace AzerothVoices
         {
             if (Clock::now() > request.expires)
             {
+                if (request.kind == RequestKind::PersonalityGeneration)
+                {
+                    ChatCompletion completion;
+                    completion.request = std::move(request);
+                    completion.error = "personality generation expired in the request queue";
+                    std::lock_guard<std::mutex> lock(m_completionMutex);
+                    m_completions.push_back(std::move(completion));
+                    continue;
+                }
                 ++m_dropped;
                 continue;
             }
@@ -870,78 +961,106 @@ namespace AzerothVoices
             return false;
 
         auto const now = Clock::now();
-        uint32_t cooldownSeconds = request.ambient ? m_config->ambientActorCooldownSeconds : m_config->actorCooldownSeconds;
+        bool const personalityRequest = request.kind == RequestKind::PersonalityGeneration;
+        uint32_t cooldownSeconds = request.ambient
+            ? m_config->ambientActorCooldownSeconds : m_config->actorCooldownSeconds;
         auto cooldown = m_actorCooldowns.find(request.actor.guid);
-        if (request.priority != RequestPriority::Direct && cooldown != m_actorCooldowns.end() && cooldown->second > now)
+        if (!personalityRequest && request.priority != RequestPriority::Direct &&
+            cooldown != m_actorCooldowns.end() && cooldown->second > now)
         {
             ++m_dropped;
             return false;
         }
 
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        while (!m_requestBudget.empty() && now - m_requestBudget.front() >= std::chrono::minutes(1))
-            m_requestBudget.pop_front();
-        if (m_requestBudget.size() >= m_config->globalRequestsPerMinute)
+        ActorSnapshot personalityActor;
+        bool queueMissingPersonality = false;
         {
-            ++m_dropped;
-            return false;
-        }
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            while (!m_requestBudget.empty() && now - m_requestBudget.front() >= std::chrono::minutes(1))
+                m_requestBudget.pop_front();
+            if (m_requestBudget.size() >= m_config->globalRequestsPerMinute)
+            {
+                ++m_dropped;
+                return false;
+            }
 
-        auto latest = m_latestRequestByActor.find(request.actor.guid);
-        if (latest != m_latestRequestByActor.end())
-        {
-            RequestPriority existing = RequestPriority::Ambient;
-            bool found = false;
-            for (size_t i = 0; i < m_queues.size() && !found; ++i)
-                for (ChatRequest const& queued : m_queues[i])
-                    if (queued.id == latest->second)
+            if (!personalityRequest)
+            {
+                auto latest = m_latestRequestByActor.find(request.actor.guid);
+                if (latest != m_latestRequestByActor.end())
+                {
+                    RequestPriority existing = RequestPriority::Ambient;
+                    bool found = false;
+                    for (size_t i = 0; i < m_queues.size() && !found; ++i)
+                        for (ChatRequest const& queued : m_queues[i])
+                            if (queued.kind == RequestKind::Dialogue && queued.id == latest->second)
+                            {
+                                existing = queued.priority;
+                                found = true;
+                                break;
+                            }
+                    if (found && static_cast<uint8_t>(request.priority) <= static_cast<uint8_t>(existing))
                     {
-                        existing = queued.priority;
-                        found = true;
-                        break;
+                        ++m_dropped;
+                        return false;
                     }
-            if (found && static_cast<uint8_t>(request.priority) <= static_cast<uint8_t>(existing))
-            {
-                ++m_dropped;
-                return false;
+                }
             }
+
+            size_t queuedCount = 0;
+            for (auto const& queue : m_queues)
+                queuedCount += queue.size();
+            size_t normalLimit = m_config->queueMaximum - m_config->highPriorityReserve;
+            bool highPriority = !personalityRequest &&
+                (request.priority == RequestPriority::Direct || request.priority == RequestPriority::Group);
+            if ((!highPriority && queuedCount >= normalLimit) || queuedCount >= m_config->queueMaximum)
+            {
+                if (highPriority && !m_queues[0].empty())
+                {
+                    ChatRequest dropped = std::move(m_queues[0].back());
+                    m_queues[0].pop_back();
+                    if (dropped.kind == RequestKind::PersonalityGeneration)
+                    {
+                        auto pending = m_pendingPersonalityRequests.find(dropped.actor.guid);
+                        if (pending != m_pendingPersonalityRequests.end() && pending->second == dropped.id)
+                            m_pendingPersonalityRequests.erase(pending);
+                    }
+                    else
+                    {
+                        auto oldLatest = m_latestRequestByActor.find(dropped.actor.guid);
+                        if (oldLatest != m_latestRequestByActor.end() && oldLatest->second == dropped.id)
+                            m_latestRequestByActor.erase(oldLatest);
+                    }
+                    ++m_dropped;
+                }
+                else
+                {
+                    ++m_dropped;
+                    return false;
+                }
+            }
+
+            if (!request.id)
+                request.id = m_nextRequestId++;
+            request.created = now;
+            request.expires = now + std::chrono::seconds(m_config->requestTtlSeconds);
+            if (!personalityRequest)
+                m_latestRequestByActor[request.actor.guid] = request.id;
+            size_t const priorityIndex = static_cast<size_t>(request.priority);
+            queueMissingPersonality = !personalityRequest && request.personalityGenerationNeeded;
+            if (queueMissingPersonality)
+                personalityActor = request.actor;
+            m_queues[priorityIndex].push_back(std::move(request));
+            m_requestBudget.push_back(now);
+            if (!personalityRequest)
+                m_actorCooldowns[m_queues[priorityIndex].back().actor.guid] =
+                    now + std::chrono::seconds(cooldownSeconds);
+            ++m_accepted;
+            m_queueReady.notify_one();
         }
 
-        size_t queuedCount = 0;
-        for (auto const& queue : m_queues)
-            queuedCount += queue.size();
-        size_t normalLimit = m_config->queueMaximum - m_config->highPriorityReserve;
-        bool highPriority = request.priority == RequestPriority::Direct || request.priority == RequestPriority::Group;
-        if ((!highPriority && queuedCount >= normalLimit) || queuedCount >= m_config->queueMaximum)
-        {
-            if (highPriority && !m_queues[0].empty())
-            {
-                ChatRequest dropped = std::move(m_queues[0].back());
-                m_queues[0].pop_back();
-                auto oldLatest = m_latestRequestByActor.find(dropped.actor.guid);
-                if (oldLatest != m_latestRequestByActor.end() && oldLatest->second == dropped.id)
-                    m_latestRequestByActor.erase(oldLatest);
-                ++m_dropped;
-            }
-            else
-            {
-                ++m_dropped;
-                return false;
-            }
-        }
-
-        if (!request.id)
-            request.id = m_nextRequestId++;
-        request.created = now;
-        request.expires = now + std::chrono::seconds(m_config->requestTtlSeconds);
-        m_latestRequestByActor[request.actor.guid] = request.id;
-        size_t const priorityIndex = static_cast<size_t>(request.priority);
-        m_queues[priorityIndex].push_back(std::move(request));
-        m_requestBudget.push_back(now);
-        m_actorCooldowns[m_queues[priorityIndex].back().actor.guid] =
-            now + std::chrono::seconds(cooldownSeconds);
-        ++m_accepted;
-        m_queueReady.notify_one();
+        if (queueMissingPersonality)
+            QueuePersonalityGeneration(personalityActor, false);
         return true;
     }
 
@@ -954,6 +1073,8 @@ namespace AzerothVoices
         request.id = m_nextRequestId++;
         request.priority = priority;
         request.actor = actor;
+        if (!m_config->personalityEnabled)
+            request.actor.talentBuild.clear();
         request.speaker = speaker;
         request.scope = scope;
         request.channelName = channelName;
@@ -964,7 +1085,30 @@ namespace AzerothVoices
         request.historyKey = HistoryKey(*m_config, actor, speaker, scope, channelName);
         request.scopeKey = ScopeKey(scope, channelName, actor, speaker);
 
+        if (actor.kind == ActorKind::PlayerBot && m_config->personalityEnabled)
+        {
+            BotPersonality personality;
+            if (LoadPersonality(actor, personality))
+            {
+                request.personality = std::move(personality);
+                if (request.personality.backgroundMode != m_config->personalityBackgroundMode)
+                    request.personality.background.clear();
+                request.personalityBlock = BuildPersonalityPromptBlock(*m_config, request.personality);
+            }
+            else if (m_config->personalityGenerateOnDemand &&
+                     !m_pendingPersonalityRequests.count(actor.guid))
+            {
+                auto retry = m_personalityRetryAfter.find(actor.guid);
+                request.personalityGenerationNeeded = retry == m_personalityRetryAfter.end() ||
+                    retry->second <= Clock::now();
+            }
+        }
+
         std::string rolePrompt = actor.kind == ActorKind::Creature ? m_config->rpgPrompt : m_config->prePrompt;
+        bool const personalityPlaceholder = m_config->globalPrompt.find("<bot personality block>") != std::string::npos ||
+            rolePrompt.find("<bot personality block>") != std::string::npos;
+        bool const specializationPlaceholder = m_config->globalPrompt.find("<bot specialization>") != std::string::npos ||
+            rolePrompt.find("<bot specialization>") != std::string::npos;
         request.systemPrompt = m_config->globalPrompt;
         if (!rolePrompt.empty())
             request.systemPrompt += "\n" + rolePrompt;
@@ -986,6 +1130,11 @@ namespace AzerothVoices
 
         request.systemPrompt = Expand(request.systemPrompt, request);
         request.userPrompt = Expand(request.userPrompt, request);
+        if (actor.kind == ActorKind::PlayerBot && !request.personalityBlock.empty() && !personalityPlaceholder)
+            request.systemPrompt += "\n" + request.personalityBlock;
+        if (m_config->personalityEnabled && actor.kind == ActorKind::PlayerBot &&
+            !request.actor.talentBuild.empty() && !specializationPlaceholder)
+            request.systemPrompt += "\nCurrent talent specialization: " + request.actor.talentBuild + '.';
         std::string const currentEnvironment = BuildEnvironmentContext(request);
         std::string const history = BuildHistoryContext(request);
         std::string const surrounding = BuildSurroundingContext(request);
@@ -1002,7 +1151,8 @@ namespace AzerothVoices
 
         // Allocate the fixed context budget by importance. The final ordering
         // keeps the authoritative live snapshot closest to the new user turn.
-        size_t remaining = m_config->contextLength;
+        size_t remaining = m_config->contextLength > request.personalityBlock.size()
+            ? m_config->contextLength - request.personalityBlock.size() : 0;
         auto reserveHead = [&](std::string const& value) {
             std::string selected = HeadBounded(value, remaining);
             remaining -= selected.size();
@@ -1462,6 +1612,328 @@ namespace AzerothVoices
         return Enqueue(std::move(request));
     }
 
+    bool Manager::IsPersonalityCurrent(BotPersonality const& personality) const
+    {
+        if (!m_config || !personality.characterGuid ||
+            personality.generationVersion != PersonalityGenerationVersion ||
+            personality.traits.size() != m_config->personalityTraitCount ||
+            personality.backgroundMode > 1)
+            return false;
+        if (m_config->personalityGenerateTone && personality.tone.empty())
+            return false;
+        if (m_config->personalityGenerateBackground &&
+            (personality.background.empty() ||
+             personality.backgroundMode != m_config->personalityBackgroundMode))
+            return false;
+        return true;
+    }
+
+    void Manager::CachePersonality(BotPersonality personality)
+    {
+        uint64_t const guid = personality.characterGuid;
+        if (!guid)
+            return;
+        m_personalityCacheOrder.erase(std::remove(m_personalityCacheOrder.begin(),
+            m_personalityCacheOrder.end(), guid), m_personalityCacheOrder.end());
+        m_personalityCacheOrder.push_back(guid);
+        m_personalities[guid] = std::move(personality);
+        while (m_personalities.size() > MaximumPersonalityCacheEntries && !m_personalityCacheOrder.empty())
+        {
+            uint64_t const expired = m_personalityCacheOrder.front();
+            m_personalityCacheOrder.pop_front();
+            m_personalities.erase(expired);
+            m_databaseLoadedPersonalityGuids.erase(expired);
+        }
+    }
+
+    bool Manager::LoadPersonality(ActorSnapshot const& actor, BotPersonality& personality,
+                                  bool requireCurrent)
+    {
+        if (!m_config || actor.kind != ActorKind::PlayerBot || !actor.guid)
+            return false;
+
+        auto cached = m_personalities.find(actor.guid);
+        if (cached != m_personalities.end())
+        {
+            if (!requireCurrent || IsPersonalityCurrent(cached->second))
+            {
+                personality = cached->second;
+                CachePersonality(personality);
+                return true;
+            }
+            m_personalities.erase(cached);
+            m_personalityCacheOrder.erase(std::remove(m_personalityCacheOrder.begin(),
+                m_personalityCacheOrder.end(), actor.guid), m_personalityCacheOrder.end());
+        }
+
+        if (m_databaseLoadedPersonalityGuids.count(actor.guid))
+            return false;
+        m_databaseLoadedPersonalityGuids.insert(actor.guid);
+        while (m_databaseLoadedPersonalityGuids.size() > MaximumPersonalityCacheEntries)
+            m_databaseLoadedPersonalityGuids.erase(m_databaseLoadedPersonalityGuids.begin());
+        if (!m_personalityDatabaseAvailable)
+            return false;
+
+        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+            "SELECT `bot_name`,`traits_json`,`tone`,`background`,`background_mode`,`generation_version`,"
+            "UNIX_TIMESTAMP(`created_at`),UNIX_TIMESTAMP(`updated_at`) "
+            "FROM `azeroth_voices_bot_personality` WHERE `character_guid`='%llu' LIMIT 1",
+            static_cast<unsigned long long>(actor.guid)));
+        if (!result)
+            return false;
+
+        Field* fields = result->Fetch();
+        BotPersonality loaded;
+        loaded.characterGuid = actor.guid;
+        loaded.botName = fields[0].GetCppString();
+        if (!ParseStoredPersonalityTraits(fields[1].GetCppString(), loaded.traits))
+        {
+            sLog.outError("[AzerothVoices][PERSONALITY] Stored traits for %s are invalid; regeneration is required.",
+                SanitizeLogText(actor.name).c_str());
+            return false;
+        }
+        loaded.tone = fields[2].GetCppString();
+        loaded.background = fields[3].GetCppString();
+        loaded.backgroundMode = fields[4].GetUInt32();
+        loaded.generationVersion = fields[5].GetUInt32();
+        loaded.createdUnix = fields[6].GetUInt64();
+        loaded.updatedUnix = fields[7].GetUInt64();
+        if (requireCurrent && !IsPersonalityCurrent(loaded))
+            return false;
+        CachePersonality(loaded);
+        personality = std::move(loaded);
+        return true;
+    }
+
+    bool Manager::QueuePersonalityGeneration(ActorSnapshot const& actor, bool forced)
+    {
+        if (!m_started || !m_config || !m_config->personalityEnabled ||
+            actor.kind != ActorKind::PlayerBot || !actor.guid ||
+            (!forced && !m_config->personalityGenerateOnDemand) ||
+            m_pendingPersonalityRequests.count(actor.guid))
+            return false;
+        auto const now = Clock::now();
+        auto retry = m_personalityRetryAfter.find(actor.guid);
+        if (!forced && retry != m_personalityRetryAfter.end() && retry->second > now)
+            return false;
+
+        ChatRequest request;
+        request.id = m_nextRequestId++;
+        request.kind = RequestKind::PersonalityGeneration;
+        request.priority = RequestPriority::Ambient;
+        request.actor = actor;
+        request.trigger = "personality-generation";
+        request.systemPrompt = BuildPersonalityGenerationSystemPrompt(*m_config);
+        request.userPrompt = BuildPersonalityGenerationUserPrompt(*m_config, actor);
+        request.maxTokensOverride = PersonalityGenerationTokenBudget(*m_config);
+        uint64_t const requestId = request.id;
+        if (!Enqueue(std::move(request)))
+            return false;
+        m_pendingPersonalityRequests[actor.guid] = requestId;
+        return true;
+    }
+
+    void Manager::PersistPersonality(BotPersonality const& personality)
+    {
+        if (!m_personalityDatabaseAvailable)
+            return;
+        std::string botName = personality.botName;
+        std::string traits = SerializePersonalityTraits(personality.traits);
+        std::string tone = personality.tone;
+        std::string background = personality.background;
+        CharacterDatabase.escape_string(botName);
+        CharacterDatabase.escape_string(traits);
+        CharacterDatabase.escape_string(tone);
+        CharacterDatabase.escape_string(background);
+        CharacterDatabase.PExecute(
+            "INSERT INTO `azeroth_voices_bot_personality` "
+            "(`character_guid`,`bot_name`,`traits_json`,`tone`,`background`,`background_mode`,`generation_version`) "
+            "VALUES ('%llu','%s','%s','%s','%s','%u','%u') "
+            "ON DUPLICATE KEY UPDATE `bot_name`=VALUES(`bot_name`),`traits_json`=VALUES(`traits_json`),"
+            "`tone`=VALUES(`tone`),`background`=VALUES(`background`),"
+            "`background_mode`=VALUES(`background_mode`),`generation_version`=VALUES(`generation_version`),"
+            "`updated_at`=CURRENT_TIMESTAMP",
+            static_cast<unsigned long long>(personality.characterGuid), botName.c_str(), traits.c_str(),
+            tone.c_str(), background.c_str(), personality.backgroundMode, personality.generationVersion);
+    }
+
+    void Manager::HandlePersonalityCompletion(ChatCompletion const& completion)
+    {
+        uint64_t const guid = completion.request.actor.guid;
+        auto pending = m_pendingPersonalityRequests.find(guid);
+        if (pending == m_pendingPersonalityRequests.end() || pending->second != completion.request.id)
+        {
+            ++m_dropped;
+            return;
+        }
+        m_pendingPersonalityRequests.erase(pending);
+        auto const now = Clock::now();
+        auto fail = [&](std::string const& error) {
+            m_personalityRetryAfter[guid] = now +
+                std::chrono::seconds(m_config->personalityGenerationRetrySeconds);
+            while (m_personalityRetryAfter.size() > MaximumPersonalityCacheEntries)
+                m_personalityRetryAfter.erase(m_personalityRetryAfter.begin());
+            ++m_failed;
+            sLog.outError("[AzerothVoices][PERSONALITY] Generation for %s failed; retry allowed in %u seconds: %s",
+                SanitizeLogText(completion.request.actor.name).c_str(),
+                m_config->personalityGenerationRetrySeconds,
+                SanitizeLogText(RedactSecrets(*m_config, error)).c_str());
+        };
+
+        if (now > completion.request.expires)
+        {
+            fail("personality generation expired before completion processing");
+            return;
+        }
+        if (!completion.success)
+        {
+            fail(completion.error);
+            return;
+        }
+
+        BotPersonality personality;
+        std::string error;
+        if (!ParsePersonalityResponse(*m_config, completion.request.actor,
+                                      completion.responseText, personality, error))
+        {
+            fail(error);
+            return;
+        }
+        personality.createdUnix = UnixNow();
+        personality.updatedUnix = personality.createdUnix;
+        m_personalityRetryAfter.erase(guid);
+        m_databaseLoadedPersonalityGuids.insert(guid);
+        CachePersonality(personality);
+        PersistPersonality(personality);
+        ++m_completed;
+        if (m_config->debug)
+            sLog.outDebug("[AzerothVoices][PERSONALITY] Generated persistent identity for %s.",
+                SanitizeLogText(personality.botName).c_str());
+    }
+
+    bool Manager::ResolvePersonalityActor(std::string const& actorName, ActorSnapshot& actor,
+                                          std::string& message) const
+    {
+        if (actorName.empty())
+        {
+            message = "An exact online PlayerBot name is required.";
+            return false;
+        }
+        Player* bot = ObjectAccessor::FindPlayerByName(actorName.c_str());
+        if (!bot || !bot->IsInWorld() || !Script_IsAIControlled(bot))
+        {
+            message = "No online AI-controlled PlayerBot with that exact name was found.";
+            return false;
+        }
+        actor = SnapshotBot(bot);
+        return true;
+    }
+
+    void Manager::CancelPersonalityGeneration(uint64_t characterGuid)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            for (auto& queue : m_queues)
+            {
+                size_t const before = queue.size();
+                queue.erase(std::remove_if(queue.begin(), queue.end(), [characterGuid](ChatRequest const& request) {
+                    return request.kind == RequestKind::PersonalityGeneration &&
+                        request.actor.guid == characterGuid;
+                }), queue.end());
+                m_dropped.fetch_add(before - queue.size());
+            }
+        }
+        m_pendingPersonalityRequests.erase(characterGuid);
+    }
+
+    void Manager::DeletePersonalityRecord(uint64_t characterGuid)
+    {
+        CancelPersonalityGeneration(characterGuid);
+        m_personalities.erase(characterGuid);
+        m_personalityCacheOrder.erase(std::remove(m_personalityCacheOrder.begin(),
+            m_personalityCacheOrder.end(), characterGuid), m_personalityCacheOrder.end());
+        m_databaseLoadedPersonalityGuids.erase(characterGuid);
+        m_personalityRetryAfter.erase(characterGuid);
+        if (m_personalityDatabaseAvailable)
+            CharacterDatabase.PExecute(
+                "DELETE FROM `azeroth_voices_bot_personality` WHERE `character_guid`='%llu'",
+                static_cast<unsigned long long>(characterGuid));
+    }
+
+    bool Manager::GetPersonality(std::string const& actorName, BotPersonality& personality,
+                                 std::string& message)
+    {
+        ActorSnapshot actor;
+        if (!ResolvePersonalityActor(actorName, actor, message))
+            return false;
+        if (LoadPersonality(actor, personality, false))
+            return true;
+        if (m_pendingPersonalityRequests.count(actor.guid))
+            message = "Personality generation is still pending for " + actor.name + '.';
+        else
+            message = "No current personality is stored for " + actor.name + ". Use regenerate to create one.";
+        return false;
+    }
+
+    bool Manager::RegeneratePersonality(std::string const& actorName, std::string& message)
+    {
+        if (!m_config || !m_config->personalityEnabled)
+        {
+            message = "Persistent personalities are disabled by configuration.";
+            return false;
+        }
+        ActorSnapshot actor;
+        if (!ResolvePersonalityActor(actorName, actor, message))
+            return false;
+        DeletePersonalityRecord(actor.guid);
+        if (!QueuePersonalityGeneration(actor, true))
+        {
+            message = "The old personality was removed, but regeneration could not be queued; check module status and provider limits.";
+            return false;
+        }
+        message = "Personality regeneration queued for " + actor.name + ".";
+        return true;
+    }
+
+    bool Manager::DeletePersonality(std::string const& actorName, std::string& message)
+    {
+        ActorSnapshot actor;
+        if (!ResolvePersonalityActor(actorName, actor, message))
+            return false;
+        DeletePersonalityRecord(actor.guid);
+        message = "Personality cache and pending work deleted for " + actor.name +
+            (m_personalityDatabaseAvailable ? "; the persistent row was queued for deletion. " :
+             "; the SQL table is unavailable, so persistent deletion could not be confirmed. ") +
+            "History, snapshots, environment, and RAG were unchanged.";
+        return true;
+    }
+
+    bool Manager::DeleteAllPersonalities(std::string& message)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            for (auto& queue : m_queues)
+            {
+                size_t const before = queue.size();
+                queue.erase(std::remove_if(queue.begin(), queue.end(), [](ChatRequest const& request) {
+                    return request.kind == RequestKind::PersonalityGeneration;
+                }), queue.end());
+                m_dropped.fetch_add(before - queue.size());
+            }
+        }
+        m_pendingPersonalityRequests.clear();
+        m_personalityRetryAfter.clear();
+        m_personalities.clear();
+        m_personalityCacheOrder.clear();
+        m_databaseLoadedPersonalityGuids.clear();
+        if (m_personalityDatabaseAvailable)
+            CharacterDatabase.PExecute("DELETE FROM `azeroth_voices_bot_personality`");
+        message = m_personalityDatabaseAvailable
+            ? "All Azeroth Voices personality records were queued for deletion; no history, snapshot, environment, RAG, character, or PlayerBot data was changed."
+            : "All cached personalities and pending generation jobs were deleted, but the SQL table is unavailable so persistent deletion could not be confirmed; unrelated data was unchanged.";
+        return true;
+    }
+
     void Manager::MaybeQueueFollowup(ChatRequest const& request, std::string const& reply)
     {
         if (!request.allowFollowup || !m_config->randomChatterEnabled ||
@@ -1512,6 +1984,11 @@ namespace AzerothVoices
         for (ChatCompletion& completion : completions)
         {
             RecordApiResult(completion);
+            if (completion.request.kind == RequestKind::PersonalityGeneration)
+            {
+                HandlePersonalityCompletion(completion);
+                continue;
+            }
             bool current = false;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -2413,6 +2890,7 @@ namespace AzerothVoices
     {
         m_historyDatabaseAvailable = false;
         m_snapshotDatabaseAvailable = false;
+        m_personalityDatabaseAvailable = false;
         if (!m_config)
             return;
 
@@ -2422,7 +2900,7 @@ namespace AzerothVoices
                 "SHOW TABLES LIKE 'azeroth_voices_chat_history'"));
             m_historyDatabaseAvailable = table != nullptr;
             if (!m_historyDatabaseAvailable)
-                sLog.outError("[AzerothVoices] SQL conversation history table is missing; falling back to bounded RAM. Install data/sql/Char/20260827_01_azeroth_voices_history.sql.");
+                sLog.outError("[AzerothVoices] SQL conversation history table is missing; falling back to bounded RAM. Install data/sql/character/20260827_01_azeroth_voices_history.sql.");
             else
                 sLog.outString("[AzerothVoices][HISTORY][SQL] Persistent conversation history storage is available.");
         }
@@ -2432,9 +2910,18 @@ namespace AzerothVoices
                 "SHOW TABLES LIKE 'azeroth_voices_environment_history'"));
             m_snapshotDatabaseAvailable = table != nullptr;
             if (!m_snapshotDatabaseAvailable)
-                sLog.outError("[AzerothVoices] SQL snapshot history table is missing; falling back to bounded RAM. Install data/sql/Char/20260827_01_azeroth_voices_history.sql.");
+                sLog.outError("[AzerothVoices] SQL snapshot history table is missing; falling back to bounded RAM. Install data/sql/character/20260827_01_azeroth_voices_history.sql.");
             else
                 sLog.outString("[AzerothVoices][SNAPSHOT][SQL] Persistent snapshot history storage is available.");
+        }
+        {
+            std::unique_ptr<QueryResult> table(CharacterDatabase.Query(
+                "SHOW TABLES LIKE 'azeroth_voices_bot_personality'"));
+            m_personalityDatabaseAvailable = table != nullptr;
+            if (m_config->personalityEnabled && !m_personalityDatabaseAvailable)
+                sLog.outError("[AzerothVoices] SQL personality table is missing; using a bounded non-persistent RAM cache. Install data/sql/character/20260829_01_azeroth_voices_personality.sql.");
+            else if (m_config->personalityEnabled)
+                sLog.outString("[AzerothVoices][PERSONALITY][SQL] Persistent PlayerBot personality storage is available.");
         }
         if (m_historyDatabaseAvailable || m_snapshotDatabaseAvailable)
             CleanupDatabase();
@@ -2851,6 +3338,9 @@ namespace AzerothVoices
         status.snapshotHistories = m_snapshotHistory.size();
         status.historyDatabaseAvailable = m_historyDatabaseAvailable;
         status.snapshotDatabaseAvailable = m_snapshotDatabaseAvailable;
+        status.personalityDatabaseAvailable = m_personalityDatabaseAvailable;
+        status.personalities = m_personalities.size();
+        status.personalityGenerationsPending = m_pendingPersonalityRequests.size();
         status.ragEntries = m_rag.size();
         status.ragFiles = m_ragFiles;
         status.ragParseFailures = m_ragParseFailures;
@@ -2862,6 +3352,7 @@ namespace AzerothVoices
             status.worldChannelName = m_config->worldChannelName;
             status.historyStorageMode = m_config->historyStorageMode;
             status.snapshotStorageMode = m_config->snapshotStorageMode;
+            status.personalityEnabled = m_config->personalityEnabled;
             status.ragEnabled = m_config->ragEnabled;
             status.environmentEnabled = m_config->environmentContextEnabled;
             status.snapshotEnabled = m_config->snapshotEnabled;

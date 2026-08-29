@@ -34,6 +34,25 @@ namespace AzerothVoices
         Direct = 3
     };
 
+    enum class RequestKind : uint8_t
+    {
+        Dialogue,
+        PersonalityGeneration
+    };
+
+    struct BotPersonality
+    {
+        uint64_t characterGuid = 0;
+        std::string botName;
+        std::vector<std::string> traits;
+        std::string tone;
+        std::string background;
+        uint32_t backgroundMode = 0;
+        uint32_t generationVersion = 0;
+        uint64_t createdUnix = 0;
+        uint64_t updatedUnix = 0;
+    };
+
     struct ActorSnapshot
     {
         ActorKind kind = ActorKind::PlayerBot;
@@ -49,6 +68,7 @@ namespace AzerothVoices
         std::string area;
         std::string zone;
         std::string map;
+        std::string talentBuild;
         uint32_t level = 0;
         uint32_t mapId = 0;
         uint32_t areaId = 0;
@@ -98,9 +118,11 @@ namespace AzerothVoices
     struct ChatRequest
     {
         uint64_t id = 0;
+        RequestKind kind = RequestKind::Dialogue;
         RequestPriority priority = RequestPriority::Ambient;
         ActorSnapshot actor;
         SpeakerSnapshot speaker;
+        BotPersonality personality;
         ChatScope scope = ChatScope::Say;
         std::string channelName;
         std::string trigger;
@@ -109,8 +131,11 @@ namespace AzerothVoices
         std::string userPrompt;
         std::string context;
         std::string currentSnapshot;
+        std::string personalityBlock;
         std::string historyKey;
         std::string scopeKey;
+        uint32_t maxTokensOverride = 0;
+        bool personalityGenerationNeeded = false;
         bool ambient = false;
         bool allowFollowup = false;
         uint32_t conversationDepth = 1;

@@ -57,6 +57,16 @@ namespace AzerothVoices
         std::string legacyCharacterCardFile;
         std::vector<std::string> blockedChannels;
 
+        bool personalityEnabled = true;
+        uint32_t personalityBackgroundMode = 0;
+        bool personalityGenerateBackground = true;
+        uint32_t personalityTraitCount = 3;
+        bool personalityGenerateTone = true;
+        bool personalityGenerateOnDemand = true;
+        uint32_t personalityGenerationRetrySeconds = 300;
+        uint32_t personalityMaxBackgroundCharacters = 500;
+        uint32_t personalityMaxPromptCharacters = 700;
+
         bool whisperReplies = true;
         bool sayReplies = true;
         bool yellReplies = true;
