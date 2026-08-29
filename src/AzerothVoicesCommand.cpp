@@ -158,13 +158,20 @@ namespace AzerothVoices
             std::string action = TakeWord(rest);
             std::string actor = TakeWord(rest);
             if (action.empty() || actor.empty() || !TakeWord(rest).empty() ||
-                (action != "show" && action != "regenerate" && action != "delete"))
+                (action != "show" && action != "status" &&
+                 action != "regenerate" && action != "delete"))
             {
-                handler->SendSysMessage("Usage: .azerothvoices personality show <online-bot> | regenerate <online-bot> | delete <online-bot> | delete all");
+                handler->SendSysMessage("Usage: .azerothvoices personality show/status/regenerate/delete <online-bot> | delete all");
                 return;
             }
 
             std::string message;
+            if (action == "status")
+            {
+                Manager::Instance().GetPersonalityGenerationStatus(actor, message);
+                handler->SendSysMessage(message.c_str());
+                return;
+            }
             if (action == "show")
             {
                 BotPersonality personality;
@@ -225,7 +232,7 @@ namespace AzerothVoices
                     else if (subcommand == "personality")
                         HandlePersonalityCommand(handler, rest);
                     else
-                        handler->SendSysMessage("Usage: .azerothvoices test | personality show/regenerate/delete <online-bot> | personality delete all");
+                        handler->SendSysMessage("Usage: .azerothvoices test | personality show/status/regenerate/delete <online-bot> | personality delete all");
                     return false;
                 }
 
@@ -317,7 +324,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/regenerate/delete <bot> | personality delete all");
+                handler->SendSysMessage("av: status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all");
                 return false;
             }
         };

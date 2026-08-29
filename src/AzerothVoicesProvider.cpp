@@ -137,6 +137,31 @@ namespace AzerothVoices
             }
         }
 
+        void ApplyTokenOverride(Json& body, Config const& config, ChatRequest const& request)
+        {
+            if (!request.maxTokensOverride || !body.is_object())
+                return;
+
+            bool applied = false;
+            if (body.count("max_tokens"))
+            {
+                body["max_tokens"] = request.maxTokensOverride;
+                applied = true;
+            }
+            if (body.count("max_output_tokens"))
+            {
+                body["max_output_tokens"] = request.maxTokensOverride;
+                applied = true;
+            }
+            if (applied)
+                return;
+
+            if (Lower(config.providerMode) == "responses")
+                body["max_output_tokens"] = request.maxTokensOverride;
+            else
+                body["max_tokens"] = request.maxTokensOverride;
+        }
+
         bool ParseEndpoint(std::string const& endpoint, ParsedEndpoint& parsed, std::string& error)
         {
             static std::regex const expression(R"(^(https?)://([^/]+)(/.*)?$)", std::regex::icase);
@@ -344,6 +369,7 @@ namespace AzerothVoices
             {
                 body = Json::parse(config.apiJsonTemplate);
                 ApplyPlaceholders(body, request);
+                ApplyTokenOverride(body, config, request);
             }
             else if (Lower(config.providerMode) == "responses")
             {

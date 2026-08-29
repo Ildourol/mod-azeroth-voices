@@ -59,6 +59,63 @@ namespace AzerothVoices
             value += "...";
             return value;
         }
+
+        bool TryParseEmbeddedJsonObject(std::string const& value, Json& parsed)
+        {
+            for (size_t start = value.find('{'); start != std::string::npos;
+                 start = value.find('{', start + 1))
+            {
+                size_t depth = 0;
+                bool inString = false;
+                bool escaped = false;
+                for (size_t i = start; i < value.size(); ++i)
+                {
+                    char const current = value[i];
+                    if (inString)
+                    {
+                        if (escaped)
+                            escaped = false;
+                        else if (current == '\\')
+                            escaped = true;
+                        else if (current == '"')
+                            inString = false;
+                        continue;
+                    }
+
+                    if (current == '"')
+                    {
+                        inString = true;
+                        continue;
+                    }
+                    if (current == '{')
+                    {
+                        ++depth;
+                        continue;
+                    }
+                    if (current != '}' || !depth)
+                        continue;
+
+                    --depth;
+                    if (depth)
+                        continue;
+
+                    try
+                    {
+                        Json candidate = Json::parse(value.substr(start, i - start + 1));
+                        if (candidate.is_object())
+                        {
+                            parsed = std::move(candidate);
+                            return true;
+                        }
+                    }
+                    catch (std::exception const&)
+                    {
+                    }
+                    break;
+                }
+            }
+            return false;
+        }
     }
 
     std::string BuildPersonalityGenerationSystemPrompt(Config const& config)
@@ -120,7 +177,20 @@ namespace AzerothVoices
     {
         try
         {
-            Json root = Json::parse(Trim(response));
+            Json root;
+            std::string const trimmed = Trim(response);
+            try
+            {
+                root = Json::parse(trimmed);
+            }
+            catch (std::exception const& directError)
+            {
+                if (!TryParseEmbeddedJsonObject(trimmed, root))
+                {
+                    error = std::string("personality response JSON error: ") + directError.what();
+                    return false;
+                }
+            }
             if (!root.is_object())
             {
                 error = "personality response is not a JSON object";

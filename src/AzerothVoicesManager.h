@@ -75,6 +75,7 @@ namespace AzerothVoices
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
         bool GetPersonality(std::string const& actorName, BotPersonality& personality, std::string& message);
+        bool GetPersonalityGenerationStatus(std::string const& actorName, std::string& message);
         bool RegeneratePersonality(std::string const& actorName, std::string& message);
         bool DeletePersonality(std::string const& actorName, std::string& message);
         bool DeleteAllPersonalities(std::string& message);
@@ -133,6 +134,14 @@ namespace AzerothVoices
             uint32_t elapsedMilliseconds = 0;
             uint32_t apiAttempts = 0;
         };
+        struct PersonalityGenerationRecord
+        {
+            std::string botName;
+            std::string state;
+            std::string detail;
+            uint64_t requestId = 0;
+            uint64_t updatedUnix = 0;
+        };
         void WorkerLoop();
         void DrainIngress();
         void ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
@@ -170,6 +179,8 @@ namespace AzerothVoices
         void PersistPersonality(BotPersonality const& personality);
         bool ResolvePersonalityActor(std::string const& actorName, ActorSnapshot& actor,
                                      std::string& message) const;
+        void RecordPersonalityGenerationStatus(ActorSnapshot const& actor, std::string state,
+                                               uint64_t requestId, std::string detail);
         void CancelPersonalityGeneration(uint64_t characterGuid);
         void DeletePersonalityRecord(uint64_t characterGuid);
         std::string SelectRag(ChatRequest const& request) const;
@@ -208,6 +219,8 @@ namespace AzerothVoices
         std::set<uint64_t> m_databaseLoadedPersonalityGuids;
         std::unordered_map<uint64_t, uint64_t> m_pendingPersonalityRequests;
         std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_personalityRetryAfter;
+        std::unordered_map<uint64_t, PersonalityGenerationRecord> m_personalityGenerationStatus;
+        std::deque<uint64_t> m_personalityGenerationStatusOrder;
         std::deque<PendingHistoryWrite> m_pendingHistoryWrites;
         std::deque<PendingSnapshotWrite> m_pendingSnapshotWrites;
         bool m_historyDatabaseAvailable = false;

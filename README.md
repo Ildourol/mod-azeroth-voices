@@ -308,6 +308,7 @@ Retrieval is entirely local and cached—no embeddings, Python, vector database,
 .av live - [optional prompt]       # choose a nearby eligible actor
 .azerothvoices test
 .azerothvoices personality show <exact-online-bot-name>
+.azerothvoices personality status <exact-online-bot-name>
 .azerothvoices personality regenerate <exact-online-bot-name>
 .azerothvoices personality delete <exact-online-bot-name>
 .azerothvoices personality delete all
@@ -315,7 +316,7 @@ Retrieval is entirely local and cached—no embeddings, Python, vector database,
 
 `.azerothvoices test` performs one lightweight, read-only global status check. It reports the loaded/enabled state, API and sanitized endpoint configuration, selected History backend and its already-known availability, loaded RAG file/entry counts, Environment and Snapshot switches, chat readiness, and the current worker count. It does not generate a reply, enqueue a synthetic worker job, create history, modify SQL rows, scan the world, or expose credentials. `.av live` remains the explicit generation-and-delivery test.
 
-Personality `show`, `regenerate`, and single-bot `delete` require an exact online AI-controlled PlayerBot name so the command cannot attach identity data to an unrelated character. Regeneration deletes only that identity, invalidates any older queued completion, and asynchronously creates a replacement. Single and `delete all` operations affect only `azeroth_voices_bot_personality` plus its cache and pending personality jobs; conversation history, snapshots, Environment, RAG, character records, and PlayerBots data remain untouched. `delete all` is intentionally explicit and destructive.
+Personality `show`, `status`, `regenerate`, and single-bot `delete` require an exact online AI-controlled PlayerBot name so the command cannot attach identity data to an unrelated character. `status` reports the bounded last generation result for that bot in the current server session, including a sanitized provider, timeout, or JSON-validation error. Regeneration invalidates older queued work and asynchronously creates a replacement, but preserves the current usable personality until the replacement succeeds. Single and `delete all` operations affect only `azeroth_voices_bot_personality` plus its cache, bounded generation status, and pending personality jobs; conversation history, snapshots, Environment, RAG, character records, and PlayerBots data remain untouched. `delete all` is intentionally explicit and destructive.
 
 All commands require the existing vMaNGOS moderator/GM security level. After editing the config, use the core's config reload command and then `.av restart`, or restart `mangosd`. `.av status` and `.azerothvoices test` sanitize the endpoint and never display the API key.
 

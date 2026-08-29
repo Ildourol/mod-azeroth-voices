@@ -829,6 +829,8 @@ namespace AzerothVoices
         m_databaseLoadedPersonalityGuids.clear();
         m_pendingPersonalityRequests.clear();
         m_personalityRetryAfter.clear();
+        m_personalityGenerationStatus.clear();
+        m_personalityGenerationStatusOrder.clear();
         m_pendingHistoryWrites.clear();
         m_pendingSnapshotWrites.clear();
         m_historyDatabaseAvailable = false;
@@ -1011,8 +1013,8 @@ namespace AzerothVoices
             for (auto const& queue : m_queues)
                 queuedCount += queue.size();
             size_t normalLimit = m_config->queueMaximum - m_config->highPriorityReserve;
-            bool highPriority = !personalityRequest &&
-                (request.priority == RequestPriority::Direct || request.priority == RequestPriority::Group);
+            bool highPriority = request.priority == RequestPriority::Direct ||
+                request.priority == RequestPriority::Group;
             if ((!highPriority && queuedCount >= normalLimit) || queuedCount >= m_config->queueMaximum)
             {
                 if (highPriority && !m_queues[0].empty())
@@ -1024,6 +1026,8 @@ namespace AzerothVoices
                         auto pending = m_pendingPersonalityRequests.find(dropped.actor.guid);
                         if (pending != m_pendingPersonalityRequests.end() && pending->second == dropped.id)
                             m_pendingPersonalityRequests.erase(pending);
+                        RecordPersonalityGenerationStatus(dropped.actor, "dropped", dropped.id,
+                            "The queued personality request was displaced by higher-priority work.");
                     }
                     else
                     {
@@ -1720,7 +1724,7 @@ namespace AzerothVoices
         ChatRequest request;
         request.id = m_nextRequestId++;
         request.kind = RequestKind::PersonalityGeneration;
-        request.priority = RequestPriority::Ambient;
+        request.priority = forced ? RequestPriority::Direct : RequestPriority::Ambient;
         request.actor = actor;
         request.trigger = "personality-generation";
         request.systemPrompt = BuildPersonalityGenerationSystemPrompt(*m_config);
@@ -1728,8 +1732,15 @@ namespace AzerothVoices
         request.maxTokensOverride = PersonalityGenerationTokenBudget(*m_config);
         uint64_t const requestId = request.id;
         if (!Enqueue(std::move(request)))
+        {
+            RecordPersonalityGenerationStatus(actor, "rejected", requestId,
+                "The personality request could not be queued; check pause state, queue capacity, and the global request limit.");
             return false;
+        }
         m_pendingPersonalityRequests[actor.guid] = requestId;
+        RecordPersonalityGenerationStatus(actor, "pending", requestId,
+            forced ? "GM-requested personality replacement is running."
+                   : "On-demand personality generation is running.");
         return true;
     }
 
@@ -1774,10 +1785,13 @@ namespace AzerothVoices
             while (m_personalityRetryAfter.size() > MaximumPersonalityCacheEntries)
                 m_personalityRetryAfter.erase(m_personalityRetryAfter.begin());
             ++m_failed;
+            std::string const safeError = SanitizeLogText(RedactSecrets(*m_config, error));
+            RecordPersonalityGenerationStatus(completion.request.actor, "failed",
+                completion.request.id, safeError);
             sLog.outError("[AzerothVoices][PERSONALITY] Generation for %s failed; retry allowed in %u seconds: %s",
                 SanitizeLogText(completion.request.actor.name).c_str(),
                 m_config->personalityGenerationRetrySeconds,
-                SanitizeLogText(RedactSecrets(*m_config, error)).c_str());
+                safeError.c_str());
         };
 
         if (now > completion.request.expires)
@@ -1805,6 +1819,10 @@ namespace AzerothVoices
         m_databaseLoadedPersonalityGuids.insert(guid);
         CachePersonality(personality);
         PersistPersonality(personality);
+        RecordPersonalityGenerationStatus(completion.request.actor, "succeeded",
+            completion.request.id, m_personalityDatabaseAvailable
+                ? "Personality generated; the SQL upsert was queued."
+                : "Personality generated in RAM; the SQL table is unavailable.");
         ++m_completed;
         if (m_config->debug)
             sLog.outDebug("[AzerothVoices][PERSONALITY] Generated persistent identity for %s.",
@@ -1827,6 +1845,31 @@ namespace AzerothVoices
         }
         actor = SnapshotBot(bot);
         return true;
+    }
+
+    void Manager::RecordPersonalityGenerationStatus(ActorSnapshot const& actor, std::string state,
+                                                     uint64_t requestId, std::string detail)
+    {
+        if (!actor.guid)
+            return;
+
+        PersonalityGenerationRecord record;
+        record.botName = actor.name;
+        record.state = std::move(state);
+        record.detail = HeadBounded(SanitizeLogText(detail), 500);
+        record.requestId = requestId;
+        record.updatedUnix = UnixNow();
+        m_personalityGenerationStatusOrder.erase(std::remove(m_personalityGenerationStatusOrder.begin(),
+            m_personalityGenerationStatusOrder.end(), actor.guid), m_personalityGenerationStatusOrder.end());
+        m_personalityGenerationStatusOrder.push_back(actor.guid);
+        m_personalityGenerationStatus[actor.guid] = std::move(record);
+        while (m_personalityGenerationStatus.size() > MaximumPersonalityCacheEntries &&
+               !m_personalityGenerationStatusOrder.empty())
+        {
+            uint64_t const expired = m_personalityGenerationStatusOrder.front();
+            m_personalityGenerationStatusOrder.pop_front();
+            m_personalityGenerationStatus.erase(expired);
+        }
     }
 
     void Manager::CancelPersonalityGeneration(uint64_t characterGuid)
@@ -1854,6 +1897,9 @@ namespace AzerothVoices
             m_personalityCacheOrder.end(), characterGuid), m_personalityCacheOrder.end());
         m_databaseLoadedPersonalityGuids.erase(characterGuid);
         m_personalityRetryAfter.erase(characterGuid);
+        m_personalityGenerationStatus.erase(characterGuid);
+        m_personalityGenerationStatusOrder.erase(std::remove(m_personalityGenerationStatusOrder.begin(),
+            m_personalityGenerationStatusOrder.end(), characterGuid), m_personalityGenerationStatusOrder.end());
         if (m_personalityDatabaseAvailable)
             CharacterDatabase.PExecute(
                 "DELETE FROM `azeroth_voices_bot_personality` WHERE `character_guid`='%llu'",
@@ -1875,6 +1921,33 @@ namespace AzerothVoices
         return false;
     }
 
+    bool Manager::GetPersonalityGenerationStatus(std::string const& actorName, std::string& message)
+    {
+        ActorSnapshot actor;
+        if (!ResolvePersonalityActor(actorName, actor, message))
+            return false;
+
+        auto found = m_personalityGenerationStatus.find(actor.guid);
+        if (found == m_personalityGenerationStatus.end())
+        {
+            message = m_pendingPersonalityRequests.count(actor.guid)
+                ? "Personality generation is pending for " + actor.name + "."
+                : "No personality generation result is recorded for " + actor.name + " in this server session.";
+            return true;
+        }
+
+        PersonalityGenerationRecord const& record = found->second;
+        std::ostringstream text;
+        text << "Personality generation for " << actor.name << ": " << record.state;
+        if (record.requestId)
+            text << " (request " << record.requestId << ')';
+        if (!record.detail.empty())
+            text << ". " << record.detail;
+        text << " Updated unix=" << record.updatedUnix << '.';
+        message = text.str();
+        return true;
+    }
+
     bool Manager::RegeneratePersonality(std::string const& actorName, std::string& message)
     {
         if (!m_config || !m_config->personalityEnabled)
@@ -1885,13 +1958,19 @@ namespace AzerothVoices
         ActorSnapshot actor;
         if (!ResolvePersonalityActor(actorName, actor, message))
             return false;
-        DeletePersonalityRecord(actor.guid);
+        BotPersonality previous;
+        bool const replacing = LoadPersonality(actor, previous, false);
+        CancelPersonalityGeneration(actor.guid);
         if (!QueuePersonalityGeneration(actor, true))
         {
-            message = "The old personality was removed, but regeneration could not be queued; check module status and provider limits.";
+            message = replacing
+                ? "Personality replacement could not be queued; the current personality was preserved. Use personality status for details."
+                : "Personality generation could not be queued. Use personality status for details.";
             return false;
         }
-        message = "Personality regeneration queued for " + actor.name + ".";
+        message = replacing
+            ? "Personality replacement queued for " + actor.name + "; the current personality remains active until the replacement succeeds."
+            : "Personality generation queued for " + actor.name + ".";
         return true;
     }
 
@@ -1923,6 +2002,8 @@ namespace AzerothVoices
         }
         m_pendingPersonalityRequests.clear();
         m_personalityRetryAfter.clear();
+        m_personalityGenerationStatus.clear();
+        m_personalityGenerationStatusOrder.clear();
         m_personalities.clear();
         m_personalityCacheOrder.clear();
         m_databaseLoadedPersonalityGuids.clear();
