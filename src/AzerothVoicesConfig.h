@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,6 @@ namespace AzerothVoices
         bool consoleGeneratedMessages = false;
         bool consoleApiCallStats = false;
         uint32_t consoleApiCallStatsIntervalSeconds = 60;
-        uint32_t consoleRecentMessages = 5;
 
         std::string providerMode;
         std::string endpoint;
@@ -54,8 +54,17 @@ namespace AzerothVoices
         std::string responseEndPattern;
         std::string responseDeletePattern;
         std::string responseSplitPattern;
-        std::string legacyCharacterCardFile;
         std::vector<std::string> blockedChannels;
+
+        bool personalityEnabled = true;
+        uint32_t personalityBackgroundMode = 0;
+        bool personalityGenerateBackground = true;
+        uint32_t personalityTraitCount = 3;
+        bool personalityGenerateTone = true;
+        bool personalityGenerateOnDemand = true;
+        uint32_t personalityGenerationRetrySeconds = 300;
+        uint32_t personalityMaxBackgroundCharacters = 500;
+        uint32_t personalityMaxPromptCharacters = 700;
 
         bool whisperReplies = true;
         bool sayReplies = true;
@@ -69,9 +78,22 @@ namespace AzerothVoices
         bool npcReplies = true;
         bool disableRepliesInCombat = true;
         uint32_t maxResponders = 2;
-        float sayDistance = 30.0f;
+        float sayDistance = 25.0f;
         float yellDistance = 100.0f;
-        float npcDistance = 25.0f;
+        float npcDistance = 10.0f;
+        std::set<uint32_t> npcAllowedTypes = { 2, 3, 4, 5, 6, 7, 9 };
+        std::set<uint32_t> npcAllowedEntries;
+        std::set<uint32_t> npcExcludedEntries;
+        bool npcAllowNeutral = false;
+        bool npcAllowHostile = false;
+        std::set<uint32_t> npcAllowedNeutralEntries;
+        std::set<uint32_t> npcAllowedHostileEntries;
+        uint32_t npcFriendlyReplyChance = 100;
+        uint32_t npcNeutralReplyChance = 50;
+        uint32_t npcHostileReplyChance = 25;
+        uint32_t targetedNpcReplyChance = 100;
+        uint32_t targetedNpcJoinChance = 5;
+        uint32_t targetedNpcPlayerBotJoinChance = 10;
         uint32_t directAddressChance = 100;
         uint32_t nameMentionChance = 70;
         uint32_t overhearChance = 8;
@@ -91,7 +113,6 @@ namespace AzerothVoices
         bool randomChatterEnabled = true;
         uint32_t randomMinimumIntervalSeconds = 90;
         uint32_t randomMaximumIntervalSeconds = 240;
-        float randomRealPlayerDistance = 150.0f;
         uint32_t randomFollowupChance = 15;
         uint32_t randomMaximumActors = 2;
         std::vector<std::string> randomScopes;
@@ -109,7 +130,6 @@ namespace AzerothVoices
         bool environmentIncludeBackpack = false;
 
         bool eventChatterEnabled = true;
-        float eventRealPlayerDistance = 40.0f;
         uint32_t eventResponderChance = 25;
         uint32_t eventSelfCommentChance = 5;
         uint32_t eventMaximumResponders = 2;

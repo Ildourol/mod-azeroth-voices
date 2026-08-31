@@ -1,6 +1,7 @@
 #include "AzerothVoicesConfig.h"
 
 #include "Config/Config.h"
+#include "Log.h"
 
 #undef sConfig
 // Config/Config.h defines sConfig with an unqualified Config type. This file
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <limits>
 #include <sstream>
 
 namespace AzerothVoices
@@ -53,6 +55,45 @@ namespace AzerothVoices
             int32 value = sConfig.GetIntDefault(key, static_cast<int32>(fallback));
             return static_cast<uint32_t>(std::max<int32>(static_cast<int32>(minimum), value));
         }
+
+        uint32_t Bounded(char const* key, uint32_t fallback, uint32_t minimum, uint32_t maximum)
+        {
+            int32 value = sConfig.GetIntDefault(key, static_cast<int32>(fallback));
+            if (value < static_cast<int32>(minimum) || value > static_cast<int32>(maximum))
+            {
+                sLog.outError("[AzerothVoices][CONFIG] %s=%d is outside %u-%u; using default %u.",
+                    key, value, minimum, maximum, fallback);
+                return fallback;
+            }
+            return static_cast<uint32_t>(value);
+        }
+
+        std::set<uint32_t> UnsignedSet(char const* key, char const* fallback,
+                                       uint32_t maximum = std::numeric_limits<uint32_t>::max())
+        {
+            std::set<uint32_t> result;
+            for (std::string const& item : Split(sConfig.GetStringDefault(key, fallback), ','))
+            {
+                if (!std::all_of(item.begin(), item.end(), [](unsigned char value) {
+                        return std::isdigit(value) != 0;
+                    }))
+                {
+                    sLog.outError("[AzerothVoices][CONFIG] %s contains invalid value '%s'; ignoring it.",
+                        key, item.c_str());
+                    continue;
+                }
+
+                unsigned long long const value = std::strtoull(item.c_str(), nullptr, 10);
+                if (value > maximum)
+                {
+                    sLog.outError("[AzerothVoices][CONFIG] %s value '%s' exceeds %u; ignoring it.",
+                        key, item.c_str(), maximum);
+                    continue;
+                }
+                result.insert(static_cast<uint32_t>(value));
+            }
+            return result;
+        }
     }
 
     Config Config::Load()
@@ -69,9 +110,6 @@ namespace AzerothVoices
         c.consoleApiCallStatsIntervalSeconds = Positive(
             "AzerothVoices.Console.ApiCallStatsIntervalSeconds",
             Positive("AzerothVoices.Telemetry.Summary.IntervalSeconds", 60, 5), 5);
-        c.consoleRecentMessages = std::min<uint32_t>(50, Positive(
-            "AzerothVoices.Console.RecentMessages",
-            Positive("AzerothVoices.Telemetry.Summary.RecentMessages", 5)));
 
         c.providerMode = Trim(sConfig.GetStringDefault("AzerothVoices.ProviderMode", "ChatCompletions"));
         c.endpoint = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMApiEndpoint", "https://api.openai.com/v1/chat/completions"));
@@ -106,7 +144,8 @@ namespace AzerothVoices
             "You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. "
             "Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says."));
         c.prePrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrePrompt",
-            "You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>."));
+            "You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. "
+            "<bot personality block>"));
         c.prompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrompt", "<receiver name>: <initial message>"));
         c.postPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPostPrompt", "<bot name>:"));
         c.rpgPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMRpgPrompt",
@@ -118,8 +157,22 @@ namespace AzerothVoices
         c.responseEndPattern = sConfig.GetStringDefault("AiPlayerbot.LLMResponseEndPattern", R"(("|\b(?!<sender name>\b)(\w+):))");
         c.responseDeletePattern = sConfig.GetStringDefault("AiPlayerbot.LLMResponseDeletePattern", R"((\\n|<sender name>:|\\[^ ]+))");
         c.responseSplitPattern = sConfig.GetStringDefault("AiPlayerbot.LLMResponseSplitPattern", "");
-        c.legacyCharacterCardFile = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMDefaultPromptsFile", ""));
         c.blockedChannels = Split(sConfig.GetStringDefault("AiPlayerbot.LLMBlockedReplyChannels", ""), ',');
+
+        c.personalityEnabled = Bounded("AzerothVoices.Personality.Enable", 1, 0, 1) != 0;
+        c.personalityBackgroundMode = Bounded("AzerothVoices.Personality.BackgroundMode", 0, 0, 1);
+        c.personalityGenerateBackground = Bounded(
+            "AzerothVoices.Personality.GenerateBackground", 1, 0, 1) != 0;
+        c.personalityTraitCount = Bounded("AzerothVoices.Personality.TraitCount", 3, 1, 5);
+        c.personalityGenerateTone = Bounded("AzerothVoices.Personality.GenerateTone", 1, 0, 1) != 0;
+        c.personalityGenerateOnDemand = Bounded(
+            "AzerothVoices.Personality.GenerateOnDemand", 1, 0, 1) != 0;
+        c.personalityGenerationRetrySeconds = Bounded(
+            "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
+        c.personalityMaxBackgroundCharacters = Bounded(
+            "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
+        c.personalityMaxPromptCharacters = Bounded(
+            "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
 
         c.whisperReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Whisper", true);
         c.sayReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Say", true);
@@ -133,9 +186,23 @@ namespace AzerothVoices
         c.npcReplies = sConfig.GetBoolDefault("AzerothVoices.NPC.Enable", true);
         c.disableRepliesInCombat = sConfig.GetBoolDefault("AzerothVoices.DisableRepliesInCombat", true);
         c.maxResponders = Positive("AzerothVoices.MaxResponders", 2, 1);
-        c.sayDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.SayDistance", 30.0f));
+        c.sayDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.SayDistance", 25.0f));
         c.yellDistance = std::max(c.sayDistance, sConfig.GetFloatDefault("AzerothVoices.YellDistance", 100.0f));
-        c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 25.0f));
+        c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 10.0f));
+        c.npcAllowedTypes = UnsignedSet("AzerothVoices.NPC.AllowedTypes", "2,3,4,5,6,7,9", 11);
+        c.npcAllowedEntries = UnsignedSet("AzerothVoices.NPC.AllowedEntries", "");
+        c.npcExcludedEntries = UnsignedSet("AzerothVoices.NPC.ExcludedEntries", "");
+        c.npcAllowNeutral = sConfig.GetBoolDefault("AzerothVoices.NPC.AllowNeutral", false);
+        c.npcAllowHostile = sConfig.GetBoolDefault("AzerothVoices.NPC.AllowHostile", false);
+        c.npcAllowedNeutralEntries = UnsignedSet("AzerothVoices.NPC.AllowedNeutralEntries", "");
+        c.npcAllowedHostileEntries = UnsignedSet("AzerothVoices.NPC.AllowedHostileEntries", "");
+        c.npcFriendlyReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Friendly", 100);
+        c.npcNeutralReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Neutral", 50);
+        c.npcHostileReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Hostile", 25);
+        c.targetedNpcReplyChance = Percent("AzerothVoices.NPC.TargetedReplyChance", 100);
+        c.targetedNpcJoinChance = Percent("AzerothVoices.NPC.TargetedOtherNPCJoinChance", 5);
+        c.targetedNpcPlayerBotJoinChance = Percent(
+            "AzerothVoices.NPC.TargetedPlayerBotJoinChance", 10);
         c.directAddressChance = Percent("AzerothVoices.Chance.DirectAddress", 100);
         c.nameMentionChance = Percent("AzerothVoices.Chance.NameMention", 70);
         c.overhearChance = Percent("AzerothVoices.Chance.Overhear", 8);
@@ -156,7 +223,6 @@ namespace AzerothVoices
         c.randomChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.Random.Enable", true);
         c.randomMinimumIntervalSeconds = Positive("AzerothVoices.Random.MinimumIntervalSeconds", 90, 5);
         c.randomMaximumIntervalSeconds = Positive("AzerothVoices.Random.MaximumIntervalSeconds", 240, c.randomMinimumIntervalSeconds);
-        c.randomRealPlayerDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Random.RealPlayerDistance", 150.0f));
         c.randomFollowupChance = Percent("AzerothVoices.Random.FollowupChance", 15);
         c.randomMaximumActors = Positive("AzerothVoices.Random.MaximumActors", 2, 1);
         c.randomScopes = Split(sConfig.GetStringDefault("AzerothVoices.Random.Scopes", "say,guild,world"), ',');
@@ -188,7 +254,6 @@ namespace AzerothVoices
         c.environmentIncludeBackpack = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeBackpack", false);
 
         c.eventChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.Events.Enable", true);
-        c.eventRealPlayerDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Events.RealPlayerDistance", 40.0f));
         c.eventResponderChance = Percent("AzerothVoices.Events.ResponderChance", 25);
         c.eventSelfCommentChance = Percent("AzerothVoices.Events.SelfCommentChance", 5);
         c.eventMaximumResponders = Positive("AzerothVoices.Events.MaximumResponders", 2, 1);

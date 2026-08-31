@@ -1,6 +1,7 @@
 #include "AzerothVoicesManager.h"
 
 #include "Creature.h"
+#include "Guild.h"
 #include "Item.h"
 #include "Opcodes.h"
 #include "Player.h"
@@ -219,14 +220,14 @@ namespace AzerothVoices
         public:
             AzerothVoicesGuildScript() : GuildScript("AzerothVoicesGuildScript") {}
 
-            void OnAddMember(Guild* /*guild*/, Player* player, uint8& /*rank*/) override
+            void OnAddMember(Guild* guild, Player* player, uint8& /*rank*/) override
             {
-                Manager::Instance().HandleEvent(player, "guild_join");
+                Manager::Instance().HandleEvent(player, "guild_join", "", guild ? guild->GetId() : 0);
             }
 
-            void OnRemoveMember(Guild* /*guild*/, Player* player, bool /*isDisbanding*/, bool /*isKicked*/) override
+            void OnRemoveMember(Guild* guild, Player* player, bool /*isDisbanding*/, bool /*isKicked*/) override
             {
-                Manager::Instance().HandleEvent(player, "guild_leave");
+                Manager::Instance().HandleEvent(player, "guild_leave", "", guild ? guild->GetId() : 0);
             }
         };
     }

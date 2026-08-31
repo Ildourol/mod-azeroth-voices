@@ -19,6 +19,7 @@
 #include <vector>
 
 class Player;
+class WorldObject;
 
 namespace AzerothVoices
 {
@@ -42,6 +43,10 @@ namespace AzerothVoices
         uint32_t snapshotStorageMode = 0;
         bool historyDatabaseAvailable = false;
         bool snapshotDatabaseAvailable = false;
+        bool personalityEnabled = false;
+        bool personalityDatabaseAvailable = false;
+        size_t personalities = 0;
+        size_t personalityGenerationsPending = 0;
         bool ragEnabled = false;
         bool environmentEnabled = false;
         bool snapshotEnabled = false;
@@ -66,10 +71,16 @@ namespace AzerothVoices
 
         void HandleChat(Player* speaker, ChatScope scope, std::string const& message,
                         std::string const& targetName = "", std::string const& channelName = "");
-        void HandleEvent(Player* subject, std::string const& eventName, std::string const& detail = "");
+        void HandleEvent(Player* subject, std::string const& eventName, std::string const& detail = "",
+                         uint32_t guildId = 0);
 
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
+        bool GetPersonality(std::string const& actorName, BotPersonality& personality, std::string& message);
+        bool GetPersonalityGenerationStatus(std::string const& actorName, std::string& message);
+        bool RegeneratePersonality(std::string const& actorName, std::string& message);
+        bool DeletePersonality(std::string const& actorName, std::string& message);
+        bool DeleteAllPersonalities(std::string& message);
         void ClearHistory();
         void SetPaused(bool paused);
         bool IsPaused() const;
@@ -107,29 +118,52 @@ namespace AzerothVoices
             std::string targetName;
             std::string channelName;
             std::string eventName;
+            uint32_t guildId = 0;
         };
 
-        struct TelemetryMessage
+        enum class PreflightReason : uint8_t
         {
+            NoHumanNearby,
+            NoAudience,
+            NpcNeutral,
+            NpcHostile,
+            NpcTemporary,
+            InvalidActor,
+            InvalidScope,
+            Combat,
+            Unavailable,
+            Cooldown,
+            RateLimit,
+            QueueFull,
+            Superseded,
+            Count
+        };
+        struct PersonalityGenerationRecord
+        {
+            std::string botName;
+            std::string state;
+            std::string detail;
             uint64_t requestId = 0;
-            std::string actorName;
-            std::string actorKind;
-            std::string scope;
-            std::string trigger;
-            std::string speakerName;
-            std::string text;
-            std::string channelName;
-            std::string model;
-            uint64_t actorGuid = 0;
-            int httpStatus = 0;
-            uint32_t elapsedMilliseconds = 0;
-            uint32_t apiAttempts = 0;
+            uint64_t updatedUnix = 0;
         };
         void WorkerLoop();
         void DrainIngress();
         void ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                          std::string const& targetName, std::string const& channelName);
-        void ProcessEvent(Player* subject, std::string const& eventName, std::string const& detail);
+        void ProcessEvent(Player* subject, std::string const& eventName, std::string const& detail,
+                          uint32_t guildId);
+        bool QueueDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                           ChatScope scope, std::string const& channelName,
+                           std::string const& trigger, std::string const& message,
+                           RequestPriority priority, bool ambient, bool allowFollowup,
+                           uint32_t conversationDepth = 0);
+        bool PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                               ChatScope scope, std::string const& channelName,
+                               std::string const& trigger, RequestPriority priority,
+                               bool ambient);
+        bool CanEnqueueDialogue(ActorSnapshot const& actor, RequestPriority priority,
+                                bool ambient);
+        void RecordPreflightRejection(PreflightReason reason);
         bool Enqueue(ChatRequest request);
         bool PopRequest(ChatRequest& request);
         void DrainCompletions();
@@ -146,13 +180,28 @@ namespace AzerothVoices
         std::vector<Candidate> CollectCandidates(Player* speaker, ChatScope scope,
                                                   std::string const& targetName,
                                                   std::string const& message,
-                                                  bool ambient, float distanceOverride = 0.0f,
-                                                  uint64_t excludedActor = 0) const;
+                                                  bool ambient, bool allowNpcs,
+                                                  uint64_t excludedActor = 0,
+                                                  uint32_t guildIdOverride = 0,
+                                                  WorldObject const* dispositionTarget = nullptr);
         std::string BuildHistoryContext(ChatRequest const& request);
         std::string BuildSurroundingContext(ChatRequest const& request) const;
         std::string BuildEnvironmentContext(ChatRequest const& request) const;
         std::string BuildCurrentSnapshotContext(ChatRequest const& request) const;
         std::string BuildSnapshotHistoryContext(ChatRequest const& request);
+        bool LoadPersonality(ActorSnapshot const& actor, BotPersonality& personality,
+                             bool requireCurrent = true);
+        bool IsPersonalityCurrent(BotPersonality const& personality) const;
+        void CachePersonality(BotPersonality personality);
+        bool QueuePersonalityGeneration(ActorSnapshot const& actor, bool forced);
+        void HandlePersonalityCompletion(ChatCompletion const& completion);
+        void PersistPersonality(BotPersonality const& personality);
+        bool ResolvePersonalityActor(std::string const& actorName, ActorSnapshot& actor,
+                                     std::string& message) const;
+        void RecordPersonalityGenerationStatus(ActorSnapshot const& actor, std::string state,
+                                               uint64_t requestId, std::string detail);
+        void CancelPersonalityGeneration(uint64_t characterGuid);
+        void DeletePersonalityRecord(uint64_t characterGuid);
         std::string SelectRag(ChatRequest const& request) const;
         void AddHistory(ChatRequest const& request, std::string const& reply);
         void AddSnapshotHistory(ChatRequest const& request, std::string const& snapshot);
@@ -179,15 +228,23 @@ namespace AzerothVoices
         std::map<std::string, std::deque<HistoryTurn>> m_history;
         std::map<std::string, std::deque<RecentChatLine>> m_surroundingChat;
         std::map<std::string, std::deque<SnapshotRecord>> m_snapshotHistory;
+        std::map<uint64_t, BotPersonality> m_personalities;
+        std::deque<uint64_t> m_personalityCacheOrder;
         std::vector<RagItem> m_rag;
         size_t m_ragFiles = 0;
         size_t m_ragParseFailures = 0;
         std::set<std::string> m_databaseLoadedHistoryKeys;
         std::set<std::string> m_databaseLoadedSnapshotKeys;
+        std::set<uint64_t> m_databaseLoadedPersonalityGuids;
+        std::unordered_map<uint64_t, uint64_t> m_pendingPersonalityRequests;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_personalityRetryAfter;
+        std::unordered_map<uint64_t, PersonalityGenerationRecord> m_personalityGenerationStatus;
+        std::deque<uint64_t> m_personalityGenerationStatusOrder;
         std::deque<PendingHistoryWrite> m_pendingHistoryWrites;
         std::deque<PendingSnapshotWrite> m_pendingSnapshotWrites;
         bool m_historyDatabaseAvailable = false;
         bool m_snapshotDatabaseAvailable = false;
+        bool m_personalityDatabaseAvailable = false;
 
         mutable std::mutex m_queueMutex;
         mutable std::mutex m_ingressMutex;
@@ -219,7 +276,7 @@ namespace AzerothVoices
         uint64_t m_telemetrySuccessfulResults = 0;
         uint64_t m_telemetryFailedResults = 0;
         uint64_t m_telemetryGeneratedMessages = 0;
-        std::deque<TelemetryMessage> m_telemetryRecentMessages;
+        std::array<uint64_t, static_cast<size_t>(PreflightReason::Count)> m_preflightRejections{};
         std::atomic<bool> m_started;
     };
 }
