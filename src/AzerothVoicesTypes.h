@@ -37,8 +37,7 @@ namespace AzerothVoices
     enum class RequestKind : uint8_t
     {
         Dialogue,
-        PersonalityGeneration,
-        NaturalCommand
+        PersonalityGeneration
     };
 
     struct BotPersonality
@@ -132,20 +131,16 @@ namespace AzerothVoices
         std::string systemPrompt;
         std::string userPrompt;
         std::string context;
-        std::string modelOverride;
         std::string currentSnapshot;
         std::string personalityBlock;
         std::string historyKey;
         std::string scopeKey;
-        std::vector<std::string> naturalAllowedActions;
-        std::vector<std::string> naturalPreservedLinks;
-        std::vector<uint64_t> naturalRecipientGuids;
-        std::vector<std::string> naturalRecipientNames;
-        uint32_t naturalMaximumActions = 1;
         uint32_t maxTokensOverride = 0;
-        uint32_t requestTimeoutSecondsOverride = 0;
-        uint32_t requestTimeoutMillisecondsOverride = 0;
-        float temperatureOverride = -1.0f;
+        bool naturalCommandCapable = false;
+        uint64_t naturalCommandOwnerGuid = 0;
+        std::vector<uint64_t> naturalCommandRecipientGuids;
+        std::vector<std::string> naturalCommandAllowedActions;
+        uint32_t naturalCommandMaximumActions = 1;
         bool personalityGenerationNeeded = false;
         bool ambient = false;
         bool allowFollowup = false;

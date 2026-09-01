@@ -1,0 +1,34 @@
+Azeroth Voices natural-command action inputs
+============================================
+
+Use these exact, case-insensitive values in:
+AzerothVoices.NaturalCommands.AllowedActions
+
+Presets and individual inputs can be mixed with commas. Repeated values are
+deduplicated. Example: medium,mail,jump
+
+LIGHT (20)
+quests, stats, loot, release, use, equip, attack, pull, accept, buff, follow,
+stay, guard, free, flee, talk, revive, position, who, ready
+
+MEDIUM additions (52; medium includes LIGHT, for 72 total)
+quest reward, leave, rep, roll, share, corpse run, teleport, taxi, repair,
+inventory, keep, ue, s, b, bb, talents, spells, co, nc, trainer, attack rti,
+pull rti, home, list ai, reset ai, reset strats, emote, help, gbank, bank,
+wander, wait for attack time, pet, focus heal, follow target, boost target,
+buff target, revive target, self res, grind, tank attack, cast, castnc, invite,
+join, lfg, spell, rti, runaway, summon, where, outfit
+
+HEAVY additions (59; heavy includes MEDIUM, for all 131 permitted inputs)
+reputation, log, los, drop, q, ll, ss, add all loot, u, c, items, inv, e, r,
+t, nt, de, react, all, chat, load ai, save ai, gb, warning, save mana, max dps,
+possible attack targets, attackers, formation, stance, sendmail, mail, go, cs,
+wts, hire, craft, flag, range, ra, give leader, rtsc, ah, ah bid, guild invite,
+guild join, guild promote, guild demote, guild remove, guild leave, guild
+leader, bg free, move style, jump, doquest, skill, faction, glyph, speak
+
+PERMANENTLY UNAVAILABLE (6)
+cdebug, cheat, debug, destroy, reset values, set value
+
+These six inputs are present in the checked-out PlayerBots trigger registry but
+are deliberately not exposed to model output.

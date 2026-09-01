@@ -365,8 +365,6 @@ namespace AzerothVoices
         try
         {
             Json body;
-            std::string const selectedModel = request.modelOverride.empty()
-                ? config.model : request.modelOverride;
             if (!config.apiJsonTemplate.empty())
             {
                 body = Json::parse(config.apiJsonTemplate);
@@ -375,7 +373,7 @@ namespace AzerothVoices
             }
             else if (Lower(config.providerMode) == "responses")
             {
-                body["model"] = selectedModel;
+                body["model"] = config.model;
                 body["instructions"] = request.systemPrompt;
                 body["input"] = request.context.empty() ? request.userPrompt : request.context + "\n\n" + request.userPrompt;
                 body["max_output_tokens"] = request.maxTokensOverride
@@ -383,7 +381,7 @@ namespace AzerothVoices
             }
             else
             {
-                body["model"] = selectedModel;
+                body["model"] = config.model;
                 body["messages"] = Json::array();
                 body["messages"].push_back({ { "role", "system" }, { "content", request.systemPrompt } });
                 if (!request.context.empty())
@@ -391,18 +389,12 @@ namespace AzerothVoices
                 body["messages"].push_back({ { "role", "user" }, { "content", request.userPrompt } });
                 body["max_tokens"] = request.maxTokensOverride
                     ? request.maxTokensOverride : config.maxTokens;
-                body["temperature"] = request.temperatureOverride >= 0.0f
-                    ? request.temperatureOverride : config.temperature;
+                body["temperature"] = config.temperature;
                 body["top_p"] = config.topP;
-                if (request.kind == RequestKind::NaturalCommand &&
-                    Lower(config.endpoint).find("api.openai.com") != std::string::npos)
-                    body["response_format"] = { { "type", "json_object" } };
             }
 
-            if (!request.modelOverride.empty())
-                body["model"] = request.modelOverride;
-            else if (!body.count("model") && !selectedModel.empty())
-                body["model"] = selectedModel;
+            if (!body.count("model") && !config.model.empty())
+                body["model"] = config.model;
             return body.dump();
         }
         catch (std::exception const& exception)
@@ -415,8 +407,7 @@ namespace AzerothVoices
     std::string Provider::ParseResponse(Config const& config, ChatRequest const& request,
                                         std::string const& raw, std::string& error)
     {
-        if (request.kind != RequestKind::NaturalCommand &&
-            Lower(config.parserMode) == "legacyregex")
+        if (Lower(config.parserMode) == "legacyregex")
             return SanitizeReply(LegacyParse(config, request, raw, error));
 
         try
@@ -428,8 +419,6 @@ namespace AzerothVoices
                 error = "provider JSON did not contain a supported text field";
                 return "";
             }
-            if (request.kind == RequestKind::NaturalCommand)
-                return Trim(content);
             return SanitizeReply(content);
         }
         catch (std::exception const& exception)
@@ -474,35 +463,9 @@ namespace AzerothVoices
             slot.client.reset(new httplib::Client(endpoint.base));
         }
 
-        uint64_t requestTimeoutMilliseconds = static_cast<uint64_t>(config.requestTimeoutSeconds) * 1000;
-        uint64_t connectTimeoutMilliseconds = static_cast<uint64_t>(config.connectTimeoutSeconds) * 1000;
-        if (request.requestTimeoutMillisecondsOverride)
-        {
-            requestTimeoutMilliseconds = std::min<uint64_t>(requestTimeoutMilliseconds,
-                request.requestTimeoutMillisecondsOverride);
-            connectTimeoutMilliseconds = std::min<uint64_t>(connectTimeoutMilliseconds,
-                request.requestTimeoutMillisecondsOverride);
-        }
-        else if (request.requestTimeoutSecondsOverride)
-        {
-            requestTimeoutMilliseconds = std::min<uint64_t>(requestTimeoutMilliseconds,
-                static_cast<uint64_t>(request.requestTimeoutSecondsOverride) * 1000);
-            connectTimeoutMilliseconds = std::min<uint64_t>(connectTimeoutMilliseconds,
-                static_cast<uint64_t>(request.requestTimeoutSecondsOverride) * 1000);
-        }
-        auto setTimeout = [](auto setter, uint64_t milliseconds) {
-            setter(static_cast<time_t>(milliseconds / 1000),
-                static_cast<time_t>((milliseconds % 1000) * 1000));
-        };
-        setTimeout([&](time_t seconds, time_t microseconds) {
-            slot.client->set_connection_timeout(seconds, microseconds);
-        }, connectTimeoutMilliseconds);
-        setTimeout([&](time_t seconds, time_t microseconds) {
-            slot.client->set_read_timeout(seconds, microseconds);
-        }, requestTimeoutMilliseconds);
-        setTimeout([&](time_t seconds, time_t microseconds) {
-            slot.client->set_write_timeout(seconds, microseconds);
-        }, requestTimeoutMilliseconds);
+        slot.client->set_connection_timeout(static_cast<time_t>(config.connectTimeoutSeconds), 0);
+        slot.client->set_read_timeout(static_cast<time_t>(config.requestTimeoutSeconds), 0);
+        slot.client->set_write_timeout(static_cast<time_t>(config.requestTimeoutSeconds), 0);
         slot.client->set_keep_alive(true);
         slot.client->enable_server_certificate_verification(true);
         if (!config.caCertFile.empty())

@@ -4,13 +4,18 @@
 # static relationship visible and avoids platform-specific transitive-linking
 # surprises.
 if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
+  if(BUILD_PLAYERBOTS)
+    # botpch.h includes Boost headers. PlayerBots keeps that dependency
+    # private, so this module-local bridge must request the header path too.
+    find_package(Boost 1.70 REQUIRED)
+  endif()
   foreach(AV_TARGET modules mod_mod_azeroth_voices)
     if(TARGET ${AV_TARGET})
       target_include_directories(${AV_TARGET} PRIVATE
         ${OPENSSL_INCLUDE_DIR}
         ${CMAKE_SOURCE_DIR}/src/game/MapNodes
         ${CMAKE_SOURCE_DIR}/src/modules/PlayerBots
-        ${Boost_INCLUDE_DIR})
+        ${Boost_INCLUDE_DIRS})
       if(WIN32)
         # VMangos' bundled OpenSSL headers live below this include root and
         # cpp-httplib includes them as <openssl/...>.
@@ -18,9 +23,6 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
           ${CMAKE_SOURCE_DIR}/dep/include-windows)
       endif()
       target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_LIBRARIES})
-      if(TARGET playerbots)
-        target_link_libraries(${AV_TARGET} PUBLIC playerbots)
-      endif()
     endif()
   endforeach()
 

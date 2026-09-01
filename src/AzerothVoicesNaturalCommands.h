@@ -1,62 +1,54 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
-#include <map>
-#include <set>
 #include <string>
 #include <vector>
 
-namespace AzerothVoices
+namespace AzerothVoices::NaturalCommands
 {
-    struct NaturalCommandAction
+    struct ActionDefinition
     {
-        char const* name;
-        char const* meaning;
-        uint8_t usefulness;
-        bool forbidden;
+        char const* input;
+        char const* dispatch;
+        uint8_t presetTier;
     };
 
-    enum class NaturalCommandRisk : uint8_t { Low, Caution, High, Forbidden };
-    enum class NaturalCommandArgumentMode : uint8_t { None, Optional, Required };
-
-    struct NaturalCommandMetadata
+    struct ParsedAction
     {
-        std::string name;
-        std::string canonical;
-        std::string category;
-        std::string meaning;
-        std::string argumentGrammar;
-        std::string requiredContext;
-        std::vector<std::string> aliases;
-        std::vector<std::string> keywords;
-        NaturalCommandArgumentMode argumentMode = NaturalCommandArgumentMode::Optional;
-        NaturalCommandRisk risk = NaturalCommandRisk::Low;
-        bool usesSelection = false;
-        bool confirmationRequired = false;
-        bool forbidden = false;
+        std::string action;
+        std::string arguments;
     };
 
-    std::vector<NaturalCommandAction> const& GetNaturalCommandActions();
-    NaturalCommandAction const* FindNaturalCommandAction(std::string const& name);
-    std::string NormalizeNaturalCommandAction(std::string value);
-    bool ExpandNaturalCommandPreset(std::string const& name,
-        std::set<std::string>& allowed);
-    std::set<std::string> ResolveNaturalCommandAllowlist(
-        std::vector<std::string> const& configured, std::vector<std::string>& invalid,
-        std::vector<std::string>& forbidden);
-    std::string BuildNaturalCommandPromptCatalog(std::set<std::string> const& allowed);
-    std::string BuildNaturalCommandClassifierPrompt(std::set<std::string> const& allowed,
-        size_t maximumActions = 1, bool includeAcknowledgement = false);
-    NaturalCommandMetadata GetNaturalCommandMetadata(NaturalCommandAction const& action);
-    std::set<std::string> ShortlistNaturalCommandActions(
-        std::set<std::string> const& allowed, std::string const& message,
-        size_t maximumActions = 20,
-        std::map<std::string, uint64_t> const* actionUsage = nullptr);
-    std::string NaturalCommandRiskName(NaturalCommandRisk risk);
-    bool ValidateNaturalCommandArguments(std::string const& action,
-        std::string const& arguments, bool hasSelection,
-        std::vector<std::string> const& preservedLinks, std::string& restored,
-        std::string& error);
-    std::string PreserveNaturalCommandLinks(std::string const& message,
-        std::vector<std::string>& links);
+    struct ParsedReply
+    {
+        std::string say;
+        std::vector<ParsedAction> actions;
+        bool attemptedEnvelope = false;
+        bool parseMiss = false;
+    };
+
+    struct FastPathAction
+    {
+        std::string action;
+        std::string arguments;
+        std::string acknowledgement;
+    };
+
+    ActionDefinition const* FindAction(std::string const& input);
+    std::vector<std::string> ResolveAllowedActions(std::string const& configured,
+                                                    std::vector<std::string>& invalid);
+    std::vector<std::string> BuildShortlist(std::vector<std::string> const& allowed,
+                                            std::string const& message,
+                                            bool dynamic,
+                                            size_t maximum);
+    std::string BuildSystemAddendum(std::vector<std::string> const& shortlist,
+                                    uint32_t maximumActions,
+                                    std::vector<std::string> const& nearbyEnemies);
+    ParsedReply ParseReply(std::string const& response, uint32_t maximumActions);
+    bool MatchFastPath(std::string const& commandText,
+                       std::vector<std::string> const& allowed,
+                       FastPathAction& result);
+    std::string Normalize(std::string const& value);
+    std::vector<std::string> AllActionInputs();
 }

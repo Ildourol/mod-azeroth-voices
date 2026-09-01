@@ -56,30 +56,6 @@ namespace AzerothVoices
         std::string responseSplitPattern;
         std::vector<std::string> blockedChannels;
 
-        bool naturalCommandsEnabled = true;
-        bool naturalCommandsMasterOnly = true;
-        bool naturalCommandsLocalFastPath = true;
-        bool naturalCommandsLlmFallback = true;
-        std::string naturalCommandsModel;
-        float naturalCommandsMinimumConfidence = 0.90f;
-        uint32_t naturalCommandsRequestTtlSeconds = 15;
-        uint32_t naturalCommandsRetryMaximum = 0;
-        uint32_t naturalCommandsMaximumPendingPerBot = 2;
-        uint32_t naturalCommandsShortlistMaximum = 20;
-        uint32_t naturalCommandsMaximumRecipients = 1;
-        uint32_t naturalCommandsMaximumActions = 1;
-        bool naturalCommandsConfirmationEnabled = true;
-        uint32_t naturalCommandsConfirmationTtlSeconds = 20;
-        bool naturalCommandsFeedbackEnabled = true;
-        std::string naturalCommandsAcknowledgementMode = "local";
-        bool naturalCommandsTelemetryEnabled = false;
-        bool naturalCommandsPromoteFrequentlyUsedActions = true;
-        bool naturalCommandsAuditEnabled = false;
-        uint32_t naturalCommandsAuditMaximumRecords = 500;
-        bool naturalCommandsAuditIncludeArguments = false;
-        std::set<std::string> naturalCommandsAllowedActions;
-        std::vector<std::string> naturalCommandsExcludedChannels;
-
         bool personalityEnabled = true;
         uint32_t personalityBackgroundMode = 0;
         bool personalityGenerateBackground = true;
@@ -133,6 +109,14 @@ namespace AzerothVoices
         uint32_t rpgAiChatChance = 30;
         std::string worldChannelName = "World";
         std::vector<std::string> commandBlacklist;
+
+        bool naturalCommandsEnabled = false;
+        bool naturalCommandsLocalFastPath = true;
+        bool naturalCommandsDynamicShortlist = true;
+        uint32_t naturalCommandsShortlistMaximum = 20;
+        uint32_t naturalCommandsMaximumActions = 1;
+        uint32_t naturalCommandsMaximumRecipients = 1;
+        std::vector<std::string> naturalCommandsAllowedActions;
 
         bool randomChatterEnabled = true;
         uint32_t randomMinimumIntervalSeconds = 90;

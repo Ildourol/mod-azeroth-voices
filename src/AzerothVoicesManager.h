@@ -23,20 +23,6 @@ class WorldObject;
 
 namespace AzerothVoices
 {
-    struct NaturalCommandAuditRecord
-    {
-        uint64_t createdUnix = 0;
-        uint64_t requestId = 0;
-        uint64_t playerGuid = 0;
-        uint64_t botGuid = 0;
-        std::string action;
-        std::string arguments;
-        std::string source;
-        std::string result;
-        double confidence = 0.0;
-        uint32_t latencyMilliseconds = 0;
-    };
-
     struct StatusSnapshot
     {
         bool enabled = false;
@@ -64,31 +50,6 @@ namespace AzerothVoices
         bool ragEnabled = false;
         bool environmentEnabled = false;
         bool snapshotEnabled = false;
-        bool naturalCommandsEnabled = false;
-        size_t naturalCommandActions = 0;
-        uint32_t naturalCommandShortlistMaximum = 20;
-        size_t naturalCommandEffectiveShortlistMaximum = 0;
-        uint32_t naturalCommandMaximumRecipients = 1;
-        uint32_t naturalCommandMaximumActions = 1;
-        size_t naturalCommandsPending = 0;
-        size_t naturalConfirmationsPending = 0;
-        bool naturalCommandPrefixConfigured = false;
-        uint64_t naturalClassified = 0;
-        uint64_t naturalDispatched = 0;
-        uint64_t naturalRejected = 0;
-        uint64_t naturalExpired = 0;
-        uint64_t naturalConsidered = 0;
-        uint64_t naturalLocalFastPath = 0;
-        uint64_t naturalClassifierQueued = 0;
-        size_t naturalAverageShortlist = 0;
-        size_t naturalAveragePromptCharacters = 0;
-        uint32_t naturalAverageClassifierLatencyMilliseconds = 0;
-        std::string naturalCommandModel;
-        std::string naturalAcknowledgementMode;
-        std::string naturalMostUsedActions;
-        bool naturalAuditEnabled = false;
-        size_t naturalAuditRecords = 0;
-        std::string naturalLastFailure;
         size_t ragEntries = 0;
         size_t ragFiles = 0;
         size_t ragParseFailures = 0;
@@ -124,8 +85,6 @@ namespace AzerothVoices
         void SetPaused(bool paused);
         bool IsPaused() const;
         StatusSnapshot GetStatus() const;
-        std::vector<NaturalCommandAuditRecord> GetNaturalCommandAudit(size_t maximum) const;
-        void ClearNaturalCommandAudit();
 
     private:
         Manager();
@@ -134,6 +93,7 @@ namespace AzerothVoices
         Manager& operator=(Manager const&) = delete;
 
         struct Candidate;
+        struct NaturalCommandContext;
         struct RagItem;
         struct PendingHistoryWrite
         {
@@ -187,100 +147,22 @@ namespace AzerothVoices
             uint64_t requestId = 0;
             uint64_t updatedUnix = 0;
         };
-        struct PendingNaturalConfirmation
-        {
-            struct Action
-            {
-                std::string action;
-                std::string arguments;
-                double confidence = 1.0;
-            };
-            uint64_t speakerGuid = 0;
-            std::vector<uint64_t> botGuids;
-            std::vector<Action> actions;
-            ChatScope scope = ChatScope::Whisper;
-            std::string addressing;
-            std::string source = "local";
-            uint64_t requestId = 0;
-            uint32_t latencyMilliseconds = 0;
-            std::string acknowledgement;
-            ChatRequest acknowledgementRequest;
-            std::chrono::steady_clock::time_point expires;
-        };
-        struct NaturalCommandTelemetryWindow
-        {
-            uint64_t considered = 0;
-            uint64_t localFastPath = 0;
-            uint64_t classifierQueued = 0;
-            uint64_t classifierResults = 0;
-            uint64_t classifierLatencyMilliseconds = 0;
-            uint64_t shortlistActions = 0;
-            uint64_t promptCharacters = 0;
-            uint64_t conversation = 0;
-            uint64_t unsupported = 0;
-            uint64_t lowConfidence = 0;
-            uint64_t invalidDecision = 0;
-            uint64_t rejected = 0;
-            uint64_t confirmationRequired = 0;
-            uint64_t confirmationConfirmed = 0;
-            uint64_t confirmationCancelled = 0;
-            uint64_t confirmationExpired = 0;
-        };
         void WorkerLoop();
         void DrainIngress();
         void ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                          std::string const& targetName, std::string const& channelName);
-        bool TryHandleNaturalCommand(Player* speaker, ChatScope scope,
-                                     std::string const& message,
-                                     std::string const& targetName,
-                                     std::string const& channelName);
-        std::vector<Player*> ResolveNaturalCommandBots(Player* speaker, ChatScope scope,
-                                                       std::string const& message,
-                                                       std::string const& targetName,
-                                                       std::string& addressing,
-                                                       std::string& addressedMessage) const;
-        bool NaturalCommandTargetValid(Player* speaker, Player* bot, ChatScope scope,
-                                       std::string const& addressing) const;
-        bool QueueNaturalCommandInterpretation(Player* speaker,
-                                               std::vector<Player*> const& bots,
-                                               ChatScope scope,
-                                               std::string const& channelName,
-                                               std::string const& addressing,
-                                               std::string const& message);
-        void HandleNaturalCommandCompletion(ChatCompletion const& completion);
-        bool ExecuteNaturalCommand(Player* speaker, Player* bot,
-                                   std::string const& action,
-                                   std::string const& arguments,
-                                   ChatScope scope,
-                                   std::string const& addressing,
-                                   bool confirmed = false,
-                                   bool sendFeedback = true,
-                                   std::string const& source = "local",
-                                   double confidence = 1.0,
-                                   uint64_t requestId = 0,
-                                   uint32_t latencyMilliseconds = 0);
-        bool ExecuteNaturalCommandBatch(Player* speaker,
-                                        std::vector<Player*> const& bots,
-                                        std::vector<PendingNaturalConfirmation::Action> const& actions,
-                                        ChatScope scope, std::string const& addressing,
-                                        bool confirmed = false,
-                                        std::string const& source = "local",
-                                        uint64_t requestId = 0,
-                                        uint32_t latencyMilliseconds = 0,
-                                        std::string const& acknowledgement = "",
-                                        ChatRequest const* acknowledgementRequest = nullptr);
-        void SendNaturalCommandFeedback(Player* speaker, std::string const& message) const;
-        void RejectNaturalCommand(Player* speaker, std::string const& reason);
-        void RecordNaturalCommandAudit(uint64_t playerGuid, uint64_t botGuid,
-                                       std::string const& action,
-                                       std::string const& arguments,
-                                       std::string const& source,
-                                       std::string const& result,
-                                       double confidence, uint64_t requestId,
-                                       uint32_t latencyMilliseconds);
-        void ScheduleNaturalCommandAcknowledgement(ChatRequest const& request,
-                                                   std::string const& acknowledgement);
-        std::string NaturalCommandMostUsedActions(size_t maximum) const;
+        bool TryProcessNaturalCommand(Player* speaker, ChatScope scope,
+                                      std::string const& message,
+                                      std::string const& targetName,
+                                      std::string const& channelName);
+        bool QueueNaturalCommandDialogue(NaturalCommandContext const& context,
+                                         Player* owner, ChatScope scope,
+                                         std::string const& channelName,
+                                         std::string const& message);
+        void ScheduleNaturalCommandAcknowledgement(NaturalCommandContext const& context,
+                                                   Player* owner, ChatScope scope,
+                                                   std::string const& channelName,
+                                                   std::string const& text);
         void ProcessEvent(Player* subject, std::string const& eventName, std::string const& detail,
                           uint32_t guildId);
         bool QueueDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
@@ -383,10 +265,6 @@ namespace AzerothVoices
         std::condition_variable m_queueReady;
         std::vector<std::thread> m_workers;
         std::unordered_map<uint64_t, uint64_t> m_latestRequestByActor;
-        std::unordered_map<uint64_t, std::deque<uint64_t>> m_pendingNaturalCommandsByActor;
-        std::unordered_map<uint64_t, PendingNaturalConfirmation> m_pendingNaturalConfirmations;
-        std::map<std::string, uint64_t> m_naturalActionUsage;
-        std::deque<NaturalCommandAuditRecord> m_naturalCommandAudit;
         std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_actorCooldowns;
         std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_speakerCooldowns;
         std::map<std::string, std::chrono::steady_clock::time_point> m_eventCooldowns;
@@ -411,19 +289,6 @@ namespace AzerothVoices
         uint64_t m_telemetrySuccessfulResults = 0;
         uint64_t m_telemetryFailedResults = 0;
         uint64_t m_telemetryGeneratedMessages = 0;
-        uint64_t m_naturalClassified = 0;
-        uint64_t m_naturalDispatched = 0;
-        uint64_t m_naturalRejected = 0;
-        uint64_t m_naturalExpired = 0;
-        uint64_t m_naturalConsidered = 0;
-        uint64_t m_naturalLocalFastPath = 0;
-        uint64_t m_naturalClassifierQueued = 0;
-        uint64_t m_naturalClassifierResults = 0;
-        uint64_t m_naturalClassifierLatencyMilliseconds = 0;
-        uint64_t m_naturalShortlistActions = 0;
-        uint64_t m_naturalPromptCharacters = 0;
-        NaturalCommandTelemetryWindow m_naturalTelemetry;
-        std::string m_naturalLastFailure;
         std::array<uint64_t, static_cast<size_t>(PreflightReason::Count)> m_preflightRejections{};
         std::atomic<bool> m_started;
     };
