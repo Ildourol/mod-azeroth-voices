@@ -115,6 +115,58 @@ AiPlayerbot.LLMResponseSplitPattern =
 AiPlayerbot.LLMBlockedReplyChannels =
 
 ###################################################################################################
+# Natural-language PlayerBot commands
+###################################################################################################
+
+# Recommended external PlayerBots setting: AiPlayerbot.CommandPrefix = ! in aiplayerbot.conf. Azeroth Voices reads but does not own or edit that setting. If it is empty, native PlayerBots may process unprefixed input before this module and the interpreted path refuses to dispatch overlapping commands.
+# Enables the module's natural-language command interpreter. It targets PlayerBots only; NPCs are never command recipients. Exact native PlayerBots command syntax remains handled by PlayerBots itself. (Default 1.)
+AzerothVoices.NaturalCommands.Enable = 1
+# 1 permits interpreted commands only for a PlayerBot whose current master is the speaking real player. 0 still requires one explicitly resolved PlayerBot and leaves final authorization to PlayerBots security. (Default 1.)
+AzerothVoices.NaturalCommands.MasterOnly = 1
+# Uses a small deterministic phrase map before considering an API call. Exact native PlayerBots commands are not re-dispatched, preventing duplicate execution. (Default 1.)
+AzerothVoices.NaturalCommands.LocalFastPath = 1
+# Sends only command-looking, explicitly addressed instructions that did not match the local phrase map to the provider for strict structured interpretation. Ordinary conversation such as "how are you?" bypasses this classifier. (Default 1.)
+AzerothVoices.NaturalCommands.LLMFallback = 1
+# Optional model used only by the natural-command classifier. Empty uses AzerothVoices.Model. The existing endpoint and API key are shared. (Default empty.)
+AzerothVoices.NaturalCommands.Model =
+# Minimum provider confidence required before an interpreted action is dispatched. (Decimal 0.0-1.0; default 0.90.)
+AzerothVoices.NaturalCommands.MinimumConfidence = 0.90
+# Drops an interpreted command if provider work and queueing outlive this window. This is an expiry limit, not an added delay, and does not affect normal chat. (Integer seconds 1-120; default 15.)
+AzerothVoices.NaturalCommands.RequestTTLSeconds = 15
+# Natural-command transport retries only; a retry is skipped when insufficient TTL remains. (Integer 0-2; default 0.)
+AzerothVoices.NaturalCommands.RetryMaximum = 0
+# Bounded interpreted-command queue per PlayerBot. Commands beyond this limit are rejected privately. (Integer 1-4; default 2.)
+AzerothVoices.NaturalCommands.MaximumPendingPerBot = 2
+# Maximum locally shortlisted actions sent to the classifier; always a subset of AllowedActions. 0 automatically sends the complete resolved allowlist. If the allowlist contains no more than this value, every allowed action is sent; otherwise relevance scoring may use fewer. (Integer 0-131; default 20.)
+AzerothVoices.NaturalCommands.ShortlistMaximum = 20
+# Maximum explicitly addressed PlayerBots that may receive one interpreted instruction. Whisper and selected Say still resolve one bot. (Integer 1-5; default 1.)
+AzerothVoices.NaturalCommands.MaximumRecipients = 1
+# Maximum ordered actions the classifier may extract from one instruction. Each action is applied to every resolved recipient. (Integer 1-3; default 1.)
+AzerothVoices.NaturalCommands.MaximumActionsPerMessage = 1
+# Requires the same player to confirm high-risk interpreted actions before dispatch. Native PlayerBots commands remain independent. (Default 1.)
+AzerothVoices.NaturalCommands.RequireHighRiskConfirmation = 1
+# Expiry for a pending high-risk confirmation. Confirmation is local and makes no API call. (Integer seconds 5-120; default 20.)
+AzerothVoices.NaturalCommands.ConfirmationTTLSeconds = 20
+# Sends short private non-LLM status/rejection messages for interpreted commands. (Default 1.)
+AzerothVoices.NaturalCommands.Feedback = 1
+# Command-success acknowledgment mode: None sends no success acknowledgment, Local uses zero-token private module feedback, and Generated asks the existing classifier call for one short in-character line delivered by the first addressed PlayerBot after dispatch. Local fast-path commands fall back to Local in Generated mode because they make no provider call. Rejections and confirmations remain governed by Feedback. (None/Local/Generated; default Local.)
+AzerothVoices.NaturalCommands.AcknowledgementMode = Local
+# Logs privacy-safe natural-command counters at Console.ApiCallStatsIntervalSeconds without retaining player messages. Includes local/classifier counts, average shortlist/prompt size, classifier latency, outcomes, confirmations, and most-used actions. (Default 0.)
+AzerothVoices.NaturalCommands.Telemetry.Enable = 0
+# Uses successful session-local action counts as a tie-breaker and bounded fallback order in future classifier shortlists. It never adds an action outside AllowedActions or ShortlistMaximum and never overrides direct message relevance. (Default 1.)
+AzerothVoices.NaturalCommands.PromoteFrequentlyUsedActions = 1
+# Stores a bounded RAM-only audit of natural-command decisions and dispatch outcomes. Records are cleared on restart/reload and never store the original player message. (Default 0.)
+AzerothVoices.NaturalCommands.Audit.Enable = 0
+# Maximum RAM audit records retained, oldest-first eviction. (Integer 1-5000; default 500.)
+AzerothVoices.NaturalCommands.Audit.MaximumRecords = 500
+# Includes validated command arguments in audit records. Keep disabled to avoid retaining player names, item links, or other private command details. (Default 0.)
+AzerothVoices.NaturalCommands.Audit.IncludeArguments = 0
+# Presets or exact PlayerBots chat-trigger inputs that interpreted commands may produce. 'light' enables 20 everyday actions, 'medium' enables all 72 usefulness tiers 1-2, and 'heavy' or '*' enables all 131 non-forbidden inputs. Presets and manual names may be mixed, for example: medium,emote,craft. Duplicate names are removed. Unknown and permanently forbidden names are logged and ignored. Native prefixed PlayerBots syntax is independent of this allowlist. See data/NATURAL_COMMAND_ACTIONS.txt. (Comma-separated; default 'medium'.)
+AzerothVoices.NaturalCommands.AllowedActions = medium
+# Scopes or channel names the interpreter must ignore. Empty hears every scope. Supported scope names: whisper,say,yell,party,raid,guild,officer,world,channel. Use channel:NAME to exclude one custom channel. (Comma-separated; default empty.)
+AzerothVoices.NaturalCommands.ExcludedChannels =
+
+###################################################################################################
 # Persistent PlayerBot personalities
 ###################################################################################################
 
@@ -161,7 +213,7 @@ AzerothVoices.Replies.World = 1
 AzerothVoices.Replies.CustomChannels = 0
 # Used to classify and deliver world-chat messages. (Channel name; default World.)
 AzerothVoices.WorldChannelName = World
-# Allows static, genuinely Alliance- or Horde-friendly NPCs in ambient chatter, event reactions, and reactions to human or PlayerBot Say. Neutral/yellow, hostile, pet, summon, guardian, totem, charmed, trigger, critter, and temporary speakers are rejected. NPC output is Say only. (Default 1.)
+# Allows eligible static NPCs in ambient chatter, event reactions, and reactions to human or PlayerBot Say. Friendly NPCs are admitted by default; neutral and hostile NPCs require their category switch or entry override below. Pet, summon, guardian, totem, charmed, trigger, critter, and temporary speakers remain rejected. NPC output is Say only. (Default 1.)
 AzerothVoices.NPC.Enable = 1
 # NPC candidate search radius around the local event subject, human/PlayerBot speaker, or random real-player anchor. It is also the maximum actor-to-actor distance for every generated follow-up pair containing an NPC. Both follow-up actors must share one real-human observer within SayDistance. (Decimal yards, minimum 1; default 10.)
 AzerothVoices.NPC.Distance = 10
@@ -179,6 +231,13 @@ AzerothVoices.NPC.AllowHostile = 0
 AzerothVoices.NPC.AllowedNeutralEntries =
 # Hostile creature_template.entry values allowed through the faction gate when AllowHostile is 0. (Comma-separated entry IDs; default empty.)
 AzerothVoices.NPC.AllowedHostileEntries =
+# The three disposition chances below are an additional probability gate alongside the existing targeted, direct-address, name-mention, overhear, event, random, and follow-up chances. They apply to every eligible NPC-speaking path and never bypass NPC safety, faction, distance, audience, or combat checks.
+# Chance that an otherwise selected NPC friendly toward the current conversational counterpart speaks. (Percentage; default 100.)
+AzerothVoices.NPC.ReplyChance.Friendly = 100
+# Chance that an otherwise selected NPC neutral toward the current conversational counterpart speaks. (Percentage; default 50.)
+AzerothVoices.NPC.ReplyChance.Neutral = 50
+# Chance that an otherwise selected NPC hostile or unfriendly toward the current conversational counterpart speaks. (Percentage; default 25.)
+AzerothVoices.NPC.ReplyChance.Hostile = 25
 # The three target-specific chances below apply only when a real player selects an eligible NPC and speaks in Say. Every participant must remain within NPC.Distance of that player, and every generated NPC therefore retains that same real player as its SayDistance observer.
 # Chance that an eligible NPC explicitly selected by a real player answers that player's Say. The selected NPC is considered before every other responder. (Percentage; default 100.)
 AzerothVoices.NPC.TargetedReplyChance = 100
@@ -221,7 +280,7 @@ AzerothVoices.BotReplyChance.Guild = 5
 AiPlayerbot.LLMBotToBotChatChance = 10
 # Upper cap for NPC reactions to PlayerBot Say and for generated follow-ups where either participant is an NPC. These interactions remain in Say and require a real human within SayDistance. (Percentage; default 30.)
 AiPlayerbot.LLMRpgAIChatChance = 30
-# Messages beginning with any listed PlayerBots command or addon prefix are never sent to the provider; add local prefixes as needed. (Comma-separated case-insensitive prefixes; default below.)
+# After the natural-command interpreter has had an opportunity to process a real player's addressed instruction, messages beginning with any listed PlayerBots command or addon prefix are excluded from normal dialogue generation; add local prefixes as needed. (Comma-separated case-insensitive prefixes; default below.)
 AzerothVoices.CommandBlacklist = .,! ,/,autogear,talents,summon,release,revive,attack,follow,stay,cast,quest,trainer,teleport,addon,DBM,Recount,Questie
 
 ###################################################################################################

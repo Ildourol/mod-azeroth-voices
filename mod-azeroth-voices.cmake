@@ -8,7 +8,9 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
     if(TARGET ${AV_TARGET})
       target_include_directories(${AV_TARGET} PRIVATE
         ${OPENSSL_INCLUDE_DIR}
-        ${CMAKE_SOURCE_DIR}/src/game/MapNodes)
+        ${CMAKE_SOURCE_DIR}/src/game/MapNodes
+        ${CMAKE_SOURCE_DIR}/src/modules/PlayerBots
+        ${Boost_INCLUDE_DIR})
       if(WIN32)
         # VMangos' bundled OpenSSL headers live below this include root and
         # cpp-httplib includes them as <openssl/...>.
@@ -16,6 +18,9 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
           ${CMAKE_SOURCE_DIR}/dep/include-windows)
       endif()
       target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_LIBRARIES})
+      if(TARGET playerbots)
+        target_link_libraries(${AV_TARGET} PUBLIC playerbots)
+      endif()
     endif()
   endforeach()
 

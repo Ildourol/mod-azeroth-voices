@@ -1,5 +1,7 @@
 #include "AzerothVoicesConfig.h"
 
+#include "AzerothVoicesNaturalCommands.h"
+
 #include "Config/Config.h"
 #include "Log.h"
 
@@ -27,6 +29,14 @@ namespace AzerothVoices
             value.erase(std::find_if(value.rbegin(), value.rend(), notSpace).base(), value.end());
             if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
                 value = value.substr(1, value.size() - 2);
+            return value;
+        }
+
+        std::string Lower(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
             return value;
         }
 
@@ -159,6 +169,69 @@ namespace AzerothVoices
         c.responseSplitPattern = sConfig.GetStringDefault("AiPlayerbot.LLMResponseSplitPattern", "");
         c.blockedChannels = Split(sConfig.GetStringDefault("AiPlayerbot.LLMBlockedReplyChannels", ""), ',');
 
+        c.naturalCommandsEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.Enable", true);
+        c.naturalCommandsMasterOnly = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.MasterOnly", true);
+        c.naturalCommandsLocalFastPath = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.LocalFastPath", true);
+        c.naturalCommandsLlmFallback = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.LLMFallback", true);
+        c.naturalCommandsModel = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.NaturalCommands.Model", ""));
+        c.naturalCommandsMinimumConfidence = std::max(0.0f, std::min(1.0f,
+            sConfig.GetFloatDefault("AzerothVoices.NaturalCommands.MinimumConfidence", 0.90f)));
+        c.naturalCommandsRequestTtlSeconds = Bounded(
+            "AzerothVoices.NaturalCommands.RequestTTLSeconds", 15, 1, 120);
+        c.naturalCommandsRetryMaximum = Bounded(
+            "AzerothVoices.NaturalCommands.RetryMaximum", 0, 0, 2);
+        c.naturalCommandsMaximumPendingPerBot = Bounded(
+            "AzerothVoices.NaturalCommands.MaximumPendingPerBot", 2, 1, 4);
+        c.naturalCommandsShortlistMaximum = Bounded(
+            "AzerothVoices.NaturalCommands.ShortlistMaximum", 20, 0, 131);
+        c.naturalCommandsMaximumRecipients = Bounded(
+            "AzerothVoices.NaturalCommands.MaximumRecipients", 1, 1, 5);
+        c.naturalCommandsMaximumActions = Bounded(
+            "AzerothVoices.NaturalCommands.MaximumActionsPerMessage", 1, 1, 3);
+        c.naturalCommandsConfirmationEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.RequireHighRiskConfirmation", true);
+        c.naturalCommandsConfirmationTtlSeconds = Bounded(
+            "AzerothVoices.NaturalCommands.ConfirmationTTLSeconds", 20, 5, 120);
+        c.naturalCommandsFeedbackEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.Feedback", true);
+        c.naturalCommandsAcknowledgementMode = Lower(Trim(sConfig.GetStringDefault(
+            "AzerothVoices.NaturalCommands.AcknowledgementMode", "Local")));
+        if (c.naturalCommandsAcknowledgementMode != "none" &&
+            c.naturalCommandsAcknowledgementMode != "local" &&
+            c.naturalCommandsAcknowledgementMode != "generated")
+        {
+            sLog.outError("[AzerothVoices][CONFIG] NaturalCommands.AcknowledgementMode must be None, Local, or Generated; using Local.");
+            c.naturalCommandsAcknowledgementMode = "local";
+        }
+        c.naturalCommandsTelemetryEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.Telemetry.Enable", false);
+        c.naturalCommandsPromoteFrequentlyUsedActions = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.PromoteFrequentlyUsedActions", true);
+        c.naturalCommandsAuditEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.Audit.Enable", false);
+        c.naturalCommandsAuditMaximumRecords = Bounded(
+            "AzerothVoices.NaturalCommands.Audit.MaximumRecords", 500, 1, 5000);
+        c.naturalCommandsAuditIncludeArguments = sConfig.GetBoolDefault(
+            "AzerothVoices.NaturalCommands.Audit.IncludeArguments", false);
+        c.naturalCommandsExcludedChannels = Split(sConfig.GetStringDefault(
+            "AzerothVoices.NaturalCommands.ExcludedChannels", ""), ',');
+        std::vector<std::string> invalidNaturalActions;
+        std::vector<std::string> forbiddenNaturalActions;
+        c.naturalCommandsAllowedActions = ResolveNaturalCommandAllowlist(
+            Split(sConfig.GetStringDefault("AzerothVoices.NaturalCommands.AllowedActions", "medium"), ','),
+            invalidNaturalActions, forbiddenNaturalActions);
+        for (std::string const& action : invalidNaturalActions)
+            sLog.outError("[AzerothVoices][CONFIG] NaturalCommands.AllowedActions contains unknown action '%s'; ignoring it.",
+                action.c_str());
+        for (std::string const& action : forbiddenNaturalActions)
+            sLog.outError("[AzerothVoices][CONFIG] NaturalCommands action '%s' is permanently forbidden; ignoring it.",
+                action.c_str());
+
         c.personalityEnabled = Bounded("AzerothVoices.Personality.Enable", 1, 0, 1) != 0;
         c.personalityBackgroundMode = Bounded("AzerothVoices.Personality.BackgroundMode", 0, 0, 1);
         c.personalityGenerateBackground = Bounded(
@@ -196,6 +269,9 @@ namespace AzerothVoices
         c.npcAllowHostile = sConfig.GetBoolDefault("AzerothVoices.NPC.AllowHostile", false);
         c.npcAllowedNeutralEntries = UnsignedSet("AzerothVoices.NPC.AllowedNeutralEntries", "");
         c.npcAllowedHostileEntries = UnsignedSet("AzerothVoices.NPC.AllowedHostileEntries", "");
+        c.npcFriendlyReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Friendly", 100);
+        c.npcNeutralReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Neutral", 50);
+        c.npcHostileReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Hostile", 25);
         c.targetedNpcReplyChance = Percent("AzerothVoices.NPC.TargetedReplyChance", 100);
         c.targetedNpcJoinChance = Percent("AzerothVoices.NPC.TargetedOtherNPCJoinChance", 5);
         c.targetedNpcPlayerBotJoinChance = Percent(

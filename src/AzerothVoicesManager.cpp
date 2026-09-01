@@ -1,6 +1,8 @@
 #include "AzerothVoicesManager.h"
 
+#include "AzerothVoicesNaturalCommands.h"
 #include "AzerothVoicesPersonality.h"
+#include "AzerothVoicesPlayerbotBridge.h"
 #include "AzerothVoicesProvider.h"
 
 #include "Cell.h"
@@ -33,14 +35,17 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <ctime>
 #include <fstream>
 #include <filesystem>
 #include <list>
+#include <limits>
 #include <memory>
 #include <random>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 namespace AzerothVoices
 {
@@ -147,6 +152,53 @@ namespace AzerothVoices
             Hostile,
             NoHumanNearby
         };
+
+        enum class NpcDisposition : uint8_t
+        {
+            Friendly,
+            Neutral,
+            Hostile
+        };
+
+        NpcDisposition ClassifyNpcDisposition(Creature const* creature,
+                                              WorldObject const* counterpart)
+        {
+            ReputationRank const reaction = creature && counterpart
+                ? creature->GetReactionTo(counterpart) : REP_NEUTRAL;
+            if (reaction >= REP_FRIENDLY)
+                return NpcDisposition::Friendly;
+            if (reaction == REP_NEUTRAL)
+                return NpcDisposition::Neutral;
+            return NpcDisposition::Hostile;
+        }
+
+        std::string NpcDispositionName(NpcDisposition disposition)
+        {
+            switch (disposition)
+            {
+                case NpcDisposition::Friendly:
+                    return "friendly";
+                case NpcDisposition::Neutral:
+                    return "neutral";
+                case NpcDisposition::Hostile:
+                    return "hostile";
+            }
+            return "neutral";
+        }
+
+        uint32_t NpcDispositionReplyChance(NpcDisposition disposition, Config const& config)
+        {
+            switch (disposition)
+            {
+                case NpcDisposition::Friendly:
+                    return config.npcFriendlyReplyChance;
+                case NpcDisposition::Neutral:
+                    return config.npcNeutralReplyChance;
+                case NpcDisposition::Hostile:
+                    return config.npcHostileReplyChance;
+            }
+            return config.npcNeutralReplyChance;
+        }
 
         ReputationRank NpcPlayableFactionReaction(Creature const* creature)
         {
@@ -727,6 +779,303 @@ namespace AzerothVoices
             return false;
         }
 
+        bool IsNameBoundary(std::string const& value, size_t position)
+        {
+            return position >= value.size() ||
+                !std::isalnum(static_cast<unsigned char>(value[position]));
+        }
+
+        bool ContainsExplicitName(std::string const& message, std::string const& name)
+        {
+            std::string const text = Lower(message);
+            std::string const wanted = Lower(name);
+            if (wanted.empty())
+                return false;
+            size_t position = text.find(wanted);
+            while (position != std::string::npos)
+            {
+                bool const left = position == 0 ||
+                    !std::isalnum(static_cast<unsigned char>(text[position - 1]));
+                bool const right = IsNameBoundary(text, position + wanted.size());
+                if (left && right)
+                    return true;
+                position = text.find(wanted, position + 1);
+            }
+            return false;
+        }
+
+        std::string RemoveExplicitName(std::string message, std::string const& name)
+        {
+            std::string const text = Lower(message);
+            std::string const wanted = Lower(name);
+            size_t position = text.find(wanted);
+            while (position != std::string::npos)
+            {
+                bool const left = position == 0 ||
+                    !std::isalnum(static_cast<unsigned char>(text[position - 1]));
+                bool const right = IsNameBoundary(text, position + wanted.size());
+                if (left && right)
+                {
+                    message.erase(position, wanted.size());
+                    break;
+                }
+                position = text.find(wanted, position + 1);
+            }
+            message = Trim(message);
+            while (!message.empty() && (message.front() == ',' || message.front() == ':' ||
+                message.front() == '-' || message.front() == '@'))
+                message = Trim(message.substr(1));
+            return message;
+        }
+
+        std::string NormalizeNaturalPhrase(std::string value)
+        {
+            value = Lower(Trim(value));
+            std::string result;
+            result.reserve(value.size());
+            bool previousSpace = false;
+            for (unsigned char input : value)
+            {
+                bool const word = std::isalnum(input) != 0 || input == '\'';
+                if (word)
+                {
+                    result.push_back(static_cast<char>(input));
+                    previousSpace = false;
+                }
+                else if (!previousSpace && !result.empty())
+                {
+                    result.push_back(' ');
+                    previousSpace = true;
+                }
+            }
+            if (!result.empty() && result.back() == ' ')
+                result.pop_back();
+            return result;
+        }
+
+        NaturalCommandAction const* FindNaturalCommandPrefix(std::string message)
+        {
+            message = NormalizeNaturalCommandAction(std::move(message));
+            std::string const prefix = NormalizeNaturalCommandAction(
+                PlayerbotBridge::CommandPrefix());
+            if (!prefix.empty() && message.compare(0, prefix.size(), prefix) == 0)
+                message = NormalizeNaturalCommandAction(message.substr(prefix.size()));
+
+            NaturalCommandAction const* best = nullptr;
+            for (NaturalCommandAction const& action : GetNaturalCommandActions())
+            {
+                size_t const length = std::char_traits<char>::length(action.name);
+                if (message.compare(0, length, action.name) != 0 ||
+                    !IsNameBoundary(message, length))
+                    continue;
+                if (!best || length > std::char_traits<char>::length(best->name))
+                    best = &action;
+            }
+            return best;
+        }
+
+        bool NaturalCommandChannelExcluded(Config const& config, ChatScope scope,
+                                           std::string const& channelName)
+        {
+            std::string const scopeName = Lower(ScopeName(scope));
+            std::string const channel = Lower(Trim(channelName));
+            for (std::string excluded : config.naturalCommandsExcludedChannels)
+            {
+                excluded = Lower(Trim(excluded));
+                if (excluded.empty())
+                    continue;
+                if (excluded == scopeName || excluded == channel ||
+                    (scope == ChatScope::Channel && excluded == "custom") ||
+                    (scope == ChatScope::Channel && excluded.compare(0, 8, "channel:") == 0 &&
+                        Trim(excluded.substr(8)) == channel))
+                    return true;
+            }
+            return false;
+        }
+
+        bool LooksLikeNaturalCommand(std::string const& message)
+        {
+            std::string const phrase = NormalizeNaturalPhrase(message);
+            if (phrase.empty())
+                return false;
+            static std::vector<std::string> const informational = {
+                "can you tell me about ", "could you tell me about ",
+                "would you tell me about ", "tell me about "
+            };
+            for (std::string const& opening : informational)
+                if (phrase.compare(0, opening.size(), opening) == 0)
+                    return false;
+            static std::vector<std::string> const openings = {
+                "please ", "can you ", "could you ", "would you ", "will you ",
+                "i need you to ", "i want you to ", "go ", "come ", "stop ",
+                "start ", "attack ", "pull ", "follow ", "wait ", "stay ",
+                "guard ", "flee ", "run ", "buff ", "heal ", "revive ",
+                "invite ", "join ", "leave ", "equip ", "unequip ", "use ",
+                "sell ", "buy ", "loot ", "repair ", "cast ", "talk ",
+                "accept ", "share ", "drop ", "summon ", "travel ", "move ",
+                "grind ", "farm ", "learn ", "train ", "craft ", "mail ",
+                "set ", "change ",
+                "switch ", "promote ", "demote ", "remove ", "give me "
+            };
+            for (std::string const& opening : openings)
+                if (phrase.compare(0, opening.size(), opening) == 0)
+                    return true;
+            return false;
+        }
+
+        bool ConservativeMultilingualCommandCandidate(std::string const& message,
+                                                      std::string const& addressing)
+        {
+            bool const nonAscii = std::any_of(message.begin(), message.end(), [](unsigned char c) {
+                return c >= 0x80;
+            });
+            if (!nonAscii || message.find('?') != std::string::npos)
+                return false;
+            if (addressing == "whisper")
+                return !message.empty() && message.back() == '!';
+            if (addressing != "named" && addressing != "party-single")
+                return false;
+            size_t words = 0;
+            bool inWord = false;
+            for (unsigned char c : message)
+            {
+                bool const word = std::isalnum(c) != 0 || c >= 0x80;
+                if (word && !inWord)
+                    ++words;
+                inWord = word;
+            }
+            return words >= 2 && words <= 12;
+        }
+
+        bool LooksLikeMultipleNaturalCommands(std::string const& message,
+                                               std::string const& separator)
+        {
+            std::string const phrase = NormalizeNaturalPhrase(message);
+            return message.find('\r') != std::string::npos ||
+                message.find('\n') != std::string::npos ||
+                message.find(';') != std::string::npos ||
+                (!separator.empty() && message.find(separator) != std::string::npos) ||
+                phrase.find(" and ") != std::string::npos ||
+                phrase.find(" and then ") != std::string::npos ||
+                phrase.find(" then also ") != std::string::npos;
+        }
+
+        std::vector<uint64_t> NaturalCommandRecipientGuids(ChatRequest const& request)
+        {
+            if (!request.naturalRecipientGuids.empty())
+                return request.naturalRecipientGuids;
+            return { request.actor.guid };
+        }
+
+        bool NaturalCommandPendingForAll(
+            std::unordered_map<uint64_t, std::deque<uint64_t>> const& pending,
+            ChatRequest const& request, bool requireFront)
+        {
+            for (uint64_t guid : NaturalCommandRecipientGuids(request))
+            {
+                auto found = pending.find(guid);
+                if (found == pending.end() || found->second.empty())
+                    return false;
+                if (requireFront)
+                {
+                    if (found->second.front() != request.id)
+                        return false;
+                }
+                else if (std::find(found->second.begin(), found->second.end(), request.id) ==
+                    found->second.end())
+                    return false;
+            }
+            return true;
+        }
+
+        bool RemoveNaturalCommandPending(
+            std::unordered_map<uint64_t, std::deque<uint64_t>>& pending,
+            ChatRequest const& request)
+        {
+            bool removed = false;
+            for (uint64_t guid : NaturalCommandRecipientGuids(request))
+            {
+                auto found = pending.find(guid);
+                if (found == pending.end())
+                    continue;
+                auto id = std::find(found->second.begin(), found->second.end(), request.id);
+                if (id != found->second.end())
+                {
+                    found->second.erase(id);
+                    removed = true;
+                }
+                if (found->second.empty())
+                    pending.erase(found);
+            }
+            return removed;
+        }
+
+        bool NaturalArgumentsComeFromMessage(std::string const& arguments,
+                                             std::string const& protectedMessage)
+        {
+            std::set<std::string> const ignored = {
+                "a", "an", "and", "at", "for", "from", "in", "my", "of", "on",
+                "please", "the", "this", "to", "with", "your"
+            };
+            auto words = [&](std::string const& value) {
+                std::set<std::string> result;
+                std::istringstream stream(NormalizeNaturalPhrase(value));
+                for (std::string word; stream >> word;)
+                    if (word.size() > 1 && !ignored.count(word))
+                        result.insert(std::move(word));
+                return result;
+            };
+            std::set<std::string> const source = words(protectedMessage);
+            for (std::string const& word : words(arguments))
+                if (!source.count(word))
+                    return false;
+            return true;
+        }
+
+        bool FindLocalNaturalCommand(std::string const& message,
+                                     std::set<std::string> const& allowed,
+                                     std::string& action, std::string& arguments)
+        {
+            struct LocalPhrase { char const* phrase; char const* action; char const* arguments; };
+            static LocalPhrase const phrases[] = {
+                { "follow me", "follow", "" },
+                { "please follow me", "follow", "" },
+                { "come with me", "follow", "" },
+                { "come along with me", "follow", "" },
+                { "attack my target", "attack", "" },
+                { "please attack my target", "attack", "" },
+                { "pull my target", "pull", "" },
+                { "buff me", "buff", "" },
+                { "hold position", "stay", "" },
+                { "hold your position", "stay", "" },
+                { "wait here", "stay", "" },
+                { "do not move", "stay", "" },
+                { "stop moving", "stay", "" },
+                { "run away", "runaway", "" },
+                { "get out of here", "runaway", "" },
+                { "show me your quests", "quests", "" },
+                { "tell me your quests", "quests", "" },
+                { "show me your stats", "stats", "" },
+                { "tell me your stats", "stats", "" },
+                { "list your spells", "spells", "" },
+                { "show me your spells", "spells", "" },
+                { "tell me your position", "position", "" },
+                { "show me your position", "position", "" },
+                { "check if you are ready", "ready", "" }
+            };
+            std::string const phrase = NormalizeNaturalPhrase(message);
+            for (LocalPhrase const& candidate : phrases)
+            {
+                if (phrase == candidate.phrase && allowed.count(candidate.action))
+                {
+                    action = candidate.action;
+                    arguments = candidate.arguments;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         std::string GuildName(Player const* player)
         {
             if (!player || !player->GetGuildId())
@@ -797,7 +1146,8 @@ namespace AzerothVoices
             return result;
         }
 
-        ActorSnapshot SnapshotCreature(Creature const* creature, Player const* anchor)
+        ActorSnapshot SnapshotCreature(Creature const* creature, Player const* anchor,
+                                       NpcDisposition disposition)
         {
             ActorSnapshot result;
             result.kind = ActorKind::Creature;
@@ -809,7 +1159,8 @@ namespace AzerothVoices
             result.race = "NPC";
             result.className = "NPC";
             result.gender = GenderName(creature->GetGender());
-            result.faction = "friendly NPC";
+            result.disposition = NpcDispositionName(disposition);
+            result.faction = result.disposition + " NPC";
             result.groupStatus = "nearby NPC";
             result.level = creature->GetLevel();
             result.inCombat = creature->IsInCombat();
@@ -1013,6 +1364,8 @@ namespace AzerothVoices
 
         if (m_config->ResolveApiKey().empty())
             sLog.outError("[AzerothVoices] API key resolved empty; provider requests will omit the Authorization header.");
+        if (m_config->naturalCommandsEnabled && PlayerbotBridge::CommandPrefix().empty())
+            sLog.outError("[AzerothVoices][NaturalCommands] AiPlayerbot.CommandPrefix is empty; native PlayerBots may process unprefixed commands before Azeroth Voices. Recommended operator setting: AiPlayerbot.CommandPrefix = !");
 
         std::string tlsError;
         if (!Provider::InitializeTls(tlsError))
@@ -1032,6 +1385,21 @@ namespace AzerothVoices
         m_telemetrySuccessfulResults = 0;
         m_telemetryFailedResults = 0;
         m_telemetryGeneratedMessages = 0;
+        m_naturalClassified = 0;
+        m_naturalDispatched = 0;
+        m_naturalRejected = 0;
+        m_naturalExpired = 0;
+        m_naturalConsidered = 0;
+        m_naturalLocalFastPath = 0;
+        m_naturalClassifierQueued = 0;
+        m_naturalClassifierResults = 0;
+        m_naturalClassifierLatencyMilliseconds = 0;
+        m_naturalShortlistActions = 0;
+        m_naturalPromptCharacters = 0;
+        m_naturalTelemetry = {};
+        m_naturalActionUsage.clear();
+        m_naturalCommandAudit.clear();
+        m_naturalLastFailure.clear();
         m_preflightRejections.fill(0);
         m_nextHistoryPrune = Clock::now() + std::chrono::minutes(1);
         m_nextDatabaseFlush = Clock::now() + std::chrono::seconds(m_config->historyDatabaseFlushSeconds);
@@ -1040,8 +1408,11 @@ namespace AzerothVoices
             m_workers.emplace_back(&Manager::WorkerLoop, this);
         ScheduleNextAmbient();
 
-        sLog.outString("[AzerothVoices] Started with %u workers, endpoint %s, model %s.",
-            m_config->workerThreads, SanitizeEndpoint(m_config->endpoint).c_str(), m_config->model.c_str());
+        std::string const commandModel = m_config->naturalCommandsModel.empty()
+            ? m_config->model : m_config->naturalCommandsModel;
+        sLog.outString("[AzerothVoices] Started with %u workers, endpoint %s, model %s, natural-command model %s.",
+            m_config->workerThreads, SanitizeEndpoint(m_config->endpoint).c_str(),
+            m_config->model.c_str(), commandModel.c_str());
     }
 
     void Manager::Reload()
@@ -1067,6 +1438,7 @@ namespace AzerothVoices
             for (auto& queue : m_queues)
                 queue.clear();
             m_latestRequestByActor.clear();
+            m_pendingNaturalCommandsByActor.clear();
             m_requestBudget.clear();
         }
         {
@@ -1081,6 +1453,9 @@ namespace AzerothVoices
         m_actorCooldowns.clear();
         m_speakerCooldowns.clear();
         m_eventCooldowns.clear();
+        m_pendingNaturalConfirmations.clear();
+        m_naturalActionUsage.clear();
+        m_naturalCommandAudit.clear();
         m_history.clear();
         m_surroundingChat.clear();
         m_snapshotHistory.clear();
@@ -1102,6 +1477,7 @@ namespace AzerothVoices
         m_telemetrySuccessfulResults = 0;
         m_telemetryFailedResults = 0;
         m_telemetryGeneratedMessages = 0;
+        m_naturalTelemetry = {};
         m_preflightRejections.fill(0);
         m_inFlight = 0;
     }
@@ -1112,6 +1488,27 @@ namespace AzerothVoices
             return;
         DrainIngress();
         DrainCompletions();
+        auto const confirmationNow = Clock::now();
+        for (auto pending = m_pendingNaturalConfirmations.begin();
+             pending != m_pendingNaturalConfirmations.end();)
+        {
+            if (confirmationNow <= pending->second.expires)
+            {
+                ++pending;
+                continue;
+            }
+            Player* speaker = ObjectAccessor::FindPlayer(ObjectGuid(pending->second.speakerGuid));
+            SendNaturalCommandFeedback(speaker, "Pending natural-command confirmation expired.");
+            ++m_naturalExpired;
+            ++m_naturalTelemetry.confirmationExpired;
+            for (uint64_t botGuid : pending->second.botGuids)
+                for (PendingNaturalConfirmation::Action const& action : pending->second.actions)
+                    RecordNaturalCommandAudit(pending->second.speakerGuid, botGuid,
+                        action.action, action.arguments, pending->second.source, "confirmation-expired",
+                        action.confidence, pending->second.requestId,
+                        pending->second.latencyMilliseconds);
+            pending = m_pendingNaturalConfirmations.erase(pending);
+        }
         ReportTelemetry();
         DeliverScheduled();
         FlushDatabaseWrites();
@@ -1148,8 +1545,14 @@ namespace AzerothVoices
                 if (m_stopping)
                     return true;
                 for (auto const& queue : m_queues)
-                    if (!queue.empty())
-                        return true;
+                    for (ChatRequest const& queued : queue)
+                    {
+                        if (queued.kind != RequestKind::NaturalCommand)
+                            return true;
+                        if (NaturalCommandPendingForAll(
+                            m_pendingNaturalCommandsByActor, queued, true))
+                            return true;
+                    }
                 return false;
             });
             if (m_stopping)
@@ -1158,11 +1561,29 @@ namespace AzerothVoices
             for (int priority = 3; priority >= 0; --priority)
             {
                 auto& queue = m_queues[static_cast<size_t>(priority)];
-                while (!queue.empty())
+                for (auto current = queue.begin(); current != queue.end();)
                 {
-                    request = std::move(queue.front());
-                    queue.pop_front();
+                    if (current->kind == RequestKind::NaturalCommand)
+                    {
+                        if (!NaturalCommandPendingForAll(
+                            m_pendingNaturalCommandsByActor, *current, false))
+                        {
+                            current = queue.erase(current);
+                            ++m_dropped;
+                            continue;
+                        }
+                        if (!NaturalCommandPendingForAll(
+                            m_pendingNaturalCommandsByActor, *current, true))
+                        {
+                            ++current;
+                            continue;
+                        }
+                    }
+                    request = std::move(*current);
+                    queue.erase(current);
                     if (request.kind == RequestKind::PersonalityGeneration)
+                        return true;
+                    if (request.kind == RequestKind::NaturalCommand)
                         return true;
                     auto latest = m_latestRequestByActor.find(request.actor.guid);
                     if (latest != m_latestRequestByActor.end() && latest->second == request.id)
@@ -1180,11 +1601,14 @@ namespace AzerothVoices
         {
             if (Clock::now() > request.expires)
             {
-                if (request.kind == RequestKind::PersonalityGeneration)
+                if (request.kind == RequestKind::PersonalityGeneration ||
+                    request.kind == RequestKind::NaturalCommand)
                 {
                     ChatCompletion completion;
                     completion.request = std::move(request);
-                    completion.error = "personality generation expired in the request queue";
+                    completion.error = completion.request.kind == RequestKind::NaturalCommand
+                        ? "natural-command request expired in the request queue"
+                        : "personality generation expired in the request queue";
                     std::lock_guard<std::mutex> lock(m_completionMutex);
                     m_completions.push_back(std::move(completion));
                     continue;
@@ -1195,19 +1619,38 @@ namespace AzerothVoices
 
             ++m_inFlight;
             ChatCompletion completion;
+            completion.request = request;
             uint32_t retries = 0;
             uint32_t httpAttempts = 0;
             do
             {
+                if (request.kind == RequestKind::NaturalCommand)
+                {
+                    auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        request.expires - Clock::now()).count();
+                    if (remaining <= 0)
+                    {
+                        completion.error = "natural-command request expired before provider execution";
+                        break;
+                    }
+                    request.requestTimeoutMillisecondsOverride = static_cast<uint32_t>(
+                        std::min<int64_t>(remaining, std::numeric_limits<uint32_t>::max()));
+                    request.requestTimeoutSecondsOverride = static_cast<uint32_t>(
+                        std::max<int64_t>(1, (remaining + 999) / 1000));
+                }
                 completion = Provider::Execute(*m_config, request);
                 httpAttempts += completion.httpAttemptCount;
                 bool retryable = !completion.success &&
                     (completion.httpStatus == 0 || completion.httpStatus == 429 || completion.httpStatus >= 500);
-                if (!retryable || retries >= m_config->retryMaximum || m_stopping)
+                uint32_t const retryMaximum = request.kind == RequestKind::NaturalCommand
+                    ? m_config->naturalCommandsRetryMaximum : m_config->retryMaximum;
+                if (!retryable || retries >= retryMaximum || m_stopping)
                     break;
                 ++retries;
-                std::this_thread::sleep_for(std::chrono::milliseconds(
-                    m_config->retryBackoffMilliseconds * retries));
+                auto const backoff = std::chrono::milliseconds(m_config->retryBackoffMilliseconds * retries);
+                if (request.kind == RequestKind::NaturalCommand && Clock::now() + backoff >= request.expires)
+                    break;
+                std::this_thread::sleep_for(backoff);
             } while (Clock::now() <= request.expires);
             completion.httpAttemptCount = httpAttempts;
             --m_inFlight;
@@ -1433,10 +1876,12 @@ namespace AzerothVoices
 
         auto const now = Clock::now();
         bool const personalityRequest = request.kind == RequestKind::PersonalityGeneration;
+        bool const naturalCommandRequest = request.kind == RequestKind::NaturalCommand;
         uint32_t cooldownSeconds = request.ambient
             ? m_config->ambientActorCooldownSeconds : m_config->actorCooldownSeconds;
         auto cooldown = m_actorCooldowns.find(request.actor.guid);
-        if (!personalityRequest && request.priority != RequestPriority::Direct &&
+        if (!personalityRequest && !naturalCommandRequest &&
+            request.priority != RequestPriority::Direct &&
             cooldown != m_actorCooldowns.end() && cooldown->second > now)
         {
             ++m_dropped;
@@ -1455,7 +1900,21 @@ namespace AzerothVoices
                 return false;
             }
 
-            if (!personalityRequest)
+            if (naturalCommandRequest)
+            {
+                for (uint64_t guid : NaturalCommandRecipientGuids(request))
+                {
+                    auto pending = m_pendingNaturalCommandsByActor.find(guid);
+                    if (pending != m_pendingNaturalCommandsByActor.end() &&
+                        pending->second.size() >= m_config->naturalCommandsMaximumPendingPerBot)
+                    {
+                        ++m_dropped;
+                        return false;
+                    }
+                }
+            }
+
+            if (!personalityRequest && !naturalCommandRequest)
             {
                 auto latest = m_latestRequestByActor.find(request.actor.guid);
                 if (latest != m_latestRequestByActor.end())
@@ -1500,9 +1959,15 @@ namespace AzerothVoices
                     }
                     else
                     {
-                        auto oldLatest = m_latestRequestByActor.find(dropped.actor.guid);
-                        if (oldLatest != m_latestRequestByActor.end() && oldLatest->second == dropped.id)
-                            m_latestRequestByActor.erase(oldLatest);
+                        if (dropped.kind == RequestKind::NaturalCommand)
+                            RemoveNaturalCommandPending(
+                                m_pendingNaturalCommandsByActor, dropped);
+                        else
+                        {
+                            auto oldLatest = m_latestRequestByActor.find(dropped.actor.guid);
+                            if (oldLatest != m_latestRequestByActor.end() && oldLatest->second == dropped.id)
+                                m_latestRequestByActor.erase(oldLatest);
+                        }
                     }
                     ++m_dropped;
                 }
@@ -1516,16 +1981,21 @@ namespace AzerothVoices
             if (!request.id)
                 request.id = m_nextRequestId++;
             request.created = now;
-            request.expires = now + std::chrono::seconds(m_config->requestTtlSeconds);
-            if (!personalityRequest)
+            request.expires = now + std::chrono::seconds(naturalCommandRequest
+                ? m_config->naturalCommandsRequestTtlSeconds : m_config->requestTtlSeconds);
+            if (naturalCommandRequest)
+                for (uint64_t guid : NaturalCommandRecipientGuids(request))
+                    m_pendingNaturalCommandsByActor[guid].push_back(request.id);
+            else if (!personalityRequest)
                 m_latestRequestByActor[request.actor.guid] = request.id;
             size_t const priorityIndex = static_cast<size_t>(request.priority);
-            queueMissingPersonality = !personalityRequest && request.personalityGenerationNeeded;
+            queueMissingPersonality = !personalityRequest && !naturalCommandRequest &&
+                request.personalityGenerationNeeded;
             if (queueMissingPersonality)
                 personalityActor = request.actor;
             m_queues[priorityIndex].push_back(std::move(request));
             m_requestBudget.push_back(now);
-            if (!personalityRequest)
+            if (!personalityRequest && !naturalCommandRequest)
                 m_actorCooldowns[m_queues[priorityIndex].back().actor.guid] =
                     now + std::chrono::seconds(cooldownSeconds);
             ++m_accepted;
@@ -1585,6 +2055,15 @@ namespace AzerothVoices
         request.systemPrompt = m_config->globalPrompt;
         if (!rolePrompt.empty())
             request.systemPrompt += "\n" + rolePrompt;
+        if (actor.kind == ActorKind::Creature)
+        {
+            if (actor.disposition == "friendly")
+                request.systemPrompt += "\nYour disposition for this line is friendly. Speak warmly, cooperatively, or respectfully while remaining in character.";
+            else if (actor.disposition == "hostile")
+                request.systemPrompt += "\nYour disposition for this line is hostile. Speak in an unfriendly, suspicious, dismissive, or threatening way while remaining in character. Express hostility through dialogue only; do not narrate or invent combat actions.";
+            else
+                request.systemPrompt += "\nYour disposition for this line is neutral. Speak in a reserved, matter-of-fact way, neither warm nor threatening, while remaining in character.";
+        }
         request.systemPrompt += "\nThe reply will be sent through " +
             (channelName.empty() ? ScopeName(scope) : channelName) +
             ". Keep it concise and return dialogue only. Treat the current message and current live environment "
@@ -1661,7 +2140,8 @@ namespace AzerothVoices
 
     std::vector<Manager::Candidate> Manager::CollectCandidates(Player* speaker, ChatScope scope,
         std::string const& targetName, std::string const& message, bool ambient, bool allowNpcs,
-        uint64_t excludedActor, uint32_t guildIdOverride)
+        uint64_t excludedActor, uint32_t guildIdOverride,
+        WorldObject const* dispositionTarget)
     {
         std::vector<Candidate> result;
         if (!speaker || !speaker->IsInWorld() || !m_config)
@@ -1673,6 +2153,9 @@ namespace AzerothVoices
         std::string const messageLower = Lower(message);
         float const nearbyDistance = scope == ChatScope::Yell
             ? m_config->yellDistance : m_config->sayDistance;
+        WorldObject const* npcDispositionTarget = dispositionTarget && dispositionTarget->IsInWorld() &&
+            dispositionTarget->GetMapId() == speaker->GetMapId()
+                ? dispositionTarget : static_cast<WorldObject const*>(speaker);
 
         // A real player's Say while explicitly selecting an eligible NPC uses
         // a separate, tightly local selection policy. The selected NPC is
@@ -1883,11 +2366,16 @@ namespace AzerothVoices
                 }
 
                 auto chanceAndScore = chanceFor(creature->GetName(), creature->GetObjectGuid(), true);
-                if (!Roll(chanceAndScore.first))
+                NpcDisposition const disposition = ClassifyNpcDisposition(
+                    creature, npcDispositionTarget);
+                uint32_t const dispositionChance = NpcDispositionReplyChance(
+                    disposition, *m_config);
+                if (!Roll(chanceAndScore.first) || !Roll(dispositionChance))
                     continue;
                 Candidate candidate;
-                candidate.actor = SnapshotCreature(creature, speaker);
-                candidate.chance = chanceAndScore.first;
+                candidate.actor = SnapshotCreature(creature, speaker, disposition);
+                candidate.chance = static_cast<uint32_t>(
+                    (static_cast<uint64_t>(chanceAndScore.first) * dispositionChance) / 100);
                 candidate.score = chanceAndScore.second + static_cast<int>(RandomUInt(0, 9));
                 candidate.targetedNpcConversation = targetedNpcConversation;
                 candidate.selectedNpcTarget = targetedNpcConversation &&
@@ -1925,11 +2413,984 @@ namespace AzerothVoices
         m_ingress.push_back(std::move(signal));
     }
 
+    bool Manager::NaturalCommandTargetValid(Player* speaker, Player* bot, ChatScope scope,
+                                            std::string const& addressing) const
+    {
+        if (!m_config || !IsOnlineRealPlayer(speaker) || !bot || bot == speaker ||
+            !bot->IsInWorld() || !PlayerbotBridge::IsControlled(bot))
+            return false;
+        if (m_config->naturalCommandsMasterOnly && PlayerbotBridge::Master(bot) != speaker)
+            return false;
+
+        switch (scope)
+        {
+            case ChatScope::Whisper:
+                return true;
+            case ChatScope::Say:
+                return bot->GetMapId() == speaker->GetMapId() &&
+                    speaker->IsWithinDist(bot, m_config->sayDistance, false) &&
+                    (addressing != "selected" || speaker->GetSelectionGuid() == bot->GetObjectGuid());
+            case ChatScope::Yell:
+                return addressing == "named" && bot->GetMapId() == speaker->GetMapId() &&
+                    speaker->IsWithinDist(bot, m_config->yellDistance, false);
+            case ChatScope::Party:
+                return (addressing == "named" || addressing == "party-single") &&
+                    speaker->GetGroup() &&
+                    bot->GetGroup() == speaker->GetGroup() &&
+                    speaker->GetGroup()->SameSubGroup(speaker, bot);
+            case ChatScope::Raid:
+                return addressing == "named" && speaker->GetGroup() &&
+                    bot->GetGroup() == speaker->GetGroup();
+            case ChatScope::Guild:
+                return addressing == "named" && speaker->GetGuildId() &&
+                    bot->GetGuildId() == speaker->GetGuildId();
+            case ChatScope::Officer:
+            {
+                Guild* guild = speaker->GetGuildId()
+                    ? sGuildMgr.GetGuildById(speaker->GetGuildId()) : nullptr;
+                return addressing == "named" && guild &&
+                    bot->GetGuildId() == speaker->GetGuildId() &&
+                    guild->HasRankRight(bot->GetRank(), GR_RIGHT_OFFCHATLISTEN);
+            }
+            case ChatScope::World:
+            case ChatScope::Channel:
+                return addressing == "named";
+        }
+        return false;
+    }
+
+    std::vector<Player*> Manager::ResolveNaturalCommandBots(Player* speaker, ChatScope scope,
+                                                            std::string const& message,
+                                                            std::string const& targetName,
+                                                            std::string& addressing,
+                                                            std::string& addressedMessage) const
+    {
+        std::vector<Player*> result;
+        addressing.clear();
+        addressedMessage = message;
+        if (!m_config || !IsOnlineRealPlayer(speaker))
+            return result;
+
+        if (scope == ChatScope::Whisper)
+        {
+            Player* bot = targetName.empty()
+                ? nullptr : ObjectAccessor::FindPlayerByName(targetName.c_str());
+            if (!NaturalCommandTargetValid(speaker, bot, scope, "whisper"))
+            {
+                if (bot && PlayerbotBridge::IsControlled(bot))
+                    addressing = "unauthorized";
+                return result;
+            }
+            addressing = "whisper";
+            if (ContainsExplicitName(message, bot->GetName()))
+                addressedMessage = RemoveExplicitName(message, bot->GetName());
+            result.push_back(bot);
+            return result;
+        }
+
+        std::vector<Player*> mentionedBots;
+        std::set<uint64_t> seen;
+        std::string token;
+        auto considerToken = [&]() {
+            if (token.size() >= 2 && token.size() <= 32)
+            {
+                Player* bot = ObjectAccessor::FindPlayerByName(token.c_str());
+                if (bot && bot != speaker && bot->IsInWorld() &&
+                    PlayerbotBridge::IsControlled(bot) &&
+                    ContainsExplicitName(message, bot->GetName()) &&
+                    seen.insert(bot->GetObjectGuid().GetRawValue()).second)
+                    mentionedBots.push_back(bot);
+            }
+            token.clear();
+        };
+        for (unsigned char c : message)
+        {
+            if (std::isalnum(c) || c >= 0x80)
+                token.push_back(static_cast<char>(c));
+            else
+                considerToken();
+        }
+        considerToken();
+
+        if (!mentionedBots.empty())
+        {
+            addressedMessage = message;
+            for (Player* bot : mentionedBots)
+                addressedMessage = RemoveExplicitName(addressedMessage, bot->GetName());
+            addressedMessage = Trim(addressedMessage);
+            while (Lower(addressedMessage).compare(0, 4, "and ") == 0)
+                addressedMessage = Trim(addressedMessage.substr(4));
+            while (!addressedMessage.empty() && (addressedMessage.front() == ',' ||
+                addressedMessage.front() == ':' || addressedMessage.front() == '-' ||
+                addressedMessage.front() == '@'))
+                addressedMessage = Trim(addressedMessage.substr(1));
+            if (mentionedBots.size() > m_config->naturalCommandsMaximumRecipients)
+            {
+                addressing = "too-many";
+                return result;
+            }
+            for (Player* bot : mentionedBots)
+            {
+                if (!NaturalCommandTargetValid(speaker, bot, scope, "named"))
+                {
+                    addressing = "unauthorized";
+                    return {};
+                }
+            }
+            addressing = "named";
+            return mentionedBots;
+        }
+
+        if (scope == ChatScope::Party && speaker->GetGroup())
+        {
+            for (GroupReference* reference = speaker->GetGroup()->GetFirstMember();
+                reference; reference = reference->next())
+            {
+                Player* bot = reference->getSource();
+                if (!NaturalCommandTargetValid(speaker, bot, scope, "party-single"))
+                    continue;
+                result.push_back(bot);
+                if (result.size() > 1)
+                {
+                    addressing = "ambiguous-party";
+                    return {};
+                }
+            }
+            if (result.size() == 1)
+            {
+                addressing = "party-single";
+                return result;
+            }
+        }
+
+        if (scope == ChatScope::Say)
+        {
+            Player* selected = speaker->GetSelectedPlayer();
+            if (NaturalCommandTargetValid(speaker, selected, scope, "selected"))
+            {
+                addressing = "selected";
+                result.push_back(selected);
+                return result;
+            }
+            if (selected && PlayerbotBridge::IsControlled(selected))
+                addressing = "unauthorized";
+        }
+        return result;
+    }
+
+    void Manager::SendNaturalCommandFeedback(Player* speaker, std::string const& message) const
+    {
+        if (!m_config || !m_config->naturalCommandsFeedbackEnabled || !IsOnlineRealPlayer(speaker))
+            return;
+        std::string const safe = HeadBounded(SanitizeLogText(message), 500);
+        ChatHandler(speaker).SendSysMessage(("[AzerothVoices] " + safe).c_str());
+    }
+
+    void Manager::RejectNaturalCommand(Player* speaker, std::string const& reason)
+    {
+        ++m_naturalRejected;
+        ++m_naturalTelemetry.rejected;
+        m_naturalLastFailure = HeadBounded(SanitizeLogText(reason), 120);
+        SendNaturalCommandFeedback(speaker, reason);
+    }
+
+    void Manager::RecordNaturalCommandAudit(uint64_t playerGuid, uint64_t botGuid,
+        std::string const& action, std::string const& arguments,
+        std::string const& source, std::string const& result,
+        double confidence, uint64_t requestId, uint32_t latencyMilliseconds)
+    {
+        if (!m_config || !m_config->naturalCommandsAuditEnabled)
+            return;
+        NaturalCommandAuditRecord record;
+        record.createdUnix = static_cast<uint64_t>(std::time(nullptr));
+        record.requestId = requestId;
+        record.playerGuid = playerGuid;
+        record.botGuid = botGuid;
+        record.action = HeadBounded(SanitizeLogText(action), 80);
+        if (m_config->naturalCommandsAuditIncludeArguments)
+            record.arguments = HeadBounded(SanitizeLogText(arguments), 300);
+        record.source = HeadBounded(SanitizeLogText(source), 24);
+        record.result = HeadBounded(SanitizeLogText(result), 80);
+        record.confidence = std::max(0.0, std::min(1.0, confidence));
+        record.latencyMilliseconds = latencyMilliseconds;
+        m_naturalCommandAudit.push_back(std::move(record));
+        while (m_naturalCommandAudit.size() > m_config->naturalCommandsAuditMaximumRecords)
+            m_naturalCommandAudit.pop_front();
+    }
+
+    std::string Manager::NaturalCommandMostUsedActions(size_t maximum) const
+    {
+        std::vector<std::pair<std::string, uint64_t>> ranked(
+            m_naturalActionUsage.begin(), m_naturalActionUsage.end());
+        std::sort(ranked.begin(), ranked.end(), [](auto const& left, auto const& right) {
+            if (left.second != right.second)
+                return left.second > right.second;
+            return left.first < right.first;
+        });
+        std::ostringstream result;
+        for (size_t i = 0; i < ranked.size() && i < maximum; ++i)
+        {
+            if (i)
+                result << ',';
+            result << ranked[i].first << ':' << ranked[i].second;
+        }
+        return result.str();
+    }
+
+    void Manager::ScheduleNaturalCommandAcknowledgement(
+        ChatRequest const& request, std::string const& acknowledgement)
+    {
+        if (!m_config || m_config->naturalCommandsAcknowledgementMode != "generated")
+            return;
+        std::string const text = Trim(acknowledgement);
+        if (text.empty())
+            return;
+        ScheduledLine line;
+        line.request = request;
+        line.request.kind = RequestKind::NaturalCommand;
+        line.request.allowFollowup = false;
+        line.request.ambient = false;
+        line.request.expires = Clock::now() + std::chrono::seconds(5);
+        line.text = HeadBounded(text, 240);
+        line.due = Clock::now();
+        line.firstLine = true;
+        m_scheduled.push_back(std::move(line));
+    }
+
+    bool Manager::ExecuteNaturalCommand(Player* speaker, Player* bot,
+                                        std::string const& action,
+                                        std::string const& arguments,
+                                        ChatScope scope,
+                                        std::string const& addressing,
+                                        bool confirmed,
+                                        bool sendFeedback,
+                                        std::string const& source,
+                                        double confidence,
+                                        uint64_t requestId,
+                                        uint32_t latencyMilliseconds)
+    {
+        if (!m_config || !speaker || !bot)
+            return false;
+        NaturalCommandAction const* definition = FindNaturalCommandAction(action);
+        std::string const normalizedAction = NormalizeNaturalCommandAction(action);
+        uint64_t const speakerGuid = speaker->GetObjectGuid().GetRawValue();
+        uint64_t const botGuid = bot->GetObjectGuid().GetRawValue();
+        auto audit = [&](std::string const& result) {
+            RecordNaturalCommandAudit(speakerGuid, botGuid, normalizedAction, arguments,
+                source, result, confidence, requestId, latencyMilliseconds);
+        };
+        if (!definition || definition->forbidden ||
+            !m_config->naturalCommandsAllowedActions.count(normalizedAction))
+        {
+            audit("not-allowed");
+            RejectNaturalCommand(speaker, "Action is not allowed by the module.");
+            return false;
+        }
+
+        if (!NaturalCommandTargetValid(speaker, bot, scope, addressing))
+        {
+            audit("recipient-ineligible");
+            RejectNaturalCommand(speaker, "The PlayerBot is no longer an eligible command recipient.");
+            return false;
+        }
+
+        std::string safeArguments;
+        std::string validationError;
+        if (!ValidateNaturalCommandArguments(normalizedAction, Trim(arguments),
+            !speaker->GetSelectionGuid().IsEmpty(), {}, safeArguments, validationError))
+        {
+            audit("argument-rejected");
+            RejectNaturalCommand(speaker, "Command rejected: " + validationError + ".");
+            return false;
+        }
+
+        std::string command = normalizedAction;
+        if (!safeArguments.empty())
+            command += ' ' + safeArguments;
+        std::string const separator = PlayerbotBridge::CommandSeparator();
+        if (!separator.empty() && command.find(separator) != std::string::npos)
+        {
+            audit("separator-rejected");
+            RejectNaturalCommand(speaker, "Command rejected because it contains the PlayerBots command separator.");
+            return false;
+        }
+
+        NaturalCommandMetadata const metadata = GetNaturalCommandMetadata(*definition);
+        if (metadata.confirmationRequired && m_config->naturalCommandsConfirmationEnabled && !confirmed)
+        {
+            PendingNaturalConfirmation pending;
+            pending.speakerGuid = speakerGuid;
+            pending.botGuids.push_back(bot->GetObjectGuid().GetRawValue());
+            pending.actions.push_back({ normalizedAction, safeArguments });
+            pending.scope = scope;
+            pending.addressing = addressing;
+            pending.source = source;
+            pending.requestId = requestId;
+            pending.latencyMilliseconds = latencyMilliseconds;
+            pending.expires = Clock::now() +
+                std::chrono::seconds(m_config->naturalCommandsConfirmationTtlSeconds);
+            m_pendingNaturalConfirmations[speakerGuid] = std::move(pending);
+            std::string exact = normalizedAction;
+            if (!safeArguments.empty())
+                exact += " " + safeArguments;
+            SendNaturalCommandFeedback(speaker, "Confirmation required for '" +
+                HeadBounded(SanitizeLogText(exact), 300) + "'. Address the same bot with 'confirm' within " +
+                std::to_string(m_config->naturalCommandsConfirmationTtlSeconds) + " seconds, or use 'cancel'.");
+            ++m_naturalTelemetry.confirmationRequired;
+            audit("confirmation-required");
+            return true;
+        }
+
+        if (!PlayerbotBridge::Dispatch(speaker, bot, command))
+        {
+            audit("dispatch-boundary-rejected");
+            RejectNaturalCommand(speaker, "PlayerBots rejected the dispatch boundary.");
+            return false;
+        }
+        ++m_naturalDispatched;
+        ++m_naturalActionUsage[normalizedAction];
+        audit(confirmed && metadata.confirmationRequired ? "dispatched-confirmed" : "dispatched");
+        m_naturalLastFailure.clear();
+        if (sendFeedback)
+            SendNaturalCommandFeedback(speaker, "Dispatched '" +
+                HeadBounded(SanitizeLogText(command), 300) + "' to " +
+                SanitizeLogText(bot->GetName()) + ". PlayerBots will report whether the action succeeds.");
+        if (m_config->debug)
+            sLog.outDebug("[AzerothVoices][NaturalCommands] Dispatched action '%s' to %s for %s.",
+                normalizedAction.c_str(), SanitizeLogText(bot->GetName()).c_str(),
+                SanitizeLogText(speaker->GetName()).c_str());
+        return true;
+    }
+
+    bool Manager::ExecuteNaturalCommandBatch(Player* speaker,
+        std::vector<Player*> const& bots,
+        std::vector<PendingNaturalConfirmation::Action> const& actions,
+        ChatScope scope, std::string const& addressing, bool confirmed,
+        std::string const& source, uint64_t requestId,
+        uint32_t latencyMilliseconds, std::string const& acknowledgement,
+        ChatRequest const* acknowledgementRequest)
+    {
+        if (!m_config || !speaker || bots.empty() || actions.empty() ||
+            bots.size() > m_config->naturalCommandsMaximumRecipients ||
+            actions.size() > m_config->naturalCommandsMaximumActions)
+            return false;
+
+        bool needsConfirmation = false;
+        for (Player* bot : bots)
+            if (!NaturalCommandTargetValid(speaker, bot, scope, addressing))
+            {
+                RejectNaturalCommand(speaker, "A PlayerBot is no longer an eligible command recipient.");
+                return false;
+            }
+        for (PendingNaturalConfirmation::Action const& item : actions)
+        {
+            NaturalCommandAction const* definition = FindNaturalCommandAction(item.action);
+            if (!definition || definition->forbidden ||
+                !m_config->naturalCommandsAllowedActions.count(
+                    NormalizeNaturalCommandAction(item.action)))
+            {
+                RejectNaturalCommand(speaker, "An action is not allowed by the module.");
+                return false;
+            }
+            needsConfirmation = needsConfirmation ||
+                GetNaturalCommandMetadata(*definition).confirmationRequired;
+        }
+
+        if (needsConfirmation && m_config->naturalCommandsConfirmationEnabled && !confirmed)
+        {
+            PendingNaturalConfirmation pending;
+            pending.speakerGuid = speaker->GetObjectGuid().GetRawValue();
+            for (Player* bot : bots)
+                pending.botGuids.push_back(bot->GetObjectGuid().GetRawValue());
+            pending.actions = actions;
+            pending.scope = scope;
+            pending.addressing = addressing;
+            pending.source = source;
+            pending.requestId = requestId;
+            pending.latencyMilliseconds = latencyMilliseconds;
+            pending.acknowledgement = acknowledgement;
+            if (acknowledgementRequest)
+                pending.acknowledgementRequest = *acknowledgementRequest;
+            pending.expires = Clock::now() +
+                std::chrono::seconds(m_config->naturalCommandsConfirmationTtlSeconds);
+            m_pendingNaturalConfirmations[pending.speakerGuid] = std::move(pending);
+            ++m_naturalTelemetry.confirmationRequired;
+            for (Player* bot : bots)
+                for (PendingNaturalConfirmation::Action const& action : actions)
+                    RecordNaturalCommandAudit(speaker->GetObjectGuid().GetRawValue(),
+                        bot->GetObjectGuid().GetRawValue(), action.action, action.arguments,
+                        source, "confirmation-required", action.confidence, requestId,
+                        latencyMilliseconds);
+            SendNaturalCommandFeedback(speaker, "Confirmation required for a batch of " +
+                std::to_string(actions.size()) + " action(s) across " +
+                std::to_string(bots.size()) + " PlayerBot(s). Address the same bot(s) with 'confirm' within " +
+                std::to_string(m_config->naturalCommandsConfirmationTtlSeconds) +
+                " seconds, or use 'cancel'.");
+            return true;
+        }
+
+        bool const generatedAcknowledgement =
+            m_config->naturalCommandsAcknowledgementMode == "generated" &&
+            source == "llm" && !acknowledgement.empty() && acknowledgementRequest;
+        bool const localAcknowledgement =
+            m_config->naturalCommandsAcknowledgementMode == "local" ||
+            (m_config->naturalCommandsAcknowledgementMode == "generated" && source != "llm");
+        bool const individualFeedback = localAcknowledgement &&
+            bots.size() == 1 && actions.size() == 1;
+        for (PendingNaturalConfirmation::Action const& item : actions)
+            for (Player* bot : bots)
+                if (!ExecuteNaturalCommand(speaker, bot, item.action, item.arguments,
+                    scope, addressing, true, individualFeedback, source, item.confidence,
+                    requestId, latencyMilliseconds))
+                    return false;
+        if (localAcknowledgement && !individualFeedback)
+            SendNaturalCommandFeedback(speaker, "Dispatched " +
+                std::to_string(actions.size() * bots.size()) + " PlayerBots command(s): " +
+                std::to_string(actions.size()) + " action(s) across " +
+                std::to_string(bots.size()) +
+                " recipient(s). PlayerBots will report whether each action succeeds.");
+        if (generatedAcknowledgement)
+            ScheduleNaturalCommandAcknowledgement(*acknowledgementRequest, acknowledgement);
+        return true;
+    }
+
+    bool Manager::QueueNaturalCommandInterpretation(Player* speaker,
+                                                    std::vector<Player*> const& bots,
+                                                    ChatScope scope,
+                                                    std::string const& channelName,
+                                                    std::string const& addressing,
+                                                    std::string const& message)
+    {
+        if (!m_config || !speaker || bots.empty())
+            return false;
+
+        std::vector<std::string> links;
+        std::string const protectedMessage = PreserveNaturalCommandLinks(message, links);
+        std::string shortlistInput = protectedMessage;
+        if (!speaker->GetSelectionGuid().IsEmpty())
+            shortlistInput += " target";
+        if (scope == ChatScope::Guild || scope == ChatScope::Officer)
+            shortlistInput += " guild";
+        else if (scope == ChatScope::Party || scope == ChatScope::Raid)
+            shortlistInput += " group";
+        std::set<std::string> const shortlist = ShortlistNaturalCommandActions(
+            m_config->naturalCommandsAllowedActions, shortlistInput,
+            m_config->naturalCommandsShortlistMaximum,
+            m_config->naturalCommandsPromoteFrequentlyUsedActions
+                ? &m_naturalActionUsage : nullptr);
+        if (shortlist.empty())
+            return false;
+
+        ChatRequest request;
+        request.kind = RequestKind::NaturalCommand;
+        request.priority = RequestPriority::Direct;
+        request.actor = SnapshotBot(bots.front());
+        request.speaker = SnapshotSpeaker(speaker);
+        request.scope = scope;
+        request.channelName = channelName;
+        request.trigger = "natural-command-" + addressing;
+        request.incomingMessage = message;
+        request.naturalPreservedLinks = links;
+        request.naturalAllowedActions.assign(shortlist.begin(), shortlist.end());
+        for (Player* bot : bots)
+        {
+            request.naturalRecipientGuids.push_back(bot->GetObjectGuid().GetRawValue());
+            request.naturalRecipientNames.push_back(bot->GetName());
+        }
+        request.naturalMaximumActions = LooksLikeMultipleNaturalCommands(
+            message, PlayerbotBridge::CommandSeparator())
+            ? m_config->naturalCommandsMaximumActions : 1;
+        bool const generatedAcknowledgement =
+            m_config->naturalCommandsAcknowledgementMode == "generated";
+        request.systemPrompt = BuildNaturalCommandClassifierPrompt(shortlist,
+            request.naturalMaximumActions, generatedAcknowledgement);
+        std::ostringstream recipientNames;
+        for (size_t i = 0; i < request.naturalRecipientNames.size(); ++i)
+        {
+            if (i)
+                recipientNames << ", ";
+            recipientNames << request.naturalRecipientNames[i];
+        }
+        request.userPrompt = std::string("Addressed PlayerBots: ") + recipientNames.str() +
+            "\nChat scope: " + ScopeName(scope) +
+            "\nPlayer message: " + protectedMessage;
+        request.modelOverride = m_config->naturalCommandsModel;
+        request.maxTokensOverride = request.naturalMaximumActions > 1 ? 256 :
+            (protectedMessage.size() > 300 ? 256 :
+            (!links.empty() || protectedMessage.size() > 120 ? 160 : 96));
+        request.requestTimeoutSecondsOverride = m_config->naturalCommandsRequestTtlSeconds;
+        request.temperatureOverride = 0.0f;
+        size_t const promptCharacters = request.systemPrompt.size() + request.userPrompt.size();
+        if (m_config->debug)
+            sLog.outDebug("[AzerothVoices][NaturalCommands] Classifier shortlist=%u prompt-characters=%u.",
+                static_cast<unsigned>(shortlist.size()),
+                static_cast<unsigned>(promptCharacters));
+        if (!Enqueue(std::move(request)))
+        {
+            RejectNaturalCommand(speaker, "Natural-command queue is full.");
+            return false;
+        }
+        ++m_naturalClassifierQueued;
+        ++m_naturalTelemetry.classifierQueued;
+        m_naturalShortlistActions += shortlist.size();
+        m_naturalTelemetry.shortlistActions += shortlist.size();
+        m_naturalPromptCharacters += promptCharacters;
+        m_naturalTelemetry.promptCharacters += promptCharacters;
+        return true;
+    }
+
+    bool Manager::TryHandleNaturalCommand(Player* speaker, ChatScope scope,
+                                          std::string const& message,
+                                          std::string const& targetName,
+                                          std::string const& channelName)
+    {
+        if (!m_config || !IsOnlineRealPlayer(speaker) || message.empty())
+            return false;
+
+        NaturalCommandAction const* rawAction = FindNaturalCommandPrefix(message);
+        std::string const configuredPrefix = PlayerbotBridge::CommandPrefix();
+        bool const startsConfiguredPrefix = !configuredPrefix.empty() &&
+            message.compare(0, configuredPrefix.size(), configuredPrefix) == 0;
+        // With no PlayerBots prefix, native syntax has already been delivered
+        // by PlayerbotMgr. With a prefix, a prefixed native command has also
+        // already been delivered. Consume it here so Azeroth Voices neither
+        // duplicates the command nor turns it into LLM dialogue.
+        if (rawAction && startsConfiguredPrefix)
+            return true;
+
+        if (rawAction && configuredPrefix.empty())
+        {
+            if (m_config->naturalCommandsEnabled)
+                SendNaturalCommandFeedback(speaker,
+                    "Native PlayerBots may already have processed this unprefixed command. "
+                    "Azeroth Voices did not dispatch it; set AiPlayerbot.CommandPrefix = ! for reliable separation.");
+            return true;
+        }
+
+        if (!m_config->naturalCommandsEnabled || m_config->naturalCommandsAllowedActions.empty())
+            return false;
+
+        std::string addressing;
+        std::string addressedMessage;
+        std::vector<Player*> bots = ResolveNaturalCommandBots(speaker, scope, message, targetName,
+            addressing, addressedMessage);
+        if (bots.empty())
+        {
+            if ((addressing == "too-many" || addressing == "unauthorized" ||
+                    addressing == "ambiguous-party") &&
+                (LooksLikeNaturalCommand(addressedMessage) ||
+                    LooksLikeMultipleNaturalCommands(addressedMessage,
+                        PlayerbotBridge::CommandSeparator())))
+            {
+                RejectNaturalCommand(speaker, addressing == "too-many"
+                    ? "Command rejected because the number of named PlayerBots exceeds NaturalCommands.MaximumRecipients."
+                    : (addressing == "ambiguous-party"
+                        ? "Command rejected because more than one eligible PlayerBot is in the party subgroup; name the recipient."
+                        : "Command rejected because the named PlayerBot is not an eligible owned recipient."));
+                return true;
+            }
+            return false;
+        }
+        if (addressedMessage.empty())
+            return false;
+
+        bool const commandCandidate = FindNaturalCommandPrefix(addressedMessage) ||
+            LooksLikeNaturalCommand(addressedMessage) ||
+            ConservativeMultilingualCommandCandidate(addressedMessage, addressing);
+        if (commandCandidate)
+        {
+            ++m_naturalConsidered;
+            ++m_naturalTelemetry.considered;
+        }
+        if (NaturalCommandChannelExcluded(*m_config, scope, channelName))
+        {
+            if (commandCandidate)
+            {
+                RejectNaturalCommand(speaker, "Natural commands are excluded from this channel or scope.");
+                return true;
+            }
+            return false;
+        }
+        if (message.size() > 500)
+        {
+            if (commandCandidate)
+            {
+                RejectNaturalCommand(speaker, "Natural command exceeds the 500-character input limit.");
+                return true;
+            }
+            return false;
+        }
+
+        if (configuredPrefix.empty() && commandCandidate)
+        {
+            RejectNaturalCommand(speaker,
+                "Natural command was not dispatched because the native PlayerBots prefix is empty. "
+                "Set AiPlayerbot.CommandPrefix = ! to prevent native and interpreted commands from overlapping.");
+            return true;
+        }
+
+        std::string const normalizedMessage = NormalizeNaturalPhrase(addressedMessage);
+        uint64_t const speakerGuid = speaker->GetObjectGuid().GetRawValue();
+        if (normalizedMessage == "cancel")
+        {
+            auto pending = m_pendingNaturalConfirmations.find(speakerGuid);
+            if (pending != m_pendingNaturalConfirmations.end())
+            {
+                for (uint64_t botGuid : pending->second.botGuids)
+                    for (PendingNaturalConfirmation::Action const& action : pending->second.actions)
+                        RecordNaturalCommandAudit(speakerGuid, botGuid, action.action,
+                            action.arguments, pending->second.source, "confirmation-cancelled",
+                            action.confidence, pending->second.requestId,
+                            pending->second.latencyMilliseconds);
+                m_pendingNaturalConfirmations.erase(pending);
+                ++m_naturalTelemetry.confirmationCancelled;
+                SendNaturalCommandFeedback(speaker, "Pending natural command cancelled.");
+            }
+            else
+                RejectNaturalCommand(speaker, "There is no pending natural command to cancel.");
+            return true;
+        }
+        if (normalizedMessage == "confirm")
+        {
+            auto pending = m_pendingNaturalConfirmations.find(speakerGuid);
+            if (pending == m_pendingNaturalConfirmations.end())
+            {
+                RejectNaturalCommand(speaker, "There is no pending natural command to confirm.");
+                return true;
+            }
+            PendingNaturalConfirmation confirmation = pending->second;
+            m_pendingNaturalConfirmations.erase(pending);
+            if (Clock::now() > confirmation.expires)
+            {
+                ++m_naturalExpired;
+                ++m_naturalTelemetry.confirmationExpired;
+                for (uint64_t botGuid : confirmation.botGuids)
+                    for (PendingNaturalConfirmation::Action const& action : confirmation.actions)
+                        RecordNaturalCommandAudit(speakerGuid, botGuid, action.action,
+                            action.arguments, confirmation.source, "confirmation-expired",
+                            action.confidence, confirmation.requestId,
+                            confirmation.latencyMilliseconds);
+                RejectNaturalCommand(speaker, "Natural-command confirmation expired.");
+                return true;
+            }
+            std::vector<uint64_t> resolvedGuids;
+            for (Player* bot : bots)
+                resolvedGuids.push_back(bot->GetObjectGuid().GetRawValue());
+            std::sort(resolvedGuids.begin(), resolvedGuids.end());
+            std::vector<uint64_t> confirmedGuids = confirmation.botGuids;
+            std::sort(confirmedGuids.begin(), confirmedGuids.end());
+            if (confirmedGuids != resolvedGuids)
+            {
+                RejectNaturalCommand(speaker, "Confirmation does not match the same PlayerBot recipient set.");
+                return true;
+            }
+            ++m_naturalTelemetry.confirmationConfirmed;
+            ChatRequest const* acknowledgementRequest = confirmation.acknowledgement.empty()
+                ? nullptr : &confirmation.acknowledgementRequest;
+            ExecuteNaturalCommandBatch(speaker, bots, confirmation.actions,
+                confirmation.scope, confirmation.addressing, true,
+                confirmation.source, confirmation.requestId,
+                confirmation.latencyMilliseconds, confirmation.acknowledgement,
+                acknowledgementRequest);
+            return true;
+        }
+
+        bool const multipleActions = LooksLikeMultipleNaturalCommands(
+            addressedMessage, PlayerbotBridge::CommandSeparator());
+        if (multipleActions && m_config->naturalCommandsMaximumActions <= 1)
+        {
+            RejectNaturalCommand(speaker, "Use one natural-language action per message.");
+            return true;
+        }
+
+        std::string localAction;
+        std::string localArguments;
+        if (!multipleActions && m_config->naturalCommandsLocalFastPath &&
+            FindLocalNaturalCommand(addressedMessage,
+                m_config->naturalCommandsAllowedActions, localAction, localArguments))
+        {
+            ++m_naturalLocalFastPath;
+            ++m_naturalTelemetry.localFastPath;
+            ExecuteNaturalCommandBatch(speaker, bots, { { localAction, localArguments } },
+                scope, addressing, false, "local");
+            return true;
+        }
+
+        NaturalCommandAction const* addressedAction = FindNaturalCommandPrefix(addressedMessage);
+        if (addressedAction && addressedAction->forbidden)
+        {
+            ++m_naturalLocalFastPath;
+            ++m_naturalTelemetry.localFastPath;
+            RejectNaturalCommand(speaker, "That action is permanently forbidden for interpreted commands.");
+            return true;
+        }
+        if (addressedAction && !m_config->naturalCommandsAllowedActions.count(addressedAction->name))
+        {
+            RejectNaturalCommand(speaker, "That action is not present in NaturalCommands.AllowedActions.");
+            return true;
+        }
+        if (!multipleActions && m_config->naturalCommandsLocalFastPath && addressedAction &&
+            m_config->naturalCommandsAllowedActions.count(addressedAction->name))
+        {
+            std::string commandText = Trim(addressedMessage);
+            if (!configuredPrefix.empty() &&
+                commandText.compare(0, configuredPrefix.size(), configuredPrefix) == 0)
+                commandText = Trim(commandText.substr(configuredPrefix.size()));
+            size_t const actionLength = std::char_traits<char>::length(addressedAction->name);
+            std::string arguments = commandText.size() > actionLength
+                ? Trim(commandText.substr(actionLength)) : "";
+            ExecuteNaturalCommandBatch(speaker, bots,
+                { { addressedAction->name, arguments } }, scope, addressing,
+                false, "local");
+            return true;
+        }
+
+        if (!commandCandidate)
+            return false;
+        if (m_config->naturalCommandsLlmFallback)
+        {
+            if (!QueueNaturalCommandInterpretation(speaker, bots, scope, channelName,
+                addressing, addressedMessage))
+                return true;
+        }
+        else
+            RejectNaturalCommand(speaker, "Natural-command LLM fallback is disabled.");
+        // Command-looking addressed input is never offered to NPC responders,
+        // even if provider work is disabled, rate-limited, or unavailable.
+        return true;
+    }
+
+    void Manager::HandleNaturalCommandCompletion(ChatCompletion const& completion)
+    {
+        Player* speaker = ObjectAccessor::FindPlayer(ObjectGuid(completion.request.speaker.guid));
+        std::string const prefix = "natural-command-";
+        std::string addressing = completion.request.trigger.compare(0, prefix.size(), prefix) == 0
+            ? completion.request.trigger.substr(prefix.size()) : "";
+        std::vector<uint64_t> recipientGuids = completion.request.naturalRecipientGuids;
+        if (recipientGuids.empty())
+            recipientGuids.push_back(completion.request.actor.guid);
+        std::vector<Player*> bots;
+        for (uint64_t guid : recipientGuids)
+        {
+            Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(guid));
+            if (!NaturalCommandTargetValid(speaker, bot, completion.request.scope, addressing))
+            {
+                if (IsOnlineRealPlayer(speaker))
+                    RejectNaturalCommand(speaker,
+                        "Natural command was dropped because a PlayerBot recipient is no longer eligible.");
+                ++m_dropped;
+                return;
+            }
+            bots.push_back(bot);
+        }
+        if (bots.empty())
+        {
+            ++m_dropped;
+            return;
+        }
+        auto auditForBots = [&](std::string const& action, std::string const& arguments,
+                                std::string const& result, double confidence) {
+            for (Player* bot : bots)
+                RecordNaturalCommandAudit(completion.request.speaker.guid,
+                    bot->GetObjectGuid().GetRawValue(), action, arguments, "llm", result,
+                    confidence, completion.request.id, completion.elapsedMilliseconds);
+        };
+
+        try
+        {
+            Json const decision = Json::parse(completion.responseText);
+            uint32_t const maximumActions = std::max<uint32_t>(1,
+                std::min<uint32_t>(3, completion.request.naturalMaximumActions));
+            if (!decision.is_object() || !decision.count("kind") ||
+                !decision["kind"].is_string())
+                throw std::runtime_error("decision must contain a string kind");
+            std::string const kind = Lower(Trim(decision["kind"].get<std::string>()));
+            std::vector<PendingNaturalConfirmation::Action> actions;
+            std::vector<double> confidences;
+            bool const generatedAcknowledgement =
+                m_config->naturalCommandsAcknowledgementMode == "generated";
+            std::string acknowledgement;
+            if (maximumActions == 1)
+            {
+                size_t const expectedFields = generatedAcknowledgement ? 5 : 4;
+                if (decision.size() != expectedFields ||
+                    !decision.count("action") || !decision["action"].is_string() ||
+                    !decision.count("arguments") || !decision["arguments"].is_string() ||
+                    !decision.count("confidence") || !decision["confidence"].is_number() ||
+                    (generatedAcknowledgement && (!decision.count("acknowledgment") ||
+                        !decision["acknowledgment"].is_string())))
+                    throw std::runtime_error("decision contains an invalid single-action schema");
+                actions.push_back({ NormalizeNaturalCommandAction(
+                    decision["action"].get<std::string>()),
+                    decision["arguments"].get<std::string>() });
+                confidences.push_back(decision["confidence"].get<double>());
+                if (generatedAcknowledgement)
+                    acknowledgement = Trim(decision["acknowledgment"].get<std::string>());
+            }
+            else
+            {
+                size_t const expectedFields = generatedAcknowledgement ? 3 : 2;
+                if (decision.size() != expectedFields || !decision.count("commands") ||
+                    !decision["commands"].is_array() ||
+                    decision["commands"].size() > maximumActions ||
+                    (generatedAcknowledgement && (!decision.count("acknowledgment") ||
+                        !decision["acknowledgment"].is_string())))
+                    throw std::runtime_error("decision contains an invalid batch schema");
+                for (Json const& item : decision["commands"])
+                {
+                    if (!item.is_object() || item.size() != 3 ||
+                        !item.count("action") || !item["action"].is_string() ||
+                        !item.count("arguments") || !item["arguments"].is_string() ||
+                        !item.count("confidence") || !item["confidence"].is_number())
+                        throw std::runtime_error("each command must contain exactly action, arguments, confidence");
+                    actions.push_back({ NormalizeNaturalCommandAction(
+                        item["action"].get<std::string>()),
+                        item["arguments"].get<std::string>() });
+                    confidences.push_back(item["confidence"].get<double>());
+                }
+                if (generatedAcknowledgement)
+                    acknowledgement = Trim(decision["acknowledgment"].get<std::string>());
+            }
+            for (double confidence : confidences)
+                if (!std::isfinite(confidence) || confidence < 0.0 || confidence > 1.0)
+                    throw std::runtime_error("confidence must be finite and between zero and one");
+            if (generatedAcknowledgement &&
+                (acknowledgement.size() > 240 || acknowledgement.find('\r') != std::string::npos ||
+                 acknowledgement.find('\n') != std::string::npos ||
+                 acknowledgement.find('\0') != std::string::npos ||
+                 acknowledgement.find("|H") != std::string::npos))
+                throw std::runtime_error("acknowledgment exceeded its safe single-line bound");
+            ++m_naturalClassified;
+
+            if (kind == "conversation")
+            {
+                bool const empty = maximumActions == 1
+                    ? actions.size() == 1 && actions.front().action.empty() &&
+                        actions.front().arguments.empty()
+                    : actions.empty();
+                if (!empty)
+                    throw std::runtime_error("conversation decision contained commands");
+                if (generatedAcknowledgement && !acknowledgement.empty())
+                    throw std::runtime_error("conversation decision contained an acknowledgment");
+                ++m_naturalTelemetry.conversation;
+                auditForBots("", "", "conversation", 0.0);
+                QueueDialogue(completion.request.actor, completion.request.speaker,
+                    completion.request.scope, completion.request.channelName,
+                    "natural-command-conversation", completion.request.incomingMessage,
+                    RequestPriority::Direct, false, false);
+                ++m_completed;
+                return;
+            }
+            if (kind == "unsupported")
+            {
+                bool const empty = maximumActions == 1
+                    ? actions.size() == 1 && actions.front().action.empty() &&
+                        actions.front().arguments.empty()
+                    : actions.empty();
+                if (!empty)
+                    throw std::runtime_error("unsupported decision contained commands");
+                if (generatedAcknowledgement && !acknowledgement.empty())
+                    throw std::runtime_error("unsupported decision contained an acknowledgment");
+                ++m_naturalTelemetry.unsupported;
+                auditForBots("", "", "unsupported", 0.0);
+                RejectNaturalCommand(speaker, "The instruction is unsupported or cannot be represented safely.");
+                ++m_completed;
+                return;
+            }
+            if (kind != "command")
+                throw std::runtime_error("unknown command decision kind");
+            if (actions.empty() || actions.size() > maximumActions)
+                throw std::runtime_error("command decision contained no actions or exceeded its limit");
+            if (generatedAcknowledgement && acknowledgement.empty())
+                throw std::runtime_error("command decision omitted its acknowledgment");
+            std::vector<std::string> sourceLinks;
+            std::string const protectedSource = PreserveNaturalCommandLinks(
+                completion.request.incomingMessage, sourceLinks);
+            if (sourceLinks != completion.request.naturalPreservedLinks)
+                throw std::runtime_error("source link placeholders changed");
+            std::set<std::string> uniqueActions;
+            for (size_t i = 0; i < actions.size(); ++i)
+            {
+                std::string const& action = actions[i].action;
+                std::string const& arguments = actions[i].arguments;
+                if (confidences[i] < m_config->naturalCommandsMinimumConfidence)
+                {
+                    ++m_naturalTelemetry.lowConfidence;
+                    auditForBots(action, arguments, "low-confidence", confidences[i]);
+                    RejectNaturalCommand(speaker, "Natural-command classification confidence was too low.");
+                    return;
+                }
+                if (!uniqueActions.insert(action).second ||
+                    std::find(completion.request.naturalAllowedActions.begin(),
+                        completion.request.naturalAllowedActions.end(), action) ==
+                        completion.request.naturalAllowedActions.end() ||
+                    !m_config->naturalCommandsAllowedActions.count(action))
+                {
+                    auditForBots(action, arguments, "outside-shortlist", confidences[i]);
+                    RejectNaturalCommand(speaker,
+                        "Classifier returned a duplicate action or an action outside the authorized shortlist.");
+                    return;
+                }
+                if (arguments.find("|H") != std::string::npos ||
+                    LooksLikeMultipleNaturalCommands(action + " " + arguments,
+                        PlayerbotBridge::CommandSeparator()))
+                {
+                    auditForBots(action, arguments, "embedded-command-rejected", confidences[i]);
+                    RejectNaturalCommand(speaker,
+                        "Classifier returned an invented link or embedded command chain.");
+                    return;
+                }
+                if (!NaturalArgumentsComeFromMessage(arguments, protectedSource))
+                {
+                    auditForBots(action, arguments, "invented-argument", confidences[i]);
+                    RejectNaturalCommand(speaker,
+                        "Classifier returned an argument that was not present in the player's instruction.");
+                    return;
+                }
+                std::string restoredArguments;
+                std::string validationError;
+                if (!ValidateNaturalCommandArguments(action, arguments,
+                    !speaker->GetSelectionGuid().IsEmpty(),
+                    completion.request.naturalPreservedLinks,
+                    restoredArguments, validationError))
+                {
+                    auditForBots(action, arguments, "argument-rejected", confidences[i]);
+                    RejectNaturalCommand(speaker, "Command rejected: " + validationError + ".");
+                    return;
+                }
+                actions[i].arguments = std::move(restoredArguments);
+                actions[i].confidence = confidences[i];
+            }
+            ChatRequest const* acknowledgementRequest = acknowledgement.empty()
+                ? nullptr : &completion.request;
+            if (!ExecuteNaturalCommandBatch(speaker, bots, actions,
+                completion.request.scope, addressing, false, "llm",
+                completion.request.id, completion.elapsedMilliseconds,
+                acknowledgement, acknowledgementRequest))
+                return;
+            ++m_completed;
+        }
+        catch (std::exception const& exception)
+        {
+            ++m_failed;
+            ++m_naturalTelemetry.invalidDecision;
+            auditForBots("", "", "invalid-decision", 0.0);
+            RejectNaturalCommand(speaker, "Provider returned an invalid natural-command decision.");
+            if (m_config->debug)
+                sLog.outError("[AzerothVoices][NaturalCommands] Request %llu returned an invalid decision: %s",
+                    static_cast<unsigned long long>(completion.request.id), exception.what());
+        }
+    }
+
     void Manager::ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                               std::string const& targetName, std::string const& channelName)
     {
         if (!m_started || !m_config || !m_config->enabled || m_paused || !speaker ||
-            message.empty() || !IsScopeEnabled(*m_config, scope) ||
+            message.empty())
+            return;
+        if (TryHandleNaturalCommand(speaker, scope, message, targetName, channelName))
+            return;
+        if (!IsScopeEnabled(*m_config, scope) ||
             IsBlockedChannel(*m_config, scope, channelName) || IsBlacklisted(*m_config, message))
             return;
 
@@ -2716,8 +4177,17 @@ namespace AzerothVoices
         if (!IsOnlineRealPlayer(anchor))
             return;
 
+        if (!actor && request.actor.kind == ActorKind::Creature && !actorCreature &&
+            anchor->GetMapId() == request.actor.mapId)
+        {
+            actorCreature = ObjectAccessor::GetCreature(*anchor,
+                ObjectGuid(request.actor.guid));
+        }
+        WorldObject* previousActor = actor
+            ? static_cast<WorldObject*>(actor)
+            : static_cast<WorldObject*>(actorCreature);
         std::vector<Candidate> candidates = CollectCandidates(anchor, request.scope, "", reply,
-            true, true, request.actor.guid);
+            true, true, request.actor.guid, 0, previousActor);
 
         // Any follow-up pair containing an NPC must remain close enough to be
         // a plausible local exchange. Both actors must also be observable by
@@ -2725,9 +4195,6 @@ namespace AzerothVoices
         // SayDistance is 25 yards by default.
         if (request.scope == ChatScope::Say)
         {
-            WorldObject* previousActor = actor
-                ? static_cast<WorldObject*>(actor)
-                : static_cast<WorldObject*>(actorCreature);
             candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
                 [&](Candidate const& candidate) {
                     bool const npcPair = request.actor.kind == ActorKind::Creature ||
@@ -2804,21 +4271,56 @@ namespace AzerothVoices
         for (ChatCompletion& completion : completions)
         {
             RecordApiResult(completion);
+            if (completion.request.kind == RequestKind::NaturalCommand)
+            {
+                ++m_naturalClassifierResults;
+                m_naturalClassifierLatencyMilliseconds += completion.elapsedMilliseconds;
+                ++m_naturalTelemetry.classifierResults;
+                m_naturalTelemetry.classifierLatencyMilliseconds += completion.elapsedMilliseconds;
+            }
             if (completion.request.kind == RequestKind::PersonalityGeneration)
             {
                 HandlePersonalityCompletion(completion);
                 continue;
             }
             bool current = false;
+            bool wakeQueue = false;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
-                auto latest = m_latestRequestByActor.find(completion.request.actor.guid);
-                current = latest != m_latestRequestByActor.end() && latest->second == completion.request.id;
-                if (current)
-                    m_latestRequestByActor.erase(latest);
+                if (completion.request.kind == RequestKind::NaturalCommand)
+                {
+                    current = NaturalCommandPendingForAll(
+                        m_pendingNaturalCommandsByActor, completion.request, true);
+                    wakeQueue = RemoveNaturalCommandPending(
+                        m_pendingNaturalCommandsByActor, completion.request);
+                }
+                else
+                {
+                    auto latest = m_latestRequestByActor.find(completion.request.actor.guid);
+                    current = latest != m_latestRequestByActor.end() &&
+                        latest->second == completion.request.id;
+                    if (current)
+                        m_latestRequestByActor.erase(latest);
+                }
             }
+            if (wakeQueue)
+                m_queueReady.notify_all();
             if (!current || now > completion.request.expires)
             {
+                if (completion.request.kind == RequestKind::NaturalCommand && current &&
+                    now > completion.request.expires)
+                {
+                    ++m_naturalExpired;
+                    ++m_naturalTelemetry.confirmationExpired;
+                    m_naturalLastFailure = "request expired";
+                    Player* speaker = ObjectAccessor::FindPlayer(
+                        ObjectGuid(completion.request.speaker.guid));
+                    SendNaturalCommandFeedback(speaker, "Natural-command request expired before dispatch.");
+                    for (uint64_t botGuid : NaturalCommandRecipientGuids(completion.request))
+                        RecordNaturalCommandAudit(completion.request.speaker.guid, botGuid,
+                            "", "", "llm", "request-expired", 0.0,
+                            completion.request.id, completion.elapsedMilliseconds);
+                }
                 ++m_dropped;
                 continue;
             }
@@ -2840,6 +4342,22 @@ namespace AzerothVoices
                 }
                 else
                     ++m_suppressedErrors;
+                if (completion.request.kind == RequestKind::NaturalCommand)
+                {
+                    Player* speaker = ObjectAccessor::FindPlayer(
+                        ObjectGuid(completion.request.speaker.guid));
+                    RejectNaturalCommand(speaker, "Natural-command provider request failed.");
+                    for (uint64_t botGuid : NaturalCommandRecipientGuids(completion.request))
+                        RecordNaturalCommandAudit(completion.request.speaker.guid, botGuid,
+                            "", "", "llm", "provider-failed", 0.0,
+                            completion.request.id, completion.elapsedMilliseconds);
+                }
+                continue;
+            }
+
+            if (completion.request.kind == RequestKind::NaturalCommand)
+            {
+                HandleNaturalCommandCompletion(completion);
                 continue;
             }
 
@@ -2913,14 +4431,16 @@ namespace AzerothVoices
             ScopeName(completion.request.scope).c_str(),
             SanitizeLogText(completion.request.channelName).c_str(),
             SanitizeLogText(completion.request.trigger).c_str(), speakerName.c_str(),
-            SanitizeLogText(m_config->model).c_str(), completion.httpStatus,
+            SanitizeLogText(completion.request.modelOverride.empty()
+                ? m_config->model : completion.request.modelOverride).c_str(), completion.httpStatus,
             completion.httpAttemptCount, completion.elapsedMilliseconds,
             JoinReplyLines(lines).c_str());
     }
 
     void Manager::ReportTelemetry()
     {
-        if (!m_config || !m_config->consoleApiCallStats)
+        if (!m_config || (!m_config->consoleApiCallStats &&
+                          !m_config->naturalCommandsTelemetryEnabled))
             return;
 
         auto const now = Clock::now();
@@ -2931,40 +4451,78 @@ namespace AzerothVoices
         if (elapsed < m_config->consoleApiCallStatsIntervalSeconds)
             return;
 
-        uint64_t preflightRejected = 0;
-        for (uint64_t count : m_preflightRejections)
-            preflightRejected += count;
-        sLog.outString("[AzerothVoices][Telemetry] past %lld seconds: API calls=%llu, successful results=%llu, failed results=%llu, generated messages=%llu, preflight rejected=%llu.",
-            static_cast<long long>(elapsed),
-            static_cast<unsigned long long>(m_telemetryApiCalls),
-            static_cast<unsigned long long>(m_telemetrySuccessfulResults),
-            static_cast<unsigned long long>(m_telemetryFailedResults),
-            static_cast<unsigned long long>(m_telemetryGeneratedMessages),
-            static_cast<unsigned long long>(preflightRejected));
-
-        static std::array<char const*, static_cast<size_t>(PreflightReason::Count)> const reasonNames = {
-            "no-human-nearby", "no-real-audience", "npc-neutral", "npc-hostile",
-            "npc-temporary", "invalid-actor", "invalid-scope", "combat",
-            "unavailable", "cooldown", "rate-limit", "queue-full", "superseded"
-        };
-        std::ostringstream reasons;
-        for (size_t i = 0; i < m_preflightRejections.size(); ++i)
+        if (m_config->consoleApiCallStats)
         {
-            if (!m_preflightRejections[i])
-                continue;
+            uint64_t preflightRejected = 0;
+            for (uint64_t count : m_preflightRejections)
+                preflightRejected += count;
+            sLog.outString("[AzerothVoices][Telemetry] past %lld seconds: API calls=%llu, successful results=%llu, failed results=%llu, generated messages=%llu, preflight rejected=%llu.",
+                static_cast<long long>(elapsed),
+                static_cast<unsigned long long>(m_telemetryApiCalls),
+                static_cast<unsigned long long>(m_telemetrySuccessfulResults),
+                static_cast<unsigned long long>(m_telemetryFailedResults),
+                static_cast<unsigned long long>(m_telemetryGeneratedMessages),
+                static_cast<unsigned long long>(preflightRejected));
+
+            static std::array<char const*, static_cast<size_t>(PreflightReason::Count)> const reasonNames = {
+                "no-human-nearby", "no-real-audience", "npc-neutral", "npc-hostile",
+                "npc-temporary", "invalid-actor", "invalid-scope", "combat",
+                "unavailable", "cooldown", "rate-limit", "queue-full", "superseded"
+            };
+            std::ostringstream reasons;
+            for (size_t i = 0; i < m_preflightRejections.size(); ++i)
+            {
+                if (!m_preflightRejections[i])
+                    continue;
+                if (reasons.tellp() > 0)
+                    reasons << ", ";
+                reasons << reasonNames[i] << '=' << m_preflightRejections[i];
+            }
             if (reasons.tellp() > 0)
-                reasons << ", ";
-            reasons << reasonNames[i] << '=' << m_preflightRejections[i];
+                sLog.outString("[AzerothVoices][Telemetry] preflight reasons: %s.", reasons.str().c_str());
         }
-        if (reasons.tellp() > 0)
-            sLog.outString("[AzerothVoices][Telemetry] preflight reasons: %s.", reasons.str().c_str());
+
+        if (m_config->naturalCommandsTelemetryEnabled)
+        {
+            uint64_t const averageShortlist = m_naturalTelemetry.classifierQueued
+                ? m_naturalTelemetry.shortlistActions / m_naturalTelemetry.classifierQueued : 0;
+            uint64_t const averagePrompt = m_naturalTelemetry.classifierQueued
+                ? m_naturalTelemetry.promptCharacters / m_naturalTelemetry.classifierQueued : 0;
+            uint64_t const averageLatency = m_naturalTelemetry.classifierResults
+                ? m_naturalTelemetry.classifierLatencyMilliseconds /
+                    m_naturalTelemetry.classifierResults : 0;
+            std::string const mostUsed = NaturalCommandMostUsedActions(5);
+            sLog.outString("[AzerothVoices][NaturalCommands][Telemetry] past %lld seconds: considered=%llu, local=%llu, classifier=%llu, avg-shortlist=%llu, avg-prompt-chars=%llu, avg-latency-ms=%llu, conversation=%llu, unsupported=%llu, low-confidence=%llu, invalid=%llu, rejected=%llu, confirm-required=%llu, confirmed=%llu, cancelled=%llu, expired=%llu, top-actions=%s.",
+                static_cast<long long>(elapsed),
+                static_cast<unsigned long long>(m_naturalTelemetry.considered),
+                static_cast<unsigned long long>(m_naturalTelemetry.localFastPath),
+                static_cast<unsigned long long>(m_naturalTelemetry.classifierQueued),
+                static_cast<unsigned long long>(averageShortlist),
+                static_cast<unsigned long long>(averagePrompt),
+                static_cast<unsigned long long>(averageLatency),
+                static_cast<unsigned long long>(m_naturalTelemetry.conversation),
+                static_cast<unsigned long long>(m_naturalTelemetry.unsupported),
+                static_cast<unsigned long long>(m_naturalTelemetry.lowConfidence),
+                static_cast<unsigned long long>(m_naturalTelemetry.invalidDecision),
+                static_cast<unsigned long long>(m_naturalTelemetry.rejected),
+                static_cast<unsigned long long>(m_naturalTelemetry.confirmationRequired),
+                static_cast<unsigned long long>(m_naturalTelemetry.confirmationConfirmed),
+                static_cast<unsigned long long>(m_naturalTelemetry.confirmationCancelled),
+                static_cast<unsigned long long>(m_naturalTelemetry.confirmationExpired),
+                mostUsed.empty() ? "none" : mostUsed.c_str());
+        }
 
         m_telemetryWindowStarted = now;
-        m_telemetryApiCalls = 0;
-        m_telemetrySuccessfulResults = 0;
-        m_telemetryFailedResults = 0;
-        m_telemetryGeneratedMessages = 0;
-        m_preflightRejections.fill(0);
+        if (m_config->consoleApiCallStats)
+        {
+            m_telemetryApiCalls = 0;
+            m_telemetrySuccessfulResults = 0;
+            m_telemetryFailedResults = 0;
+            m_telemetryGeneratedMessages = 0;
+            m_preflightRejections.fill(0);
+        }
+        if (m_config->naturalCommandsTelemetryEnabled)
+            m_naturalTelemetry = {};
     }
 
     void Manager::DeliverScheduled()
@@ -2979,7 +4537,7 @@ namespace AzerothVoices
             }
 
             bool delivered = Deliver(*it);
-            if (delivered && it->firstLine)
+            if (delivered && it->firstLine && it->request.kind != RequestKind::NaturalCommand)
             {
                 AddHistory(it->request, it->text);
                 AddSnapshotHistory(it->request, it->request.currentSnapshot);
@@ -3020,9 +4578,12 @@ namespace AzerothVoices
             return false;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            auto latest = m_latestRequestByActor.find(request.actor.guid);
-            if (latest != m_latestRequestByActor.end() && latest->second != request.id)
-                return false;
+            if (request.kind != RequestKind::NaturalCommand)
+            {
+                auto latest = m_latestRequestByActor.find(request.actor.guid);
+                if (latest != m_latestRequestByActor.end() && latest->second != request.id)
+                    return false;
+            }
         }
 
         // PlayerBots joining a real player's explicitly targeted NPC
@@ -4230,6 +5791,24 @@ namespace AzerothVoices
         return m_paused;
     }
 
+    std::vector<NaturalCommandAuditRecord> Manager::GetNaturalCommandAudit(size_t maximum) const
+    {
+        std::vector<NaturalCommandAuditRecord> result;
+        if (!maximum)
+            return result;
+        maximum = std::min(maximum, m_naturalCommandAudit.size());
+        result.reserve(maximum);
+        for (auto entry = m_naturalCommandAudit.rbegin();
+             entry != m_naturalCommandAudit.rend() && result.size() < maximum; ++entry)
+            result.push_back(*entry);
+        return result;
+    }
+
+    void Manager::ClearNaturalCommandAudit()
+    {
+        m_naturalCommandAudit.clear();
+    }
+
     StatusSnapshot Manager::GetStatus() const
     {
         StatusSnapshot status;
@@ -4265,6 +5844,39 @@ namespace AzerothVoices
             status.ragEnabled = m_config->ragEnabled;
             status.environmentEnabled = m_config->environmentContextEnabled;
             status.snapshotEnabled = m_config->snapshotEnabled;
+            status.naturalCommandsEnabled = m_config->naturalCommandsEnabled;
+            status.naturalCommandActions = m_config->naturalCommandsAllowedActions.size();
+            status.naturalCommandShortlistMaximum = m_config->naturalCommandsShortlistMaximum;
+            status.naturalCommandEffectiveShortlistMaximum =
+                m_config->naturalCommandsShortlistMaximum == 0
+                ? status.naturalCommandActions
+                : std::min<size_t>(m_config->naturalCommandsShortlistMaximum,
+                    status.naturalCommandActions);
+            status.naturalCommandMaximumRecipients = m_config->naturalCommandsMaximumRecipients;
+            status.naturalCommandMaximumActions = m_config->naturalCommandsMaximumActions;
+            status.naturalCommandPrefixConfigured = !PlayerbotBridge::CommandPrefix().empty();
+            status.naturalConfirmationsPending = m_pendingNaturalConfirmations.size();
+            status.naturalClassified = m_naturalClassified;
+            status.naturalDispatched = m_naturalDispatched;
+            status.naturalRejected = m_naturalRejected;
+            status.naturalExpired = m_naturalExpired;
+            status.naturalConsidered = m_naturalConsidered;
+            status.naturalLocalFastPath = m_naturalLocalFastPath;
+            status.naturalClassifierQueued = m_naturalClassifierQueued;
+            status.naturalAverageShortlist = m_naturalClassifierQueued
+                ? static_cast<size_t>(m_naturalShortlistActions / m_naturalClassifierQueued) : 0;
+            status.naturalAveragePromptCharacters = m_naturalClassifierQueued
+                ? static_cast<size_t>(m_naturalPromptCharacters / m_naturalClassifierQueued) : 0;
+            status.naturalAverageClassifierLatencyMilliseconds = m_naturalClassifierResults
+                ? static_cast<uint32_t>(m_naturalClassifierLatencyMilliseconds /
+                    m_naturalClassifierResults) : 0;
+            status.naturalCommandModel = m_config->naturalCommandsModel.empty()
+                ? m_config->model : m_config->naturalCommandsModel;
+            status.naturalAcknowledgementMode = m_config->naturalCommandsAcknowledgementMode;
+            status.naturalMostUsedActions = NaturalCommandMostUsedActions(5);
+            status.naturalAuditEnabled = m_config->naturalCommandsAuditEnabled;
+            status.naturalAuditRecords = m_naturalCommandAudit.size();
+            status.naturalLastFailure = m_naturalLastFailure;
             status.apiConfigured = !m_config->endpoint.empty() &&
                 (!m_config->model.empty() || !m_config->apiJsonTemplate.empty()) &&
                 (!m_config->ResolveApiKey().empty() || IsLocalEndpoint(m_config->endpoint));
@@ -4273,6 +5885,10 @@ namespace AzerothVoices
             std::lock_guard<std::mutex> lock(m_queueMutex);
             for (auto const& queue : m_queues)
                 status.queued += queue.size();
+            std::set<uint64_t> pendingRequestIds;
+            for (auto const& pending : m_pendingNaturalCommandsByActor)
+                pendingRequestIds.insert(pending.second.begin(), pending.second.end());
+            status.naturalCommandsPending = pendingRequestIds.size();
         }
         return status;
     }

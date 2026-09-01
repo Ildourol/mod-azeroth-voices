@@ -6,6 +6,8 @@
 #include "ScriptObjects.h"
 #include "WorldSession.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -122,6 +124,31 @@ namespace AzerothVoices
 
             send(std::string("Environment: ") + (status.environmentEnabled ? "Enabled" : "Disabled"));
             send(std::string("Snapshot System: ") + (status.snapshotEnabled ? "Enabled" : "Disabled"));
+            send("Natural commands: " + std::string(status.naturalCommandsEnabled ? "Enabled" : "Disabled") +
+                ", allowed-actions=" + std::to_string(status.naturalCommandActions) +
+                ", shortlist-cap=" + (status.naturalCommandShortlistMaximum == 0
+                    ? "auto(" + std::to_string(status.naturalCommandEffectiveShortlistMaximum) + ")"
+                    : std::to_string(status.naturalCommandEffectiveShortlistMaximum)) +
+                ", recipients/actions=" + std::to_string(status.naturalCommandMaximumRecipients) +
+                "x" + std::to_string(status.naturalCommandMaximumActions) +
+                ", native-prefix=" + std::string(status.naturalCommandPrefixConfigured ? "configured" : "EMPTY/unsafe") +
+                ", pending=" + std::to_string(status.naturalCommandsPending) +
+                ", confirmations=" + std::to_string(status.naturalConfirmationsPending) +
+                ", classified=" + std::to_string(status.naturalClassified) +
+                ", dispatched=" + std::to_string(status.naturalDispatched) +
+                ", rejected=" + std::to_string(status.naturalRejected) +
+                ", expired=" + std::to_string(status.naturalExpired) +
+                ", model=" + status.naturalCommandModel +
+                ", acknowledgment=" + status.naturalAcknowledgementMode +
+                ", avg-shortlist=" + std::to_string(status.naturalAverageShortlist) +
+                ", avg-prompt-chars=" + std::to_string(status.naturalAveragePromptCharacters) +
+                ", avg-latency-ms=" + std::to_string(status.naturalAverageClassifierLatencyMilliseconds) +
+                ", audit=" + std::string(status.naturalAuditEnabled ? "enabled" : "disabled") +
+                "(" + std::to_string(status.naturalAuditRecords) + ")" +
+                (status.naturalMostUsedActions.empty() ? "" : ", top=" + status.naturalMostUsedActions) +
+                (status.naturalLastFailure.empty() ? "" : ", last-failure=" + status.naturalLastFailure));
+            if (status.naturalCommandsEnabled && !status.naturalCommandPrefixConfigured)
+                errors = true;
             if (!status.personalityEnabled)
                 handler->SendSysMessage("Personality: Disabled");
             else
@@ -203,6 +230,64 @@ namespace AzerothVoices
             handler->SendSysMessage(message.c_str());
         }
 
+        void HandleNaturalCommandAdmin(ChatHandler* handler, std::string rest)
+        {
+            std::string action = TakeWord(rest);
+            std::string argument = TakeWord(rest);
+            if (action != "audit" || !TakeWord(rest).empty())
+            {
+                handler->SendSysMessage("Usage: .av natural audit [1-50|clear]");
+                return;
+            }
+            if (argument == "clear")
+            {
+                Manager::Instance().ClearNaturalCommandAudit();
+                handler->SendSysMessage("Azeroth Voices natural-command RAM audit cleared.");
+                return;
+            }
+            size_t maximum = 20;
+            if (!argument.empty())
+            {
+                if (argument.size() > 2 ||
+                    !std::all_of(argument.begin(), argument.end(), [](unsigned char c) {
+                        return std::isdigit(c) != 0;
+                    }))
+                {
+                    handler->SendSysMessage("Usage: .av natural audit [1-50|clear]");
+                    return;
+                }
+                maximum = static_cast<size_t>(std::stoul(argument));
+                if (!maximum || maximum > 50)
+                {
+                    handler->SendSysMessage("Audit display count must be between 1 and 50.");
+                    return;
+                }
+            }
+            StatusSnapshot const status = Manager::Instance().GetStatus();
+            if (!status.naturalAuditEnabled)
+                handler->SendSysMessage("Natural-command audit is disabled; enable NaturalCommands.Audit.Enable and reload configuration.");
+            std::vector<NaturalCommandAuditRecord> const records =
+                Manager::Instance().GetNaturalCommandAudit(maximum);
+            handler->SendSysMessage(("## Azeroth Voices Natural-Command Audit (newest first, " +
+                std::to_string(records.size()) + " record(s))").c_str());
+            for (NaturalCommandAuditRecord const& record : records)
+            {
+                std::ostringstream line;
+                line << "time=" << record.createdUnix
+                     << " request=" << record.requestId
+                     << " player=" << record.playerGuid
+                     << " bot=" << record.botGuid
+                     << " action=" << (record.action.empty() ? "-" : record.action)
+                     << " source=" << record.source
+                     << " result=" << record.result
+                     << " confidence=" << static_cast<uint32_t>(record.confidence * 100.0) << "%"
+                     << " latency=" << record.latencyMilliseconds << "ms";
+                if (!record.arguments.empty())
+                    line << " arguments=" << record.arguments;
+                handler->SendSysMessage(line.str());
+            }
+        }
+
         class AzerothVoicesCommandScript final : public AllCommandScript
         {
         public:
@@ -239,6 +324,12 @@ namespace AzerothVoices
                     return false;
                 }
 
+                if (subcommand == "natural")
+                {
+                    HandleNaturalCommandAdmin(handler, rest);
+                    return false;
+                }
+
                 if (subcommand.empty() || subcommand == "status")
                 {
                     StatusSnapshot status = Manager::Instance().GetStatus();
@@ -265,11 +356,41 @@ namespace AzerothVoices
                          << ", personality-db=" << (status.personalityDatabaseAvailable ? "available" : "unavailable")
                          << ", personalities=" << status.personalities
                          << ", personality-pending=" << status.personalityGenerationsPending
+                         << ", natural-commands=" << (status.naturalCommandsEnabled ? "enabled" : "disabled")
+                         << ", natural-native-prefix=" << (status.naturalCommandPrefixConfigured ? "configured" : "empty-unsafe")
+                         << ", natural-actions=" << status.naturalCommandActions
+                         << ", natural-shortlist-cap="
+                         << (status.naturalCommandShortlistMaximum == 0 ? "auto(" : "")
+                         << status.naturalCommandEffectiveShortlistMaximum
+                         << (status.naturalCommandShortlistMaximum == 0 ? ")" : "")
+                         << ", natural-recipients/actions=" << status.naturalCommandMaximumRecipients
+                         << "x" << status.naturalCommandMaximumActions
+                         << ", natural-pending=" << status.naturalCommandsPending
+                         << ", natural-confirmations=" << status.naturalConfirmationsPending
+                         << ", natural-classified=" << status.naturalClassified
+                         << ", natural-dispatched=" << status.naturalDispatched
+                         << ", natural-rejected=" << status.naturalRejected
+                         << ", natural-expired=" << status.naturalExpired
+                         << (status.naturalLastFailure.empty() ? "" : ", natural-last-failure=" + status.naturalLastFailure)
                          << ", rag=" << (status.ragEnabled ? "enabled" : "disabled")
                          << ", rag-entries=" << status.ragEntries
                          << ", model=" << status.model
                          << ", endpoint=" << status.endpoint;
                     handler->SendSysMessage(text.str());
+                    std::ostringstream natural;
+                    natural << "Natural command metrics: considered=" << status.naturalConsidered
+                            << ", local=" << status.naturalLocalFastPath
+                            << ", classifier=" << status.naturalClassifierQueued
+                            << ", avg-shortlist=" << status.naturalAverageShortlist
+                            << ", avg-prompt-chars=" << status.naturalAveragePromptCharacters
+                            << ", avg-latency-ms=" << status.naturalAverageClassifierLatencyMilliseconds
+                            << ", model=" << status.naturalCommandModel
+                            << ", acknowledgment=" << status.naturalAcknowledgementMode
+                            << ", audit=" << (status.naturalAuditEnabled ? "enabled" : "disabled")
+                            << '(' << status.naturalAuditRecords << ')'
+                            << (status.naturalMostUsedActions.empty() ? "" :
+                                ", top=" + status.naturalMostUsedActions);
+                    handler->SendSysMessage(natural.str());
                     return false;
                 }
 
@@ -321,7 +442,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all");
+                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all | natural audit [1-50|clear]");
                 return false;
             }
         };

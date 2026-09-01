@@ -33,8 +33,27 @@ The local `mod-ollama-chat-main` tree was treated strictly as a feature referenc
 - Typing delay compatible with the restored PlayerBots behavior: generation time can be subtracted from the character-based delay.
 - Optional terminal telemetry for one-time per-message details and periodic counters-only API-call/result summaries.
 - GM commands for status, one lightweight global sanity check, explicit generation and ambient tests, pause/resume, restart, and history clearing.
+- Optional PlayerBot-only natural-language commands with exact recipient resolution, a 137-input registry verified against this checkout, dynamic allowlist-bounded classifier shortlists, local WoW-link preservation, strict JSON decisions, a two-command per-bot FIFO, permanent action denials, high-risk confirmation, and private feedback. NPCs are never command recipients.
 
 Personality is an additional PlayerBot prompt layer. It does not replace directed chat, random/ambient chatter, world/guild/group delivery, history, Environment, Snapshot, RAG, provider scheduling, or cooldown behavior. NPCs continue to use the shared NPC prompt without PlayerBot personality records. There is still no sentiment-tracking subsystem.
+
+## Natural-language PlayerBot commands
+
+Set `AiPlayerbot.CommandPrefix = !` manually in PlayerBots' `aiplayerbot.conf` when enabling interpreted commands. Azeroth Voices reads this loaded setting but never edits or owns it. An empty prefix is unsafe because native PlayerBots can process unprefixed chat before module hooks run; the module warns at startup, reports the condition in `.av status`, and refuses an overlapping interpreted dispatch.
+
+`AzerothVoices.NaturalCommands.AllowedActions` authorizes interpreted actions only. It accepts the optional `light` (20 everyday actions), `medium` (72 usefulness tiers 1-2), and `heavy` (all 131 non-forbidden actions) presets as well as exact action names. Presets and manual names can be combined, such as `medium,emote,craft`; the resolved set automatically removes duplicates. `*` remains an alias for the complete `heavy` set. Six privileged/destructive inputs remain permanently denied. New configurations default to `medium`; an existing active configuration keeps its configured value. Native prefixed PlayerBots syntax remains governed by PlayerBots and is not protected by the module allowlist or confirmation layer. The full ranked registry and exact light preset are in [`data/NATURAL_COMMAND_ACTIONS.txt`](data/NATURAL_COMMAND_ACTIONS.txt).
+
+`AzerothVoices.NaturalCommands.ShortlistMaximum` is a true cap over the resolved allowlist. `0` means automatic/unlimited within that finite allowlist. If one action is allowed, the shortlist is one; if 20 are allowed and the cap is 20, all 20 are sent. When the allowlist is larger than a positive cap, relevance scoring may send fewer than the cap for an obvious instruction. A larger shortlist increases classifier input tokens and can reduce accuracy when actions overlap.
+
+`AzerothVoices.NaturalCommands.Model` optionally selects a smaller or faster model for command classification while sharing the existing endpoint and API key; empty uses `AzerothVoices.Model`. Classifier action rows use compact `name|argument-mode|meaning` metadata (`N` none, `O` optional, `R` required). Risk and confirmation remain local and are not repeated in the provider prompt. Successful session-local action counts can promote frequently used actions only as a relevance tie-breaker or unknown-wording fallback; direct message relevance always wins, and promotion cannot escape `AllowedActions` or `ShortlistMaximum`.
+
+`AzerothVoices.NaturalCommands.MaximumRecipients` and `MaximumActionsPerMessage` default to one and are bounded at five recipients and three actions. Multiple recipients must each be explicitly named and pass the existing ownership/range/group/subgroup/guild/officer rules; there is no implicit nearby or channel-wide fan-out. In Party chat only, an unnamed instruction resolves automatically when exactly one eligible PlayerBot exists in the speaker's subgroup; multiple eligible bots require an explicit name. One classifier request extracts the ordered action list and each action is dispatched to every resolved recipient. Dependent workflows that require waiting for movement or another command to finish remain unsupported. Whisper and selected Say resolve one bot. World and custom-channel commands intentionally do not require actual channel membership, while `AzerothVoices.NaturalCommands.ExcludedChannels` can disable scopes, exact channel names, or `channel:NAME`. NPC dialogue remains separate because NPCs cannot receive commands.
+
+Classification sends only the configured allowlist-bounded action shortlist and no personality, history, RAG, snapshot, or environment context. WoW links are replaced locally with bounded placeholders and restored only after validation. If any action in a multi-recipient/action batch is high risk, the whole batch requires a private, deterministic `confirm` from the same player addressing the same recipient set before expiry; `cancel` removes it without another API call. Feedback says “dispatched,” not “succeeded,” because the checked-out PlayerBots command API returns `void` and performs its own final state/security checks.
+
+`NaturalCommands.AcknowledgementMode` supports `None`, zero-token private `Local` feedback, or one short `Generated` in-character line returned by the existing classifier request—never a second request. Generated acknowledgments are delivered by the first addressed PlayerBot only after dispatch. Local fast-path commands fall back to Local acknowledgment in Generated mode. Privacy-safe command telemetry can report local/classifier ratios, average shortlist and prompt size, classifier latency, outcomes, confirmations, and top actions without storing chat text. The optional bounded RAM audit is disabled by default, clears on restart/reload, omits original messages, and is inspected with `.av natural audit [1-50]` or cleared with `.av natural audit clear`.
+
+Run `tools/validate-natural-commands.ps1` from the module directory to compare the registry and catalog with the checked-out `ChatTriggerContext.h`, verify permanent denials/metadata/config/parser/FIFO invariants, and print character-based prompt measurements. These character counts are not exact provider token or billing measurements.
 
 ## Thread-safety model
 
@@ -315,6 +334,8 @@ A plain-text reference containing every command is available in [COMMANDS.txt](C
 .av personality regenerate <exact-online-bot-name>
 .av personality delete <exact-online-bot-name>
 .av personality delete all
+.av natural audit [1-50]
+.av natural audit clear
 ```
 
 `.av test` performs one lightweight, read-only global status check. It reports the loaded/enabled state, API and sanitized endpoint configuration, selected History backend and its already-known availability, loaded RAG file/entry counts, Environment and Snapshot switches, chat readiness, and the current worker count. It does not generate a reply, enqueue a synthetic worker job, create history, modify SQL rows, scan the world, or expose credentials. `.av live` remains the explicit generation-and-delivery test.
@@ -367,6 +388,7 @@ reply once and print a one-minute counters-only summary, use:
 AzerothVoices.Console.GeneratedMessages = 1
 AzerothVoices.Console.ApiCallStats = 1
 AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
+AzerothVoices.NaturalCommands.Telemetry.Enable = 1
 ```
 
 The summary reports actual HTTP attempts (including retries), successful and failed
@@ -374,5 +396,7 @@ final results, generated-message count, and aggregate preflight rejection reason
 for that interval. Telemetry never retains or replays generated text; only
 `Console.GeneratedMessages` prints it. Generated output may expose whispers and
 chat history in the worldserver terminal/logs, so it is disabled by default.
+Natural-command telemetry uses the same reporting interval but can be enabled independently of the
+general API summary. It stores counters and successful action frequencies only, not message text.
 
 Do not disable certificate verification. If a private gateway uses a private CA, configure `AzerothVoices.CACertFile` with that CA bundle instead.

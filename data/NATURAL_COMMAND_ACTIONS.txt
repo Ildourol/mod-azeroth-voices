@@ -1,0 +1,294 @@
+AZEROTH VOICES NATURAL-COMMAND ACTION CATALOG
+================================================
+
+Source verified against this checkout:
+src/modules/PlayerBots/playerbot/strategy/triggers/ChatTriggerContext.h
+
+Use these exact names or the presets below in AzerothVoices.NaturalCommands.AllowedActions,
+separated by commas. Presets and exact names may be mixed; the resolved set removes duplicates.
+The allowlist controls only commands interpreted by Azeroth Voices; native PlayerBots command
+syntax is still handled and secured by PlayerBots.
+
+OPTIONAL PRESETS
+----------------
+light (20): accept, attack, buff, equip, flee, follow, free, guard, loot, position, pull, quests,
+ready, release, revive, stats, stay, talk, use, who
+
+medium (72): every non-forbidden action in usefulness sections 1 and 2 below. This is the balanced
+default for new configurations. It includes light automatically, plus the remaining essential,
+questing, inventory, travel, character, and information actions in those two sections.
+
+heavy (131): every non-forbidden action in sections 1 through 4. `*` is an alias for heavy.
+
+Examples:
+  AzerothVoices.NaturalCommands.AllowedActions = light
+  AzerothVoices.NaturalCommands.AllowedActions = medium,emote,craft
+  AzerothVoices.NaturalCommands.AllowedActions = light,cast,equip
+
+The last example resolves to 21 unique actions: equip is already in light, so it is not duplicated.
+
+ShortlistMaximum is capped by the resolved allowlist after preset expansion. Set it to 0 to send
+every resolved allowed action, or use 1-131 as a positive cap. A fitting allowlist is included
+completely; a larger allowlist may be reduced below its cap by relevance scoring for an obvious
+instruction.
+
+The interpreter defaults to one PlayerBot and one action per message. Configuration can permit up
+to five explicitly named recipients and three independent actions; it never performs implicit
+fan-out or stateful multi-step workflows. Valid WoW links are replaced by bounded local placeholders
+for classification and restored byte-for-byte before the existing PlayerBots parser receives the
+command. An allowed action does not guarantee success: PlayerBots still checks ownership/security,
+target, inventory, spell, state, range and the command's own requirements. "Dispatched" means only
+that Azeroth Voices called PlayerBots' void command API.
+
+For reliable separation, set `AiPlayerbot.CommandPrefix = !` in PlayerBots' aiplayerbot.conf.
+Azeroth Voices reads that value but does not own or edit it. If the native prefix is empty, native
+PlayerBots may process the chat first and the module refuses to claim or perform a second dispatch.
+
+RISK AND CONFIRMATION
+---------------------
+Low-risk actions are dispatched after local/provider validation. Caution actions receive the same
+strict validation and private feedback. High-risk interpreted actions require the same real player
+to address the same PlayerBot with `confirm` before the bounded confirmation TTL; `cancel` discards
+the pending action. Native prefixed commands remain governed by PlayerBots, not this confirmation.
+
+High risk includes auction bids/purchases, vendor buys, quest drops, trades/sales/mail, group or
+guild leadership/membership changes, guild member management, AI load/save/reset, skill/talent
+changes, and major travel/teleport commands. The six actions in the permanent-forbidden section can
+never be enabled for interpretation. The remaining advanced/specialized actions are caution risk;
+ordinary movement, combat, reporting, and non-destructive quest/item actions are normally low risk.
+
+USEFULNESS 1 - ESSENTIAL CONTROL AND COMBAT (35)
+------------------------------------------------
+accept - Accept a quest offered by the selected quest giver.
+attack - Attack the player's selected target.
+attack rti - Attack the current raid-target-icon target.
+buff - Apply an appropriate buff.
+buff target - Set or use a preferred buff target.
+flee - Flee from danger.
+focus heal - Set or use preferred healing targets.
+follow - Follow the requester.
+follow target - Set or follow a specified target.
+formation - Inspect or change group formation.
+free - Clear fixed movement and move freely.
+give leader - Give group leadership to the requester.
+guard - Guard the current position.
+invite - Invite the requester or named player to a group.
+leave - Leave the current group.
+max dps - Favor maximum damage output.
+move style - Inspect or change the movement style.
+pet - Inspect or change pet behavior.
+pull - Pull the player's selected target.
+pull rti - Pull the current raid-target-icon target.
+range - Inspect or change preferred combat range.
+ready - Perform a ready check.
+release - Release spirit after death.
+revive - Revive an eligible dead target.
+revive target - Set or use a preferred revive target.
+rti - Inspect or set raid target icon behavior.
+runaway - Move away from the current danger.
+save mana - Conserve mana.
+self res - Use an available self-resurrection.
+stance - Inspect or change combat stance.
+stay - Stay at the current position.
+summon - Summon the bot to the requester when PlayerBots permits.
+tank attack - Engage using tank-oriented attack behavior.
+wait for attack time - Inspect or change the attack wait time.
+wander - Wander instead of following.
+
+USEFULNESS 2 - QUESTING, ITEMS, TRAVEL AND INFORMATION (37)
+-----------------------------------------------------------
+add all loot - Enable collection of all loot.
+bank - Interact with or report bank contents.
+cast - Cast a specified known spell.
+castnc - Cast a specified spell outside normal combat handling.
+corpse run - Start or report corpse-running behavior.
+doquest - Focus travel or activity on a specified quest.
+drop - Drop a specified quest.
+equip - Equip a specified owned item.
+faction - Report faction-related information.
+glyph - Inspect or manage glyph-like character options supported by this build.
+go - Travel to a specified destination.
+grind - Start grinding nearby suitable targets.
+help - List PlayerBots help for commands or a specified topic.
+home - Set or use home-related behavior.
+items - Report counts of specified items; alias of c.
+keep - Mark specified items to keep.
+lfg - Inspect or change looking-for-group behavior.
+loot - Enable collection of all loot; alias of add all loot.
+position - Report the bot's position.
+possible attack targets - Report possible attack targets.
+quest reward - Inspect or choose a quest reward.
+quests - List the bot's quests.
+repair - Repair equipped and carried items.
+reputation - Report reputation information.
+roll - Roll on eligible loot.
+share - Share a specified quest.
+skill - Inspect, learn or unlearn supported skills.
+spell - Report information about a specified spell.
+spells - List known spells.
+stats - Report character and combat statistics.
+talents - Inspect or change talents when supported.
+talk - Talk to the selected NPC or game object.
+taxi - Use or inspect taxi travel.
+trainer - Inspect or learn from the selected trainer.
+use - Use a specified owned item.
+where - Report current travel destination or location.
+who - Report identity or group information.
+
+USEFULNESS 3 - ADVANCED, SOCIAL AND ECONOMY (37)
+-------------------------------------------------
+ah - Inspect or perform supported auction-house operations.
+ah bid - Bid on an auction-house listing.
+attackers - Report units currently attacking.
+bg free - Leave or clear battleground participation.
+boost target - Set or use preferred boost targets.
+chat - Inspect or change PlayerBots chat behavior.
+craft - Set or perform a supported crafting order.
+cs - Edit custom strategies.
+emote - Perform a specified emote.
+flag - Inspect or change supported PlayerBots flags.
+gb - Interact with or report guild-bank contents.
+gbank - Interact with or report guild-bank contents; alias of gb.
+guild demote - Demote a guild member when authorized.
+guild invite - Invite a player to the guild when authorized.
+guild join - Join a guild invitation.
+guild leader - Transfer guild leadership when authorized.
+guild leave - Leave the current guild.
+guild promote - Promote a guild member when authorized.
+guild remove - Remove a guild member when authorized.
+hire - Use supported bot-hiring behavior.
+join - Join the requester's group.
+jump - Perform a jump.
+load ai - Load a saved PlayerBots AI configuration.
+log - Inspect or change PlayerBots logging level.
+los - Report line-of-sight information.
+mail - Inspect mail-related state.
+outfit - Inspect or manage a saved outfit.
+react - Change reaction-state strategies.
+reset ai - Fully reset the bot AI.
+reset strats - Reset active strategies.
+rtsc - Use the PlayerBots real-time strategy command interface.
+save ai - Save the current PlayerBots AI configuration.
+sendmail - Send supported items or money by mail.
+speak - Make the bot speak supplied text.
+teleport - Use supported PlayerBots teleport behavior.
+warning - Issue supported raid-warning behavior.
+wts - Advertise supported items for sale.
+
+USEFULNESS 4 - SPECIALIZED INPUTS, ALIASES AND SHORTHAND (22)
+----------------------------------------------------------------
+all - Change strategies for all bot states.
+b - Buy from the selected vendor; shorthand.
+bb - Buy back from the selected vendor; shorthand.
+c - Report counts of specified items; shorthand.
+co - Change combat strategies; shorthand.
+de - Change dead-state strategies; shorthand.
+e - Equip a specified owned item; shorthand.
+inventory - Report counts of specified items; alias of c.
+inv - Report counts of specified items; alias of c.
+list ai - List saved PlayerBots AI configurations.
+ll - Inspect or change loot strategy; shorthand.
+nc - Change non-combat strategies; shorthand.
+nt - Perform a trade without the normal shorthand mode.
+q - Query a quest or item link; shorthand.
+r - Choose or inspect a quest reward; shorthand.
+ra - Remove a specified aura.
+rep - Report reputation information; alias of reputation.
+s - Sell specified items; shorthand.
+ss - Inspect or change the skipped-spell list; shorthand.
+t - Trade specified items; shorthand.
+u - Use a specified owned item; alias of use.
+ue - Unequip specified equipment; shorthand.
+
+PERMANENTLY FORBIDDEN TO THE NATURAL-LANGUAGE INTERPRETER (6)
+-------------------------------------------------------------
+cdebug - Privileged PlayerBots debug command.
+cheat - Enable or change PlayerBots cheats.
+debug - Privileged PlayerBots debug command.
+destroy - Destroy specified owned items.
+reset values - Reset internal AI values.
+set value - Set an internal AI value.
+
+These six remain native PlayerBots inputs, but Azeroth Voices rejects them even if *, heavy, or
+their exact names are placed in AllowedActions. This prevents a model-produced command from mutating
+privileged, destructive or unbounded internal state. No PlayerBots core behavior was changed.
+
+RECIPIENT RULES
+---------------
+Whisper: the whispered PlayerBot.
+Say: one selected PlayerBot, or explicitly named PlayerBots within SayDistance.
+Yell: explicitly named PlayerBots within YellDistance.
+Party: explicitly named PlayerBots in the same party subgroup, or the subgroup's single eligible
+PlayerBot without a name. Multiple eligible subgroup bots require explicit naming.
+Raid: explicitly named PlayerBots in the same raid.
+Guild: explicitly named PlayerBots in the same guild.
+Officer: explicitly named PlayerBots in the same guild with officer-chat listen rights.
+World: exact explicitly named online PlayerBots.
+Custom channel: exact explicitly named online PlayerBots.
+
+MasterOnly=1 additionally requires that the speaking real player is the bot's current master.
+NPCs are never candidates. Named recipients are capped by MaximumRecipients (default 1); no nearby,
+group, guild, World, or custom-channel audience is implicitly converted into command recipients.
+
+Azeroth Voices GM Command Reference
+===================================
+
+Primary command prefix: .av
+Required security: vMaNGOS moderator/GM, or the server console where supported.
+
+Status and diagnostics
+----------------------
+.av
+    Show the same concise runtime summary as .av status.
+
+.av status
+    Show module, worker, queue, storage, personality, RAG, model, and endpoint status.
+
+.av test
+    Run the private read-only global test. No provider request or database mutation occurs.
+
+Runtime control
+---------------
+.av pause
+    Stop accepting new Azeroth Voices work while already queued delivery may finish.
+
+.av resume
+    Resume accepting Azeroth Voices work.
+
+.av restart
+    Restart the manager and workers using configuration already loaded by the core.
+    This command does not reread edited configuration files from disk.
+
+.av clearhistory
+    Clear Azeroth Voices conversation, surrounding-chat, and snapshot history.
+    Personality records are not deleted.
+
+Generation tests
+----------------
+.av chatter [optional topic]
+    Queue one ambient chatter attempt. Requires an in-game GM.
+
+.av live <exact-online-bot-name> [optional prompt]
+    Queue one provider-backed line from the selected online PlayerBot. Requires an in-game GM.
+
+.av live - [optional prompt]
+    Queue one provider-backed line from an automatically selected nearby actor. Requires an in-game GM.
+
+Persistent PlayerBot personalities
+----------------------------------
+.av personality show <exact-online-bot-name>
+    Display the currently cached or stored personality.
+
+.av personality status <exact-online-bot-name>
+    Display the bounded last generation state and sanitized failure information for this session.
+
+.av personality regenerate <exact-online-bot-name>
+    Queue a replacement personality. A usable existing personality remains active until replacement succeeds.
+
+.av personality delete <exact-online-bot-name>
+    Delete only that bot's Azeroth Voices personality cache, pending generation, and persistent row.
+
+.av personality delete all
+    Delete all Azeroth Voices personality records and pending personality jobs.
+    Conversation history, snapshots, Environment, RAG, character data, and PlayerBots data are not deleted.
+
