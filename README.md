@@ -1,22 +1,23 @@
 # Azeroth Voices
 
-Current development milestone: **V0.3**.
+![Azeroth Voices](mod-azeroth-voices.jpg)
+
+Current development milestone: **V0.4**.
 
 `mod-azeroth-voices` is a standalone, provider-neutral conversation and ambient-chatter module for TortoiseWoW. It observes PlayerBots through the core's generic AI-control hook, so it does not modify anything under `src/modules/PlayerBots`.
 
-It is inspired by `mod-ollama-chat`, while V0.3's persistent identity methodology is adapted from `mod-llm-chatter`: stable GUID identities, distinct traits, a derived speaking tone, a persistent background, and versioned regeneration. It does not copy either reference project's Python bridge, database polling, detached-thread model, AzerothCore APIs, unrelated chatter/memory systems, or disabled TLS behavior. The module uses the HTTP and JSON libraries already shipped by TortoiseWoW (`cpp-httplib` and `nlohmann/json`) with OpenSSL certificate verification enabled.
+It is inspired by `mod-ollama-chat`, while V0.4's persistent identity methodology is adapted from `mod-llm-chatter`: stable GUID identities, distinct traits, a derived speaking tone, a persistent background, and versioned regeneration. It does not copy either reference project's Python bridge, database polling, detached-thread model, AzerothCore APIs, unrelated chatter/memory systems, or disabled TLS behavior. The module uses the HTTP and JSON libraries already shipped by TortoiseWoW (`cpp-httplib` and `nlohmann/json`) with OpenSSL certificate verification enabled.
 
 The local `mod-ollama-chat-main` tree was treated strictly as a feature reference. All registration, script hooks, chat delivery, object lookup, configuration loading, CMake discovery, and PlayerBot detection in this module use the APIs and names present in the local `tortoise-wow-playerbots-integration-gh` vMaNGOS fork. No AzerothCore headers, script loaders, configuration sections, database APIs, or playerbot classes are imported.
 
 ## Included features
 
 - Player-to-bot replies in whisper, say, yell, party, raid, guild, officer, world, and optionally custom channels.
-- Bot-to-bot replies with separate probability controls.
-- Nearby normal NPC replies to direct targeting, name mentions, and overheard say/yell chat.
-- Random nearby, guild, and world chatter while real players are online.
-- A follow-up chance for short bot/NPC conversations; lone NPCs do not start ambient monologues.
-- Event chatter for deaths, kills, loot, quests, learned spells, duels, levels, guild login/join/leave, plus a public event-adapter method for other scripts.
-- Guild-scoped reactions for guild activity, levels, achievements, dungeon completions, and rare/epic loot when the subject is guilded; game-event adapters can announce in world chat.
+- Bot-to-bot whisper replies are disabled. Bot-originated say/yell requires a nearby real player; bot-only party/raid chat is disabled, with party requiring a real member in the bot's subgroup and raid requiring a real raid member both before queueing and again before delivery. Guild/officer replies require a real member of the corresponding audience. World replies require one online real player anywhere on the server, while custom-channel replies retain the conservative public-count gate. Channel reply actors are not faction-filtered.
+- NPC generation is limited to ambient chatter, qualifying nearby event reactions, and reactions to human or PlayerBot Say. NPCs use Say only, are discovered within `NPC.Distance` of the speaker/anchor (10 yards by default), require a real human within `SayDistance` of the generated NPC (25 yards by default), and must be a static, genuinely Alliance- or Horde-friendly creature; neutral/yellow, hostile, owned, charmed, summoned, pet, guardian, totem, trigger, critter, and temporary creatures are excluded without using service `npc_flags`. When a real player explicitly selects an eligible NPC and speaks in Say, the selected NPC is considered first; other eligible NPCs and PlayerBots within `NPC.Distance` may join using the three `NPC.Targeted*Chance` controls. The 10-yard participant rule is rechecked before delivery.
+- Random chatter uses the normal audience rule for its selected scope: Say/Yell uses 25/100-yard real-human distance by default, party uses the same subgroup, raid and guild/officer use real membership, World uses any online real player, and custom channels retain their audience gate. There is no separate random distance override.
+- A follow-up chance for short PlayerBot/NPC conversations after ambient lines, bot-originated replies in every non-whisper scope, and event lines. The triggering AI is preferred for the next turn when still eligible. Each turn repeats the scope's real-audience rule; `AiPlayerbot.LLMBotToBotChatChance` caps PlayerBot-to-PlayerBot follow-ups, while `AiPlayerbot.LLMRpgAIChatChance` caps any follow-up involving an NPC. Every follow-up pair containing an NPC must be within `NPC.Distance` actor-to-actor and share one real-human observer within `SayDistance`; these checks repeat before delivery. NPC turns remain Say-only, and lone NPCs do not start ambient monologues.
+- Event chatter for deaths, kills, loot, quests, learned spells, duels, levels, guild login/join/leave, plus a public event-adapter method for other scripts. Guild join/leave/login/promotion/demotion and a guilded level-up use Guild and require an online real guild listener. Other events prioritize Party for PlayerBots in the subject's party subgroup, then use local Say for remaining PlayerBot or NPC responders. Every generated actor passes the audience rule for its actual delivery scope before a provider request is built.
 - Lightweight live environment context (map, zone, subzone, dungeon/combat/group state, nearby creatures, equipped items, and optionally backpack items), built only on the world thread and capped by configuration.
 - Fixed worker pool, priority queues, a reserved high-priority section, global rate limit, TTLs, cooldowns, retry/backoff, and stale-request replacement.
 - Proper JSON request creation and response parsing for OpenAI-compatible Chat Completions and OpenAI Responses-style APIs.
@@ -30,7 +31,7 @@ The local `mod-ollama-chat-main` tree was treated strictly as a feature referenc
 - Persistent per-PlayerBot personalities keyed by character GUID, with 1-5 generated traits, optional speaking tone and background, roleplay or fictional real-world-player mode, lazy generation, SQL persistence, and a bounded RAM hot cache.
 - Dynamic current talent specialization and point-split context derived on the world thread; talent changes affect later prompts without rewriting persistent identity.
 - Typing delay compatible with the restored PlayerBots behavior: generation time can be subtracted from the character-based delay.
-- Optional terminal telemetry for per-message details and periodic API-call/result summaries with a bounded recent-message sample.
+- Optional terminal telemetry for one-time per-message details and periodic counters-only API-call/result summaries.
 - GM commands for status, one lightweight global sanity check, explicit generation and ambient tests, pause/resume, restart, and history clearing.
 
 Personality is an additional PlayerBot prompt layer. It does not replace directed chat, random/ambient chatter, world/guild/group delivery, history, Environment, Snapshot, RAG, provider scheduling, or cooldown behavior. NPCs continue to use the shared NPC prompt without PlayerBot personality records. There is still no sentiment-tracking subsystem.
@@ -205,9 +206,9 @@ These legacy key names are read directly from `mod-azeroth-voices.conf`, so an e
 - endpoint, API key, JSON template, generation timeout, and misspelled simultaneous-generation limit;
 - pre/prompt/post/RPG prompts and context size/global scope;
 - response regex/split patterns when `ParserMode = LegacyRegex`;
-- blocked channels and bot-to-bot/RPG chat chances.
+- blocked channels, the bot-to-bot chat chance, and `AiPlayerbot.LLMRpgAIChatChance`. The RPG chance caps NPC reactions to PlayerBot Say and generated follow-ups involving an NPC.
 
-For the safer built-in JSON path, leave `AiPlayerbot.LLMApiJson` blank and keep `AzerothVoices.ParserMode = ProviderJson`. `AiPlayerbot.LLMDefaultPromptsFile` remains intentionally ignored because V0.3 identities are generated, validated, and stored by the module rather than loaded as foreign character-card files.
+For the safer built-in JSON path, leave `AiPlayerbot.LLMApiJson` blank and keep `AzerothVoices.ParserMode = ProviderJson`. When a custom JSON template is used, personality jobs apply their larger bounded output budget through `max_tokens` or `max_output_tokens` so the generated identity is not limited by the shorter dialogue budget. V0.4 identities are generated, validated, and stored by the module rather than loaded as foreign character-card files.
 
 ## Database
 
@@ -231,7 +232,7 @@ mysql -u root -p "$CHARACTER_DB" < \
   modules/mod-azeroth-voices/data/sql/character/20260829_01_azeroth_voices_personality.sql
 ```
 
-Change `mangoscharacters` to the database name from your `CharacterDatabaseInfo` setting. The history migration creates only `azeroth_voices_chat_history` and `azeroth_voices_environment_history`; the second legacy name stores optional Snapshot records. The V0.3 migration creates only `azeroth_voices_bot_personality`. If a requested table is missing, only that storage feature falls back to bounded RAM and dialogue continues.
+Change `mangoscharacters` to the database name from your `CharacterDatabaseInfo` setting. The history migration creates only `azeroth_voices_chat_history` and `azeroth_voices_environment_history`; the second legacy name stores optional Snapshot records. The V0.4 migration creates only `azeroth_voices_bot_personality`. If a requested table is missing, only that storage feature falls back to bounded RAM and dialogue continues.
 
 History/snapshot writes use small transactions through vMaNGOS's database queue. Personality upserts and deletions use the same character-database API on the world thread. Reads happen lazily once per hot-cache key instead of once per message. `.av clearhistory` clears only conversation, surrounding-chat, and snapshot history; it never deletes personality rows.
 
@@ -297,6 +298,8 @@ Retrieval is entirely local and cached—no embeddings, Python, vector database,
 
 ## GM commands
 
+A plain-text reference containing every command is available in [COMMANDS.txt](COMMANDS.txt).
+
 ```text
 .av status
 .av pause
@@ -306,23 +309,23 @@ Retrieval is entirely local and cached—no embeddings, Python, vector database,
 .av chatter [optional topic]
 .av live <exact-bot-name> [optional prompt]
 .av live - [optional prompt]       # choose a nearby eligible actor
-.azerothvoices test
-.azerothvoices personality show <exact-online-bot-name>
-.azerothvoices personality status <exact-online-bot-name>
-.azerothvoices personality regenerate <exact-online-bot-name>
-.azerothvoices personality delete <exact-online-bot-name>
-.azerothvoices personality delete all
+.av test
+.av personality show <exact-online-bot-name>
+.av personality status <exact-online-bot-name>
+.av personality regenerate <exact-online-bot-name>
+.av personality delete <exact-online-bot-name>
+.av personality delete all
 ```
 
-`.azerothvoices test` performs one lightweight, read-only global status check. It reports the loaded/enabled state, API and sanitized endpoint configuration, selected History backend and its already-known availability, loaded RAG file/entry counts, Environment and Snapshot switches, chat readiness, and the current worker count. It does not generate a reply, enqueue a synthetic worker job, create history, modify SQL rows, scan the world, or expose credentials. `.av live` remains the explicit generation-and-delivery test.
+`.av test` performs one lightweight, read-only global status check. It reports the loaded/enabled state, API and sanitized endpoint configuration, selected History backend and its already-known availability, loaded RAG file/entry counts, Environment and Snapshot switches, chat readiness, and the current worker count. It does not generate a reply, enqueue a synthetic worker job, create history, modify SQL rows, scan the world, or expose credentials. `.av live` remains the explicit generation-and-delivery test.
 
 Personality `show`, `status`, `regenerate`, and single-bot `delete` require an exact online AI-controlled PlayerBot name so the command cannot attach identity data to an unrelated character. `status` reports the bounded last generation result for that bot in the current server session, including a sanitized provider, timeout, or JSON-validation error. Regeneration invalidates older queued work and asynchronously creates a replacement, but preserves the current usable personality until the replacement succeeds. Single and `delete all` operations affect only `azeroth_voices_bot_personality` plus its cache, bounded generation status, and pending personality jobs; conversation history, snapshots, Environment, RAG, character records, and PlayerBots data remain untouched. `delete all` is intentionally explicit and destructive.
 
-All commands require the existing vMaNGOS moderator/GM security level. After editing the config, use the core's config reload command and then `.av restart`, or restart `mangosd`. `.av status` and `.azerothvoices test` sanitize the endpoint and never display the API key.
+All commands require the existing vMaNGOS moderator/GM security level. After editing the config, use the core's config reload command and then `.av restart`, or restart `mangosd`. `.av status` and `.av test` sanitize the endpoint and never display the API key.
 
 ## Debug diagnostics
 
-`AzerothVoices.Debug = 1` enables a few concise activity messages, such as ambient chatter queueing, RAG match counts, and successful or discarded reply delivery. There are no debug levels, category framework, request tracing, prompt dumps, or performance profiling. Serious production failures still use normal worldserver error logging. Use `.azerothvoices test` for a private in-game GM summary.
+`AzerothVoices.Debug = 1` enables a few concise activity messages, such as ambient chatter queueing, RAG match counts, and successful or discarded reply delivery. There are no debug levels, category framework, request tracing, prompt dumps, or performance profiling. Serious production failures still use normal worldserver error logging. Use `.av test` for a private in-game GM summary.
 
 ## Event adapter for other modules and scripted NPCs
 
@@ -336,8 +339,12 @@ AzerothVoices::Manager::Instance().HandleEvent(player, "achievement", achievemen
 
 Supported adapter event names are `achievement`, `pet_defeated`, `used_object`,
 `guild_promotion`, `guild_demotion`, `dungeon_completed`,
-`game_event_started`, and `game_event_stopped`. The event-specific chance and
-scope are controlled in `mod-azeroth-voices.conf`.
+`game_event_started`, and `game_event_stopped`. Event-specific chances are
+controlled in `mod-azeroth-voices.conf`. Guild promotion/demotion should be submitted while the
+player still has the target guild, or with the optional fourth `guildId` argument. Guild-scoped
+events require an online real player in that guild. Other events prioritize Party when the
+subject and generated PlayerBot share the party subgroup, then fall back to Say; NPC event
+reactions remain Say-only.
 
 Likewise, direct chat still needs only a `Player*`, a scope, and text. This is the supported extension seam for quest scripts, dungeon modules, world events, and future scripted-NPC systems.
 
@@ -349,25 +356,23 @@ At startup look for:
 [AzerothVoices][INIT] Azeroth Voices initialized: API=enabled, endpoint=..., model=..., history=SQL, ...
 ```
 
-Then run `.av status` and `.azerothvoices test`. For a deliberate bot-delivery test, run `.av live BotName Reply exactly: API OK`. If the provider works but normal chat does not, verify the relevant `Replies.*` switch, chance, channel name and cooldown, and confirm that the target passes `Script_IsAIControlled`.
+Then run `.av status` and `.av test`. For a deliberate bot-delivery test, run `.av live BotName Reply exactly: API OK`. If the provider works but normal chat does not, verify the relevant `Replies.*` switch, chance, channel name and cooldown, and confirm that the target passes `Script_IsAIControlled`.
 
 ### Terminal message and API telemetry
 
 These settings are independent of `AzerothVoices.Debug`. To log each generated
-reply immediately and also print a one-minute summary containing the five most
-recent generated messages, use:
+reply once and print a one-minute counters-only summary, use:
 
 ```ini
 AzerothVoices.Console.GeneratedMessages = 1
 AzerothVoices.Console.ApiCallStats = 1
 AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
-AzerothVoices.Console.RecentMessages = 5
 ```
 
 The summary reports actual HTTP attempts (including retries), successful and failed
-final results, and generated-message count for that interval. Set
-`Console.RecentMessages = 0` to keep the counts without retaining or repeating
-message text. Both text-producing options may expose whispers and chat history
-in the worldserver terminal/logs, so they are disabled by default.
+final results, generated-message count, and aggregate preflight rejection reasons
+for that interval. Telemetry never retains or replays generated text; only
+`Console.GeneratedMessages` prints it. Generated output may expose whispers and
+chat history in the worldserver terminal/logs, so it is disabled by default.
 
 Do not disable certificate verification. If a private gateway uses a private CA, configure `AzerothVoices.CACertFile` with that CA bundle instead.

@@ -19,6 +19,7 @@
 #include <vector>
 
 class Player;
+class WorldObject;
 
 namespace AzerothVoices
 {
@@ -70,7 +71,8 @@ namespace AzerothVoices
 
         void HandleChat(Player* speaker, ChatScope scope, std::string const& message,
                         std::string const& targetName = "", std::string const& channelName = "");
-        void HandleEvent(Player* subject, std::string const& eventName, std::string const& detail = "");
+        void HandleEvent(Player* subject, std::string const& eventName, std::string const& detail = "",
+                         uint32_t guildId = 0);
 
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
@@ -116,23 +118,25 @@ namespace AzerothVoices
             std::string targetName;
             std::string channelName;
             std::string eventName;
+            uint32_t guildId = 0;
         };
 
-        struct TelemetryMessage
+        enum class PreflightReason : uint8_t
         {
-            uint64_t requestId = 0;
-            std::string actorName;
-            std::string actorKind;
-            std::string scope;
-            std::string trigger;
-            std::string speakerName;
-            std::string text;
-            std::string channelName;
-            std::string model;
-            uint64_t actorGuid = 0;
-            int httpStatus = 0;
-            uint32_t elapsedMilliseconds = 0;
-            uint32_t apiAttempts = 0;
+            NoHumanNearby,
+            NoAudience,
+            NpcNeutral,
+            NpcHostile,
+            NpcTemporary,
+            InvalidActor,
+            InvalidScope,
+            Combat,
+            Unavailable,
+            Cooldown,
+            RateLimit,
+            QueueFull,
+            Superseded,
+            Count
         };
         struct PersonalityGenerationRecord
         {
@@ -146,7 +150,20 @@ namespace AzerothVoices
         void DrainIngress();
         void ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                          std::string const& targetName, std::string const& channelName);
-        void ProcessEvent(Player* subject, std::string const& eventName, std::string const& detail);
+        void ProcessEvent(Player* subject, std::string const& eventName, std::string const& detail,
+                          uint32_t guildId);
+        bool QueueDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                           ChatScope scope, std::string const& channelName,
+                           std::string const& trigger, std::string const& message,
+                           RequestPriority priority, bool ambient, bool allowFollowup,
+                           uint32_t conversationDepth = 0);
+        bool PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                               ChatScope scope, std::string const& channelName,
+                               std::string const& trigger, RequestPriority priority,
+                               bool ambient);
+        bool CanEnqueueDialogue(ActorSnapshot const& actor, RequestPriority priority,
+                                bool ambient);
+        void RecordPreflightRejection(PreflightReason reason);
         bool Enqueue(ChatRequest request);
         bool PopRequest(ChatRequest& request);
         void DrainCompletions();
@@ -163,8 +180,10 @@ namespace AzerothVoices
         std::vector<Candidate> CollectCandidates(Player* speaker, ChatScope scope,
                                                   std::string const& targetName,
                                                   std::string const& message,
-                                                  bool ambient, float distanceOverride = 0.0f,
-                                                  uint64_t excludedActor = 0) const;
+                                                  bool ambient, bool allowNpcs,
+                                                  uint64_t excludedActor = 0,
+                                                  uint32_t guildIdOverride = 0,
+                                                  WorldObject const* dispositionTarget = nullptr);
         std::string BuildHistoryContext(ChatRequest const& request);
         std::string BuildSurroundingContext(ChatRequest const& request) const;
         std::string BuildEnvironmentContext(ChatRequest const& request) const;
@@ -257,7 +276,7 @@ namespace AzerothVoices
         uint64_t m_telemetrySuccessfulResults = 0;
         uint64_t m_telemetryFailedResults = 0;
         uint64_t m_telemetryGeneratedMessages = 0;
-        std::deque<TelemetryMessage> m_telemetryRecentMessages;
+        std::array<uint64_t, static_cast<size_t>(PreflightReason::Count)> m_preflightRejections{};
         std::atomic<bool> m_started;
     };
 }

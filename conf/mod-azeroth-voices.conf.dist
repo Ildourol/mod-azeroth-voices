@@ -20,12 +20,10 @@ AzerothVoices.Enable = 1
 AzerothVoices.Debug = 0
 # Logs each cleaned reply with request ID, actor, actor kind, scope, trigger, speaker, HTTP status, generation time, and text; this may expose private chat in server logs. (Default 0.)
 AzerothVoices.Console.GeneratedMessages = 0
-# Logs HTTP-attempt, success, failure, and generated-message totals every configured interval; each retry counts as another API call. (Default 0.)
+# Logs HTTP-attempt, success, failure, generated-message, and preflight-rejection totals every configured interval; each retry counts as another API call. It never repeats generated text. (Default 0.)
 AzerothVoices.Console.ApiCallStats = 0
 # Length of each terminal reporting window. (Integer seconds, minimum 5; default 60.)
 AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
-# Includes the newest N generated messages in each statistics report; 0 reports only counts and retains no message samples. (Integer 0-50; default 5.)
-AzerothVoices.Console.RecentMessages = 5
 
 ###################################################################################################
 # Provider and HTTPS
@@ -105,8 +103,6 @@ AiPlayerbot.LLMRpgPrompt = You are <bot name>, an NPC in <bot subzone>, <bot zon
 AiPlayerbot.LLMContextLength = 4096
 # 0 isolates history by speaker/scope; 1 shares actor-wide history. (Default 0.)
 AiPlayerbot.LLMGlobalContext = 0
-# Accepted for migration diagnostics but intentionally not loaded. (File path; default empty.)
-AiPlayerbot.LLMDefaultPromptsFile =
 # LegacyRegex-only response start matcher. (ECMAScript regex; default below.)
 AiPlayerbot.LLMResponseStartPattern = ("content":\s*")
 # LegacyRegex-only response end matcher. (ECMAScript regex; default below.)
@@ -147,35 +143,63 @@ AzerothVoices.Personality.MaxPromptChars = 700
 
 # Enables direct PlayerBot whisper replies. (Default 1.)
 AzerothVoices.Replies.Whisper = 1
-# Enables nearby PlayerBot and eligible friendly NPC say replies. (Default 1.)
+# Enables PlayerBot Say replies plus eligible NPC ambient/event Say and NPC reactions to human or PlayerBot Say. (Default 1.)
 AzerothVoices.Replies.Say = 1
-# Enables nearby PlayerBot and eligible friendly NPC yell replies. (Default 1.)
+# Enables PlayerBot Yell replies. Azeroth Voices NPCs never use Yell. (Default 1.)
 AzerothVoices.Replies.Yell = 1
 # Enables PlayerBot party-subgroup replies. (Default 1.)
 AzerothVoices.Replies.Party = 1
 # Enables PlayerBot raid replies. (Default 1.)
 AzerothVoices.Replies.Raid = 1
-# Enables guild replies, guild ambient chatter, and guild events. (Default 1.)
+# Enables guild replies, guild ambient chatter, and guild-scoped event chatter. (Default 1.)
 AzerothVoices.Replies.Guild = 1
 # Enables officer-channel replies for suitably ranked bots. (Default 0.)
 AzerothVoices.Replies.Officer = 0
-# Enables replies and ambient/event lines in WorldChannelName. (Default 1.)
+# Enables cross-faction replies and ambient lines in WorldChannelName when the core's two-side channel interaction is enabled. Bot-originated and random World chatter requires one online real player anywhere on the server; it does not require channel-membership proof or proximity. (Default 1.)
 AzerothVoices.Replies.World = 1
-# Enables replies in channels other than WorldChannelName. (Default 0.)
+# Enables cross-faction replies in channels other than WorldChannelName when the core's two-side channel interaction is enabled. When set to 1, bot-originated replies retain the conservative public-count gate because exact individual channel membership is private in this core. (Default 0.)
 AzerothVoices.Replies.CustomChannels = 0
 # Used to classify and deliver world-chat messages. (Channel name; default World.)
 AzerothVoices.WorldChannelName = World
-# Allows alive friendly non-pet/non-totem/non-critter NPC speakers. (Default 1.)
+# Allows eligible static NPCs in ambient chatter, event reactions, and reactions to human or PlayerBot Say. Friendly NPCs are admitted by default; neutral and hostile NPCs require their category switch or entry override below. Pet, summon, guardian, totem, charmed, trigger, critter, and temporary speakers remain rejected. NPC output is Say only. (Default 1.)
 AzerothVoices.NPC.Enable = 1
-# Search distance for eligible NPC speakers. (Decimal yards, minimum 1; default 25.)
-AzerothVoices.NPC.Distance = 25
+# NPC candidate search radius around the local event subject, human/PlayerBot speaker, or random real-player anchor. It is also the maximum actor-to-actor distance for every generated follow-up pair containing an NPC. Both follow-up actors must share one real-human observer within SayDistance. (Decimal yards, minimum 1; default 10.)
+AzerothVoices.NPC.Distance = 10
+# Creature types eligible for generated NPC speech. Defaults to Dragonkin, Demon, Elemental, Giant, Undead, Humanoid, and Mechanical. Entry overrides bypass only this type list; all existing NPC safety, faction, audience, distance, and combat checks still apply. (Comma-separated creature_template.type values 0-11; default 2,3,4,5,6,7,9.)
+AzerothVoices.NPC.AllowedTypes = 2,3,4,5,6,7,9
+# Individual creature_template.entry values allowed to bypass AllowedTypes. ExcludedEntries still takes priority. (Comma-separated entry IDs; default empty.)
+AzerothVoices.NPC.AllowedEntries =
+# Individual creature_template.entry values always rejected from generated NPC speech, even when their type is allowed. (Comma-separated entry IDs; default empty.)
+AzerothVoices.NPC.ExcludedEntries =
+# Allows all neutral NPC entries through the faction gate. This does not bypass the type/entry or existing safety criteria. (Default 0.)
+AzerothVoices.NPC.AllowNeutral = 0
+# Allows all hostile NPC entries through the faction gate. This does not bypass the type/entry or existing safety criteria. Combat suppression still applies. (Default 0.)
+AzerothVoices.NPC.AllowHostile = 0
+# Neutral creature_template.entry values allowed through the faction gate when AllowNeutral is 0. (Comma-separated entry IDs; default empty.)
+AzerothVoices.NPC.AllowedNeutralEntries =
+# Hostile creature_template.entry values allowed through the faction gate when AllowHostile is 0. (Comma-separated entry IDs; default empty.)
+AzerothVoices.NPC.AllowedHostileEntries =
+# The three disposition chances below are an additional probability gate alongside the existing targeted, direct-address, name-mention, overhear, event, random, and follow-up chances. They apply to every eligible NPC-speaking path and never bypass NPC safety, faction, distance, audience, or combat checks.
+# Chance that an otherwise selected NPC friendly toward the current conversational counterpart speaks. (Percentage; default 100.)
+AzerothVoices.NPC.ReplyChance.Friendly = 100
+# Chance that an otherwise selected NPC neutral toward the current conversational counterpart speaks. (Percentage; default 50.)
+AzerothVoices.NPC.ReplyChance.Neutral = 50
+# Chance that an otherwise selected NPC hostile or unfriendly toward the current conversational counterpart speaks. (Percentage; default 25.)
+AzerothVoices.NPC.ReplyChance.Hostile = 25
+# The three target-specific chances below apply only when a real player selects an eligible NPC and speaks in Say. Every participant must remain within NPC.Distance of that player, and every generated NPC therefore retains that same real player as its SayDistance observer.
+# Chance that an eligible NPC explicitly selected by a real player answers that player's Say. The selected NPC is considered before every other responder. (Percentage; default 100.)
+AzerothVoices.NPC.TargetedReplyChance = 100
+# Chance that each other eligible NPC within NPC.Distance joins a real player's selected-NPC Say conversation. (Percentage; default 5.)
+AzerothVoices.NPC.TargetedOtherNPCJoinChance = 5
+# Chance that each PlayerBot within NPC.Distance joins a real player's selected-NPC Say conversation. (Percentage; default 10.)
+AzerothVoices.NPC.TargetedPlayerBotJoinChance = 10
 # Prevents actors currently in combat from being selected. (Default 1.)
 AzerothVoices.DisableRepliesInCombat = 1
 # Maximum responders to one incoming message. (Integer actors, minimum 1; default 2.)
 AzerothVoices.MaxResponders = 2
-# Local say listener/responder distance. (Decimal yards, minimum 1; default 30.)
-AzerothVoices.SayDistance = 30
-# Local yell listener/responder distance. (Decimal yards, minimum SayDistance; default 100.)
+# Local Say listener/responder and real-human observer distance for PlayerBots and NPCs. PlayerBots never count as observers. (Decimal yards, minimum 1; default 25.)
+AzerothVoices.SayDistance = 25
+# Local yell listener/responder distance. Bot-originated yell can trigger AI replies only when a real player is also within this distance. (Decimal yards, minimum SayDistance; default 100.)
 AzerothVoices.YellDistance = 100
 
 # Chance a selected or directly whispered actor answers. (Percentage; default 100.)
@@ -190,19 +214,19 @@ AzerothVoices.PlayerReplyChance.Say = 90
 AzerothVoices.BotReplyChance.Say = 10
 # Bot response chance to a real player in world/custom chat. (Percentage; default 60.)
 AzerothVoices.PlayerReplyChance.Channel = 60
-# Bot response chance to another bot in world/custom chat. (Percentage; default 3.)
+# Bot response chance to another bot in world/custom chat. Bot-originated channel replies also require the module to prove from public core counts that the channel has a real member. (Percentage; default 3.)
 AzerothVoices.BotReplyChance.Channel = 3
 # Bot response chance to a real player in party/raid. (Percentage; default 90.)
 AzerothVoices.PlayerReplyChance.Party = 90
-# Bot response chance to another bot in party/raid. (Percentage; default 25.)
+# Bot response chance to another bot in party/raid. Bot-originated replies also require a real member in the party subgroup or raid. (Percentage; default 25.)
 AzerothVoices.BotReplyChance.Party = 25
 # Bot response chance to a real player in guild/officer chat. (Percentage; default 70.)
 AzerothVoices.PlayerReplyChance.Guild = 70
-# Bot response chance to another bot in guild/officer chat. (Percentage; default 5.)
+# Bot response chance to another bot in guild/officer chat. Bot-originated replies also require a real member with listening rights. (Percentage; default 5.)
 AzerothVoices.BotReplyChance.Guild = 5
-# Global upper cap for all PlayerBot-to-PlayerBot replies. (Percentage; default 10.)
+# Global upper cap for PlayerBot-to-PlayerBot replies. Bot-to-bot whisper is disabled; every other scope requires a real audience. (Percentage; default 10.)
 AiPlayerbot.LLMBotToBotChatChance = 10
-# Global upper cap for NPC replies to PlayerBot messages. (Percentage; default 30.)
+# Upper cap for NPC reactions to PlayerBot Say and for generated follow-ups where either participant is an NPC. These interactions remain in Say and require a real human within SayDistance. (Percentage; default 30.)
 AiPlayerbot.LLMRpgAIChatChance = 30
 # Messages beginning with any listed PlayerBots command or addon prefix are never sent to the provider; add local prefixes as needed. (Comma-separated case-insensitive prefixes; default below.)
 AzerothVoices.CommandBlacklist = .,! ,/,autogear,talents,summon,release,revive,attack,follow,stay,cast,quest,trainer,teleport,addon,DBM,Recount,Questie
@@ -217,13 +241,11 @@ AzerothVoices.Random.Enable = 1
 AzerothVoices.Random.MinimumIntervalSeconds = 90
 # Upper interval bound. (Integer seconds, at least MinimumIntervalSeconds; default 240.)
 AzerothVoices.Random.MaximumIntervalSeconds = 240
-# Local speaker search radius around a real player. (Decimal yards, minimum 1; default 150.)
-AzerothVoices.Random.RealPlayerDistance = 150
-# Chance another actor replies to an ambient generated line. (Percentage; default 15.)
+# Chance another actor replies after ambient chatter, a bot-originated Say/Yell/group/guild/world/custom reaction, or an event line; the corresponding bot-to-bot or RPG interaction cap is then applied. Every follow-up repeats the selected scope's real-audience rule. (Percentage; default 15.)
 AzerothVoices.Random.FollowupChance = 15
-# Ambient chain cap; 1 disables follow-ups. (Integer generated turns, minimum 1; default 2.)
+# Generated conversation chain cap; 1 disables follow-ups. (Integer generated turns, minimum 1; default 2.)
 AzerothVoices.Random.MaximumActors = 2
-# Chooses ambient-chat delivery scopes; a disabled or unavailable group scope safely falls back to say. (Comma-separated say/yell/guild/officer/world/channel; default say,guild,world.)
+# Chooses ambient-chat delivery scopes; a disabled or unavailable group scope safely falls back to Say. Say and Yell use SayDistance and YellDistance, party requires a real player in the bot's subgroup, raid a real raid member, guild/officer a real guild listener, World one online real player, and channel the custom-channel audience gate. (Comma-separated say/yell/party/raid/guild/officer/world/channel; default say,guild,world.)
 AzerothVoices.Random.Scopes = say,guild,world
 # General ambient topic instructions. (Pipe-separated text choices; default below.)
 AzerothVoices.Random.Prompts = Make a casual observation about the current zone.|Complain briefly about leveling or grinding.|Comment on loot, repairs, travel, professions, quests, dungeons, or battlegrounds.|Make a short joke that fits World of Warcraft.|Mention what you want to do next in the game.
@@ -261,15 +283,16 @@ AzerothVoices.Environment.IncludeBackpack = 0
 # duel request/start/win, level-up, login, guild join, and guild leave.
 # Adapter events: achievement, pet_defeated, used_object, guild promotion/demotion,
 # dungeon_completed, and game_event_started/stopped. See README.md for HandleEvent examples.
-# Guild-related events use guild chat when membership is available; game events use World.
+# Guild join/leave/login/promotion/demotion and guilded level-up events use Guild and require an
+# online real guild listener. Other events prioritize Party for PlayerBots in the subject's party
+# subgroup, then use Say for remaining nearby PlayerBot/NPC responders. Say actors require a real
+# human within SayDistance; Party actors require a real human in the same party subgroup.
 
 # Master switch for automatic and adapter event reactions. (Default 1.)
 AzerothVoices.Events.Enable = 1
-# Radius for local-say event responders only. (Decimal yards, minimum 1; default 40.)
-AzerothVoices.Events.RealPlayerDistance = 40
-# Second-stage chance that other actors react to an event. (Percentage; default 25.)
+# Second-stage chance that other actors react after the selected scope's real-audience check passes. (Percentage; default 25.)
 AzerothVoices.Events.ResponderChance = 25
-# Chance an AI PlayerBot comments on its own event. (Percentage; default 5.)
+# Chance an AI PlayerBot comments on its own event through Guild, preferred Party, or fallback Say after the selected scope's audience check passes. (Percentage; default 5.)
 AzerothVoices.Events.SelfCommentChance = 5
 # Maximum other responders to one event. (Integer actors, minimum 1; default 2.)
 AzerothVoices.Events.MaximumResponders = 2
@@ -293,17 +316,17 @@ AzerothVoices.Events.Chance.DuelRequested = 25
 AzerothVoices.Events.Chance.DuelStarted = 20
 # Initial chance for automatic duel-victory chatter. (Percentage; default 35.)
 AzerothVoices.Events.Chance.DuelWon = 35
-# Initial chance for level-up chatter; guild scope if available. (Percentage; default 50.)
+# Initial chance for level-up chatter; a guilded subject requires a real guild listener and uses Guild, otherwise Party is preferred before Say. (Percentage; default 50.)
 AzerothVoices.Events.Chance.LevelUp = 50
-# Initial chance for automatic guild-join chatter. (Percentage; default 60.)
+# Initial chance for automatic Guild chatter on guild join; requires an online real member in that guild. (Percentage; default 60.)
 AzerothVoices.Events.Chance.GuildJoin = 60
-# Initial chance for guild-leave chatter; falls back to say if cleared. (Percentage; default 40.)
+# Initial chance for Guild chatter on guild leave; the old guild id is retained and an online real member must remain in that guild. (Percentage; default 40.)
 AzerothVoices.Events.Chance.GuildLeave = 40
-# Initial chance for automatic guild-login chatter. (Percentage; default 10.)
+# Initial chance for automatic Guild chatter on guild login; requires an online real member in that guild. (Percentage; default 10.)
 AzerothVoices.Events.Chance.GuildLogin = 10
-# Initial chance for adapter-supplied guild promotion. (Percentage; default 50.)
+# Initial chance for adapter-supplied Guild chatter on promotion; requires an online real member in that guild. (Percentage; default 50.)
 AzerothVoices.Events.Chance.GuildPromotion = 50
-# Initial chance for adapter-supplied guild demotion. (Percentage; default 30.)
+# Initial chance for adapter-supplied Guild chatter on demotion; requires an online real member in that guild. (Percentage; default 30.)
 AzerothVoices.Events.Chance.GuildDemotion = 30
 # Initial chance for adapter-supplied achievement chatter. (Percentage; default 60.)
 AzerothVoices.Events.Chance.Achievement = 60
@@ -311,15 +334,15 @@ AzerothVoices.Events.Chance.Achievement = 60
 AzerothVoices.Events.Chance.PetDefeated = 20
 # Initial chance for adapter-supplied object-use chatter. (Percentage; default 10.)
 AzerothVoices.Events.Chance.UsedObject = 10
-# Initial chance for automatic rare-loot guild chatter. (Percentage; default 45.)
+# Initial chance for automatic rare-loot chatter; Party is preferred before Say. (Percentage; default 45.)
 AzerothVoices.Events.Chance.RareItem = 45
-# Initial chance for automatic epic-loot guild chatter. (Percentage; default 75.)
+# Initial chance for automatic epic-loot chatter; Party is preferred before Say. (Percentage; default 75.)
 AzerothVoices.Events.Chance.EpicItem = 75
 # Initial chance for adapter-supplied dungeon completion. (Percentage; default 70.)
 AzerothVoices.Events.Chance.DungeonCompleted = 70
-# Initial chance for adapter game-event start in World. (Percentage; default 50.)
+# Initial chance for adapter game-event start chatter; Party is preferred before Say. (Percentage; default 50.)
 AzerothVoices.Events.Chance.GameEventStarted = 50
-# Initial chance for adapter game-event stop in World. (Percentage; default 30.)
+# Initial chance for adapter game-event stop chatter; Party is preferred before Say. (Percentage; default 30.)
 AzerothVoices.Events.Chance.GameEventStopped = 30
 
 ###################################################################################################

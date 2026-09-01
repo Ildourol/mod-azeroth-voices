@@ -161,7 +161,7 @@ namespace AzerothVoices
                 (action != "show" && action != "status" &&
                  action != "regenerate" && action != "delete"))
             {
-                handler->SendSysMessage("Usage: .azerothvoices personality show/status/regenerate/delete <online-bot> | delete all");
+                handler->SendSysMessage("Usage: .av personality show/status/regenerate/delete <online-bot> | delete all");
                 return;
             }
 
@@ -210,9 +210,8 @@ namespace AzerothVoices
 
             bool CanExecuteCommand(ChatHandler* handler, char const* command, char const* arguments) override
             {
-                bool const longCommand = command && std::strcmp(command, "azerothvoices") == 0;
                 bool const shortCommand = command && std::strcmp(command, "av") == 0;
-                if (!longCommand && !shortCommand)
+                if (!shortCommand)
                     return true;
 
                 bool const console = !handler->GetSession();
@@ -225,14 +224,12 @@ namespace AzerothVoices
 
                 std::string rest = arguments ? arguments : "";
                 std::string subcommand = TakeWord(rest);
-                if (longCommand)
+                if (subcommand == "test")
                 {
-                    if (subcommand == "test" && TakeWord(rest).empty())
+                    if (TakeWord(rest).empty())
                         SendGlobalTest(handler);
-                    else if (subcommand == "personality")
-                        HandlePersonalityCommand(handler, rest);
                     else
-                        handler->SendSysMessage("Usage: .azerothvoices test | personality show/status/regenerate/delete <online-bot> | personality delete all");
+                        handler->SendSysMessage("Usage: .av test");
                     return false;
                 }
 
@@ -324,7 +321,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all");
+                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all");
                 return false;
             }
         };

@@ -63,6 +63,7 @@ namespace AzerothVoices
         std::string className;
         std::string gender;
         std::string faction;
+        std::string disposition;
         std::string guild;
         std::string groupStatus;
         std::string area;
