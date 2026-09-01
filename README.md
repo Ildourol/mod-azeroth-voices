@@ -2,11 +2,9 @@
 
 ![Azeroth Voices](mod-azeroth-voices.jpg)
 
-Current development milestone: **V0.4**.
-
 `mod-azeroth-voices` is a standalone, provider-neutral conversation and ambient-chatter module for TortoiseWoW. It observes PlayerBots through the core's generic AI-control hook, so it does not modify anything under `src/modules/PlayerBots`.
 
-It is inspired by `mod-ollama-chat`, while V0.4's persistent identity methodology is adapted from `mod-llm-chatter`: stable GUID identities, distinct traits, a derived speaking tone, a persistent background, and versioned regeneration. It does not copy either reference project's Python bridge, database polling, detached-thread model, AzerothCore APIs, unrelated chatter/memory systems, or disabled TLS behavior. The module uses the HTTP and JSON libraries already shipped by TortoiseWoW (`cpp-httplib` and `nlohmann/json`) with OpenSSL certificate verification enabled.
+It is inspired by `mod-ollama-chat`, while persistent identity methodology is adapted from `mod-llm-chatter`: stable GUID identities, distinct traits, a derived speaking tone, a persistent background, and versioned regeneration. It does not copy either reference project's Python bridge, database polling, detached-thread model, AzerothCore APIs, unrelated chatter/memory systems, or disabled TLS behavior. The module uses the HTTP and JSON libraries already shipped by TortoiseWoW (`cpp-httplib` and `nlohmann/json`) with OpenSSL certificate verification enabled.
 
 The local `mod-ollama-chat-main` tree was treated strictly as a feature reference. All registration, script hooks, chat delivery, object lookup, configuration loading, CMake discovery, and PlayerBot detection in this module use the APIs and names present in the local `tortoise-wow-playerbots-integration-gh` vMaNGOS fork. No AzerothCore headers, script loaders, configuration sections, database APIs, or playerbot classes are imported.
 
