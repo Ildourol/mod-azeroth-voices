@@ -1,5 +1,6 @@
 #include "AzerothVoicesManager.h"
 #include "AzerothVoicesPersonality.h"
+#include "AzerothVoicesSentiment.h"
 
 #include "Chat.h"
 #include "Player.h"
@@ -133,6 +134,17 @@ namespace AzerothVoices
                 if (!status.personalityDatabaseAvailable)
                     errors = true;
             }
+            if (!status.sentimentEnabled)
+                handler->SendSysMessage("Sentiment: Disabled");
+            else
+            {
+                send("Sentiment: " + std::string(status.sentimentDatabaseAvailable
+                    ? "OK - SQL persistent" : "RAM fallback - SQL table unavailable") +
+                    ", cached=" + std::to_string(status.sentiments) +
+                    ", pending-writes=" + std::to_string(status.sentimentWritesPending));
+                if (!status.sentimentDatabaseAvailable)
+                    errors = true;
+            }
             send(std::string("Chat system: ") + (status.enabled ? "OK" : "Not active"));
             if (status.workers)
                 send("Workers: OK - " + std::to_string(status.workers) + " active");
@@ -203,6 +215,57 @@ namespace AzerothVoices
             handler->SendSysMessage(message.c_str());
         }
 
+        bool ParseSentimentScore(std::string const& value, int32_t& score)
+        {
+            try
+            {
+                size_t consumed = 0;
+                long long const parsed = std::stoll(value, &consumed, 10);
+                if (consumed != value.size() || parsed < SentimentMinimumScore ||
+                    parsed > SentimentMaximumScore)
+                    return false;
+                score = static_cast<int32_t>(parsed);
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+
+        void HandleSentimentCommand(ChatHandler* handler, std::string rest)
+        {
+            std::string const action = TakeWord(rest);
+            std::string const actor = TakeWord(rest);
+            std::string const target = TakeWord(rest);
+            std::string const value = TakeWord(rest);
+            std::string const extra = TakeWord(rest);
+            std::string message;
+
+            if (action == "inspect" && !actor.empty() && !target.empty() &&
+                value.empty() && extra.empty())
+                Manager::Instance().InspectSentiment(actor, target, message);
+            else if (action == "set" && !actor.empty() && !target.empty() &&
+                     !value.empty() && extra.empty())
+            {
+                int32_t score = 0;
+                if (!ParseSentimentScore(value, score))
+                    message = "Sentiment score must be an exact integer from -100 through 100.";
+                else
+                    Manager::Instance().SetSentiment(actor, target, score, message);
+            }
+            else if (action == "reset" && actor == "all" && target.empty() &&
+                     value.empty() && extra.empty())
+                Manager::Instance().ResetAllSentiments(message);
+            else if (action == "reset" && !actor.empty() && !target.empty() &&
+                     value.empty() && extra.empty())
+                Manager::Instance().ResetSentiment(actor, target, message);
+            else
+                message = "Usage: .av sentiment inspect <online-bot> <online-player> | set <online-bot> <online-player> <-100..100> | reset <online-bot> <online-player> | reset all";
+
+            handler->SendSysMessage(message.c_str());
+        }
+
         class AzerothVoicesCommandScript final : public AllCommandScript
         {
         public:
@@ -239,6 +302,12 @@ namespace AzerothVoices
                     return false;
                 }
 
+                if (subcommand == "sentiment")
+                {
+                    HandleSentimentCommand(handler, rest);
+                    return false;
+                }
+
                 if (subcommand.empty() || subcommand == "status")
                 {
                     StatusSnapshot status = Manager::Instance().GetStatus();
@@ -265,6 +334,10 @@ namespace AzerothVoices
                          << ", personality-db=" << (status.personalityDatabaseAvailable ? "available" : "unavailable")
                          << ", personalities=" << status.personalities
                          << ", personality-pending=" << status.personalityGenerationsPending
+                         << ", sentiment=" << (status.sentimentEnabled ? "enabled" : "disabled")
+                         << ", sentiment-db=" << (status.sentimentDatabaseAvailable ? "available" : "unavailable")
+                         << ", sentiments=" << status.sentiments
+                         << ", sentiment-pending=" << status.sentimentWritesPending
                          << ", rag=" << (status.ragEnabled ? "enabled" : "disabled")
                          << ", rag-entries=" << status.ragEntries
                          << ", model=" << status.model
@@ -321,7 +394,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all");
+                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all | sentiment inspect/set/reset <bot> <player> [score] | sentiment reset all");
                 return false;
             }
         };

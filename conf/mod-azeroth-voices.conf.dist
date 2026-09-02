@@ -130,12 +130,51 @@ AzerothVoices.Personality.TraitCount = 3
 AzerothVoices.Personality.GenerateTone = 1
 # Generates missing personalities when a PlayerBot first enters an accepted dialogue request; accepted values 0/1; default 1.
 AzerothVoices.Personality.GenerateOnDemand = 1
+# Uses the persistent PlayerBot personality in random/ambient and generated-follow-up prompts; accepted values 0/1; default 1.
+AzerothVoices.Personality.UseInRandom = 1
+# Uses the persistent PlayerBot personality in automatic and adapter event prompts; accepted values 0/1; default 1.
+AzerothVoices.Personality.UseInEvents = 1
 # Sets the minimum delay after failed generation before the same bot can retry; accepted range 10-86400 seconds; default 300.
 AzerothVoices.Personality.GenerationRetrySeconds = 300
 # Bounds a generated stored background; accepted range 100-1500 characters; default 500.
 AzerothVoices.Personality.MaxBackgroundChars = 500
 # Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 700.
 AzerothVoices.Personality.MaxPromptChars = 700
+
+###################################################################################################
+# PlayerBot-to-real-player sentiment
+###################################################################################################
+#
+# Sentiment is one directional: an AI-controlled PlayerBot actor toward one online real-player
+# target. NPC actors, NPC targets, PlayerBot targets, and PlayerBot-to-PlayerBot pairs are rejected.
+# The model sees only the C++-derived tier; GMs can inspect the exact -100..100 score. Dialogue
+# piggybacks one small hidden delta on the existing provider response, so no second API call is made.
+# A valid delta is applied only after the first generated line is delivered successfully.
+
+# Enables bounded sentiment context, updates, lazy decay, cache, and persistence; accepted values 0/1; default 1.
+AzerothVoices.Sentiment.Enable = 1
+# Uses the anchor real player's relationship tier in random/ambient prompts. Random lines do not change the score; accepted values 0/1; default 1.
+AzerothVoices.Sentiment.UseInRandom = 1
+# Uses the real event subject's relationship tier and permits the bounded event delta in event prompts; accepted values 0/1; default 1.
+AzerothVoices.Sentiment.UseInEvents = 1
+# Hard maximum magnitude for a model-reported ordinary-conversation change; accepted range 0-2; default 2. Zero keeps tier context but disables dialogue changes.
+AzerothVoices.Sentiment.ConversationMaximumDelta = 2
+# Hard maximum magnitude reserved for verified automatic/adapter gameplay-event reactions; accepted range 0-3; default 3. Zero disables event changes.
+AzerothVoices.Sentiment.MajorEventMaximumDelta = 3
+# Full inactive days before lazy decay can begin; accepted range 0-365; default 7. No background sweep is performed.
+AzerothVoices.Sentiment.InactivityGraceDays = 7
+# Positive points removed per full inactive day after the grace period; accepted range 0-100; default 1.
+AzerothVoices.Sentiment.PositiveDecayPerDay = 1
+# Negative points moved toward neutral per full inactive day after the grace period; accepted range 0-100; default 2, so grudges fade faster than friendship.
+AzerothVoices.Sentiment.NegativeDecayPerDay = 2
+# Maximum lazily loaded relationship pairs in the world-thread RAM hot cache; accepted range 1-100000; default 4096.
+AzerothVoices.Sentiment.CacheMaximumEntries = 4096
+# Maximum distinct dirty relationship pairs waiting for SQL; accepted range 1-100000; default 1024. Repeated changes to one pair are coalesced.
+AzerothVoices.Sentiment.PendingWriteMaximum = 1024
+# Maximum delay before dirty sentiment upserts are queued; accepted range 1-3600 seconds; default 5.
+AzerothVoices.Sentiment.DatabaseFlushSeconds = 5
+# Distinct dirty pairs queued per normal flush; accepted range 1-PendingWriteMaximum; default 50, clamped to PendingWriteMaximum when that cap is lower.
+AzerothVoices.Sentiment.DatabaseFlushBatchSize = 50
 
 ###################################################################################################
 # Chat scopes, NPCs, distances, and response selection
@@ -230,39 +269,6 @@ AiPlayerbot.LLMBotToBotChatChance = 10
 AiPlayerbot.LLMRpgAIChatChance = 30
 # Messages beginning with any listed PlayerBots command or addon prefix are never sent to the provider; add local prefixes as needed. (Comma-separated case-insensitive prefixes; default below.)
 AzerothVoices.CommandBlacklist = .,! ,/,autogear,talents,summon,release,revive,attack,follow,stay,cast,quest,trainer,teleport,addon,DBM,Recount,Questie
-
-###################################################################################################
-# Natural-language PlayerBot commands (WoW Legends single-call method)
-###################################################################################################
-
-# Lets a real master speak naturally to owned, grouped PlayerBots. One normal dialogue request
-# returns both the in-character reply and any native actions. NPCs are never command recipients.
-# AiPlayerbot.CommandPrefix must also be non-empty in the PlayerBots configuration. (Default 0.)
-AzerothVoices.NaturalCommands.Enable = 0
-
-# Enables WoW Legends-style exact phrase handling for a small set such as "follow me" and
-# "stay here". These unambiguous phrases execute locally with no provider call. (Default 1.)
-AzerothVoices.NaturalCommands.LocalFastPath.Enable = 1
-
-# Allowed native chat inputs. Presets may be combined with individual inputs, comma-separated;
-# duplicates are removed. light = 20 common inputs, medium = 72 practical inputs, heavy = all
-# 131 permitted inputs. The six administrative/debug inputs are never available. (Default medium.)
-AzerothVoices.NaturalCommands.AllowedActions = medium
-
-# Sorts the allowed set against the current message and sends only the most relevant actions to
-# the model. This changes prompt size only; it never executes an action by itself. (Default 1.)
-AzerothVoices.NaturalCommands.DynamicShortlist.Enable = 1
-
-# Maximum allowed actions placed in a dynamic prompt, capped at the resolved allow-list size and
-# at the 131-input registry. Ignored when DynamicShortlist.Enable is 0. (Default 20.)
-AzerothVoices.NaturalCommands.ShortlistMaximum = 20
-
-# Maximum sequential native actions accepted from one provider response. (Integer 1-10; default 1.)
-AzerothVoices.NaturalCommands.MaximumActionsPerMessage = 1
-
-# Maximum explicitly named or group-addressed owned PlayerBots receiving the same action sequence.
-# The first recipient supplies the single in-character reply. (Integer 1-40; default 1.)
-AzerothVoices.NaturalCommands.MaximumRecipients = 1
 
 ###################################################################################################
 # Random nearby, guild, and world chatter

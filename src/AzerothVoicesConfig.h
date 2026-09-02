@@ -62,9 +62,24 @@ namespace AzerothVoices
         uint32_t personalityTraitCount = 3;
         bool personalityGenerateTone = true;
         bool personalityGenerateOnDemand = true;
+        bool personalityUseInRandom = true;
+        bool personalityUseInEvents = true;
         uint32_t personalityGenerationRetrySeconds = 300;
         uint32_t personalityMaxBackgroundCharacters = 500;
         uint32_t personalityMaxPromptCharacters = 700;
+
+        bool sentimentEnabled = true;
+        bool sentimentUseInRandom = true;
+        bool sentimentUseInEvents = true;
+        uint32_t sentimentConversationMaximumDelta = 2;
+        uint32_t sentimentMajorEventMaximumDelta = 3;
+        uint32_t sentimentInactivityGraceDays = 7;
+        uint32_t sentimentPositiveDecayPerDay = 1;
+        uint32_t sentimentNegativeDecayPerDay = 2;
+        uint32_t sentimentCacheMaximumEntries = 4096;
+        uint32_t sentimentPendingWriteMaximum = 1024;
+        uint32_t sentimentDatabaseFlushSeconds = 5;
+        uint32_t sentimentDatabaseFlushBatchSize = 50;
 
         bool whisperReplies = true;
         bool sayReplies = true;
@@ -109,14 +124,6 @@ namespace AzerothVoices
         uint32_t rpgAiChatChance = 30;
         std::string worldChannelName = "World";
         std::vector<std::string> commandBlacklist;
-
-        bool naturalCommandsEnabled = false;
-        bool naturalCommandsLocalFastPath = true;
-        bool naturalCommandsDynamicShortlist = true;
-        uint32_t naturalCommandsShortlistMaximum = 20;
-        uint32_t naturalCommandsMaximumActions = 1;
-        uint32_t naturalCommandsMaximumRecipients = 1;
-        std::vector<std::string> naturalCommandsAllowedActions;
 
         bool randomChatterEnabled = true;
         uint32_t randomMinimumIntervalSeconds = 90;

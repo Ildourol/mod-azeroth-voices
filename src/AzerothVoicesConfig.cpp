@@ -1,7 +1,5 @@
 #include "AzerothVoicesConfig.h"
 
-#include "AzerothVoicesNaturalCommands.h"
-
 #include "Config/Config.h"
 #include "Log.h"
 
@@ -169,12 +167,42 @@ namespace AzerothVoices
         c.personalityGenerateTone = Bounded("AzerothVoices.Personality.GenerateTone", 1, 0, 1) != 0;
         c.personalityGenerateOnDemand = Bounded(
             "AzerothVoices.Personality.GenerateOnDemand", 1, 0, 1) != 0;
+        c.personalityUseInRandom = Bounded(
+            "AzerothVoices.Personality.UseInRandom", 1, 0, 1) != 0;
+        c.personalityUseInEvents = Bounded(
+            "AzerothVoices.Personality.UseInEvents", 1, 0, 1) != 0;
         c.personalityGenerationRetrySeconds = Bounded(
             "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
         c.personalityMaxBackgroundCharacters = Bounded(
             "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
         c.personalityMaxPromptCharacters = Bounded(
             "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
+
+        c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 1, 0, 1) != 0;
+        c.sentimentUseInRandom = Bounded(
+            "AzerothVoices.Sentiment.UseInRandom", 1, 0, 1) != 0;
+        c.sentimentUseInEvents = Bounded(
+            "AzerothVoices.Sentiment.UseInEvents", 1, 0, 1) != 0;
+        c.sentimentConversationMaximumDelta = Bounded(
+            "AzerothVoices.Sentiment.ConversationMaximumDelta", 2, 0, 2);
+        c.sentimentMajorEventMaximumDelta = Bounded(
+            "AzerothVoices.Sentiment.MajorEventMaximumDelta", 3, 0, 3);
+        c.sentimentInactivityGraceDays = Bounded(
+            "AzerothVoices.Sentiment.InactivityGraceDays", 7, 0, 365);
+        c.sentimentPositiveDecayPerDay = Bounded(
+            "AzerothVoices.Sentiment.PositiveDecayPerDay", 1, 0, 100);
+        c.sentimentNegativeDecayPerDay = Bounded(
+            "AzerothVoices.Sentiment.NegativeDecayPerDay", 2, 0, 100);
+        c.sentimentCacheMaximumEntries = Bounded(
+            "AzerothVoices.Sentiment.CacheMaximumEntries", 4096, 1, 100000);
+        c.sentimentPendingWriteMaximum = Bounded(
+            "AzerothVoices.Sentiment.PendingWriteMaximum", 1024, 1, 100000);
+        c.sentimentDatabaseFlushSeconds = Bounded(
+            "AzerothVoices.Sentiment.DatabaseFlushSeconds", 5, 1, 3600);
+        uint32 const sentimentDefaultFlushBatchSize = std::min<uint32>(50, c.sentimentPendingWriteMaximum);
+        c.sentimentDatabaseFlushBatchSize = Bounded(
+            "AzerothVoices.Sentiment.DatabaseFlushBatchSize", sentimentDefaultFlushBatchSize, 1,
+            c.sentimentPendingWriteMaximum);
 
         c.whisperReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Whisper", true);
         c.sayReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Say", true);
@@ -221,26 +249,6 @@ namespace AzerothVoices
         c.worldChannelName = Trim(sConfig.GetStringDefault("AzerothVoices.WorldChannelName", "World"));
         c.commandBlacklist = Split(sConfig.GetStringDefault("AzerothVoices.CommandBlacklist",
             ".,!,/,#,$,autogear,talents,summon,release,revive,attack,follow,stay,cast,quest,trainer,teleport,addon,DBM,Recount,Questie"), ',');
-
-        c.naturalCommandsEnabled = sConfig.GetBoolDefault(
-            "AzerothVoices.NaturalCommands.Enable", false);
-        c.naturalCommandsLocalFastPath = sConfig.GetBoolDefault(
-            "AzerothVoices.NaturalCommands.LocalFastPath.Enable", true);
-        c.naturalCommandsDynamicShortlist = sConfig.GetBoolDefault(
-            "AzerothVoices.NaturalCommands.DynamicShortlist.Enable", true);
-        c.naturalCommandsShortlistMaximum = std::min<uint32_t>(131, Positive(
-            "AzerothVoices.NaturalCommands.ShortlistMaximum", 20, 1));
-        c.naturalCommandsMaximumActions = Bounded(
-            "AzerothVoices.NaturalCommands.MaximumActionsPerMessage", 1, 1, 10);
-        c.naturalCommandsMaximumRecipients = Bounded(
-            "AzerothVoices.NaturalCommands.MaximumRecipients", 1, 1, 40);
-        std::vector<std::string> invalidNaturalActions;
-        c.naturalCommandsAllowedActions = NaturalCommands::ResolveAllowedActions(
-            sConfig.GetStringDefault("AzerothVoices.NaturalCommands.AllowedActions", "medium"),
-            invalidNaturalActions);
-        for (std::string const& action : invalidNaturalActions)
-            sLog.outError("[AzerothVoices][CONFIG] NaturalCommands.AllowedActions contains unknown or permanently forbidden input '%s'; ignoring it.",
-                action.c_str());
 
         c.randomChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.Random.Enable", true);
         c.randomMinimumIntervalSeconds = Positive("AzerothVoices.Random.MinimumIntervalSeconds", 90, 5);
