@@ -2,6 +2,7 @@
 
 #include "AzerothVoicesPersonality.h"
 #include "AzerothVoicesProvider.h"
+#include "AzerothVoicesSentiment.h"
 
 #include "Cell.h"
 #include "CellImpl.h"
@@ -72,6 +73,8 @@ namespace AzerothVoices
         namespace fs = std::filesystem;
         using Json = nlohmann::json;
         constexpr size_t MaximumPersonalityCacheEntries = 2048;
+        constexpr uint64_t SecondsPerDay = 24 * 60 * 60;
+        constexpr uint32_t SentimentNeutralRetentionDays = 90;
 
         uint64_t UnixNow()
         {
@@ -100,6 +103,41 @@ namespace AzerothVoices
         {
             return player && player->IsInWorld() && player->GetSession() &&
                 !Script_IsAIControlled(player);
+        }
+
+        bool IsDirectSentimentConversation(Player const* actor, Player const* target,
+                                           ChatScope scope, std::string const& message)
+        {
+            if (!actor || !actor->IsInWorld() || !Script_IsAIControlled(actor) ||
+                !IsOnlineRealPlayer(target))
+                return false;
+
+            if (scope == ChatScope::Whisper)
+                return true;
+
+            bool const named = IsExplicitPlayerBotNameMention(message, actor->GetName());
+            if (scope == ChatScope::Say || scope == ChatScope::World)
+                return named;
+            if (scope != ChatScope::Party)
+                return false;
+
+            Group const* group = target->GetGroup();
+            if (!group || actor->GetGroup() != group || !group->SameSubGroup(target, actor))
+                return false;
+
+            uint32_t playerBotsInSubgroup = 0;
+            uint8_t const subgroup = group->GetMemberGroup(target->GetObjectGuid());
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                if (slot.group != subgroup)
+                    continue;
+                Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                if (!member || !member->IsInWorld() || !Script_IsAIControlled(member))
+                    continue;
+                if (++playerBotsInSubgroup > 1)
+                    break;
+            }
+            return playerBotsInSubgroup == 1 || named;
         }
 
         Player* FindOnlineRealPlayer()
@@ -279,21 +317,13 @@ namespace AzerothVoices
                 !creature->HasStaticDBSpawnData())
                 return NpcEligibilityResult::Temporary;
 
-            uint32_t const entry = creature->GetEntry();
-            if (config.npcExcludedEntries.count(entry))
-                return NpcEligibilityResult::Filtered;
-            if (!config.npcAllowedEntries.count(entry) &&
-                !config.npcAllowedTypes.count(creature->GetCreatureInfo()->type))
+            if (!config.npcAllowedTypes.count(creature->GetCreatureInfo()->type))
                 return NpcEligibilityResult::Filtered;
 
             ReputationRank const reaction = NpcPlayableFactionReaction(creature);
-            if (reaction == REP_NEUTRAL)
-            {
-                if (!config.npcAllowNeutral && !config.npcAllowedNeutralEntries.count(entry))
-                    return NpcEligibilityResult::Neutral;
-            }
-            else if (reaction < REP_FRIENDLY && !config.npcAllowHostile &&
-                     !config.npcAllowedHostileEntries.count(entry))
+            if (reaction == REP_NEUTRAL && !config.npcAllowNeutralAndHostile)
+                return NpcEligibilityResult::Neutral;
+            if (reaction < REP_NEUTRAL && !config.npcAllowNeutralAndHostile)
                 return NpcEligibilityResult::Hostile;
             if (!HasNearbyRealPlayer(creature, observerDistance))
                 return NpcEligibilityResult::NoHumanNearby;
@@ -1084,6 +1114,8 @@ namespace AzerothVoices
         m_preflightRejections.fill(0);
         m_nextHistoryPrune = Clock::now() + std::chrono::minutes(1);
         m_nextDatabaseFlush = Clock::now() + std::chrono::seconds(m_config->historyDatabaseFlushSeconds);
+        m_nextSentimentDatabaseFlush = Clock::now() +
+            std::chrono::seconds(m_config->sentimentDatabaseFlushSeconds);
         m_nextDatabaseCleanup = Clock::now() + std::chrono::hours(1);
         for (uint32_t i = 0; i < m_config->workerThreads; ++i)
             m_workers.emplace_back(&Manager::WorkerLoop, this);
@@ -1102,7 +1134,10 @@ namespace AzerothVoices
     void Manager::Stop()
     {
         if (m_config)
+        {
             FlushDatabaseWrites(true);
+            FlushSentimentWrites(true);
+        }
         m_started = false;
         m_stopping = true;
         m_queueReady.notify_all();
@@ -1135,18 +1170,23 @@ namespace AzerothVoices
         m_snapshotHistory.clear();
         m_personalities.clear();
         m_personalityCacheOrder.clear();
+        m_sentiments.clear();
+        m_sentimentCacheOrder.clear();
         m_databaseLoadedHistoryKeys.clear();
         m_databaseLoadedSnapshotKeys.clear();
         m_databaseLoadedPersonalityGuids.clear();
+        m_databaseLoadedSentimentPairs.clear();
         m_pendingPersonalityRequests.clear();
         m_personalityRetryAfter.clear();
         m_personalityGenerationStatus.clear();
         m_personalityGenerationStatusOrder.clear();
         m_pendingHistoryWrites.clear();
         m_pendingSnapshotWrites.clear();
+        m_pendingSentimentWrites.clear();
         m_historyDatabaseAvailable = false;
         m_snapshotDatabaseAvailable = false;
         m_personalityDatabaseAvailable = false;
+        m_sentimentDatabaseAvailable = false;
         m_telemetryApiCalls = 0;
         m_telemetrySuccessfulResults = 0;
         m_telemetryFailedResults = 0;
@@ -1164,12 +1204,15 @@ namespace AzerothVoices
         ReportTelemetry();
         DeliverScheduled();
         FlushDatabaseWrites();
+        FlushSentimentWrites();
         if (Clock::now() >= m_nextHistoryPrune)
         {
             PruneHistory();
             m_nextHistoryPrune = Clock::now() + std::chrono::minutes(1);
         }
-        if ((m_historyDatabaseAvailable || m_snapshotDatabaseAvailable) && Clock::now() >= m_nextDatabaseCleanup)
+        if ((m_historyDatabaseAvailable || m_snapshotDatabaseAvailable ||
+             (m_config->sentimentEnabled && m_sentimentDatabaseAvailable)) &&
+            Clock::now() >= m_nextDatabaseCleanup)
         {
             CleanupDatabase();
             m_nextDatabaseCleanup = Clock::now() + std::chrono::hours(1);
@@ -1595,7 +1638,11 @@ namespace AzerothVoices
         request.id = m_nextRequestId++;
         request.priority = priority;
         request.actor = actor;
-        if (!m_config->personalityEnabled)
+        bool const eventTrigger = trigger.compare(0, 6, "event:") == 0;
+        bool const usePersonality = m_config->personalityEnabled &&
+            (!ambient || m_config->personalityUseInRandom) &&
+            (!eventTrigger || m_config->personalityUseInEvents);
+        if (!usePersonality)
             request.actor.talentBuild.clear();
         request.speaker = speaker;
         request.scope = scope;
@@ -1607,7 +1654,7 @@ namespace AzerothVoices
         request.historyKey = HistoryKey(*m_config, actor, speaker, scope, channelName);
         request.scopeKey = ScopeKey(scope, channelName, actor, speaker);
 
-        if (actor.kind == ActorKind::PlayerBot && m_config->personalityEnabled)
+        if (actor.kind == ActorKind::PlayerBot && usePersonality)
         {
             BotPersonality personality;
             if (LoadPersonality(actor, personality))
@@ -1623,6 +1670,30 @@ namespace AzerothVoices
                 auto retry = m_personalityRetryAfter.find(actor.guid);
                 request.personalityGenerationNeeded = retry == m_personalityRetryAfter.end() ||
                     retry->second <= Clock::now();
+            }
+        }
+
+        if (m_config->sentimentEnabled && actor.kind == ActorKind::PlayerBot &&
+            trigger != "gm-test")
+        {
+            Player* sentimentActor = ObjectAccessor::FindPlayer(ObjectGuid(actor.guid));
+            Player* target = ObjectAccessor::FindPlayer(ObjectGuid(speaker.guid));
+            bool const directConversation = !ambient && !eventTrigger && !speaker.isBot &&
+                IsDirectSentimentConversation(sentimentActor, target, scope, message);
+            bool const readOnlyContext = (ambient && m_config->sentimentUseInRandom) ||
+                (eventTrigger && m_config->sentimentUseInEvents);
+            if (IsOnlineRealPlayer(target) && (directConversation || readOnlyContext))
+            {
+                SentimentKey const key { actor.guid, target->GetObjectGuid().GetRawValue() };
+                SentimentRecord sentiment;
+                LoadSentiment(key, sentiment);
+                request.sentiment = sentiment;
+                request.sentimentTargetName = target->GetName();
+                request.sentimentTracked = true;
+                request.sentimentDeltaLimit = directConversation
+                    ? m_config->sentimentConversationMaximumDelta : 0;
+                request.sentimentBlock = BuildSentimentPromptBlock(
+                    request.sentimentTargetName, sentiment.score, request.sentimentDeltaLimit);
             }
         }
 
@@ -1665,7 +1736,9 @@ namespace AzerothVoices
         request.userPrompt = Expand(request.userPrompt, request);
         if (actor.kind == ActorKind::PlayerBot && !request.personalityBlock.empty() && !personalityPlaceholder)
             request.systemPrompt += "\n" + request.personalityBlock;
-        if (m_config->personalityEnabled && actor.kind == ActorKind::PlayerBot &&
+        if (!request.sentimentBlock.empty())
+            request.systemPrompt += "\n" + request.sentimentBlock;
+        if (usePersonality && actor.kind == ActorKind::PlayerBot &&
             !request.actor.talentBuild.empty() && !specializationPlaceholder)
             request.systemPrompt += "\nCurrent talent specialization: " + request.actor.talentBuild + '.';
         std::string const currentEnvironment = BuildEnvironmentContext(request);
@@ -1684,8 +1757,9 @@ namespace AzerothVoices
 
         // Allocate the fixed context budget by importance. The final ordering
         // keeps the authoritative live snapshot closest to the new user turn.
-        size_t remaining = m_config->contextLength > request.personalityBlock.size()
-            ? m_config->contextLength - request.personalityBlock.size() : 0;
+        size_t const fixedContext = request.personalityBlock.size() + request.sentimentBlock.size();
+        size_t remaining = m_config->contextLength > fixedContext
+            ? m_config->contextLength - fixedContext : 0;
         auto reserveHead = [&](std::string const& value) {
             std::string selected = HeadBounded(value, remaining);
             remaining -= selected.size();
@@ -1729,7 +1803,6 @@ namespace AzerothVoices
         bool const speakerIsBot = Script_IsAIControlled(speaker);
         ObjectGuid const selected = speaker->GetSelectionGuid();
         std::string const targetLower = Lower(targetName);
-        std::string const messageLower = Lower(message);
         float const nearbyDistance = scope == ChatScope::Yell
             ? m_config->yellDistance : m_config->sayDistance;
         WorldObject const* npcDispositionTarget = dispositionTarget && dispositionTarget->IsInWorld() &&
@@ -1757,7 +1830,7 @@ namespace AzerothVoices
         auto chanceFor = [&](std::string const& actorName, ObjectGuid actorGuid, bool npc) -> std::pair<uint32_t, int>
         {
             bool const direct = scope == ChatScope::Whisper || (!selected.IsEmpty() && selected == actorGuid);
-            bool const mentioned = !actorName.empty() && messageLower.find(Lower(actorName)) != std::string::npos;
+            bool const mentioned = IsExplicitPlayerBotNameMention(message, actorName);
             if (ambient)
                 return { 100, 10 };
             if (targetedNpcConversation)
@@ -2740,6 +2813,339 @@ namespace AzerothVoices
         return true;
     }
 
+    void Manager::CacheSentiment(SentimentRecord sentiment)
+    {
+        if (!m_config || !sentiment.key.actorGuid || !sentiment.key.targetGuid)
+            return;
+
+        SentimentKey const key = sentiment.key;
+        m_sentimentCacheOrder.erase(std::remove(m_sentimentCacheOrder.begin(),
+            m_sentimentCacheOrder.end(), key), m_sentimentCacheOrder.end());
+        m_sentimentCacheOrder.push_back(key);
+        m_sentiments[key] = std::move(sentiment);
+        while (m_sentiments.size() > m_config->sentimentCacheMaximumEntries &&
+               !m_sentimentCacheOrder.empty())
+        {
+            SentimentKey const expired = m_sentimentCacheOrder.front();
+            m_sentimentCacheOrder.pop_front();
+            m_sentiments.erase(expired);
+            // A dirty entry remains authoritative in m_pendingSentimentWrites.
+            // Once that bounded write is queued, a later cache miss must be
+            // allowed to read SQL again instead of being mistaken for a known
+            // neutral/missing pair. This also keeps the lazy-load marker set
+            // bounded by the hot cache rather than by lifetime traffic.
+            m_databaseLoadedSentimentPairs.erase(expired);
+        }
+    }
+
+    bool Manager::ApplySentimentDecay(SentimentRecord& sentiment)
+    {
+        if (!m_config || !sentiment.exists || !sentiment.score ||
+            (!m_config->sentimentPositiveDecayPerDay &&
+             !m_config->sentimentNegativeDecayPerDay))
+            return false;
+
+        uint64_t const now = UnixNow();
+        uint64_t const graceEnd = sentiment.lastInteractionUnix +
+            static_cast<uint64_t>(m_config->sentimentInactivityGraceDays) * SecondsPerDay;
+        uint64_t const decayBase = std::max(sentiment.lastDecayUnix, graceEnd);
+        if (!decayBase || now <= decayBase)
+            return false;
+
+        uint64_t const elapsedDays = (now - decayBase) / SecondsPerDay;
+        if (!elapsedDays)
+            return false;
+
+        uint32_t const rate = sentiment.score > 0
+            ? m_config->sentimentPositiveDecayPerDay
+            : m_config->sentimentNegativeDecayPerDay;
+        if (!rate)
+            return false;
+
+        int64_t const movement = static_cast<int64_t>(elapsedDays) * rate;
+        int32_t const previous = sentiment.score;
+        if (sentiment.score > 0)
+            sentiment.score = static_cast<int32_t>(std::max<int64_t>(0,
+                static_cast<int64_t>(sentiment.score) - movement));
+        else
+            sentiment.score = static_cast<int32_t>(std::min<int64_t>(0,
+                static_cast<int64_t>(sentiment.score) + movement));
+        sentiment.lastDecayUnix = decayBase + elapsedDays * SecondsPerDay;
+        sentiment.updatedUnix = now;
+        return sentiment.score != previous;
+    }
+
+    bool Manager::LoadSentiment(SentimentKey const& key, SentimentRecord& sentiment)
+    {
+        if (!key.actorGuid || !key.targetGuid)
+            return false;
+
+        auto dirty = m_pendingSentimentWrites.find(key);
+        if (dirty != m_pendingSentimentWrites.end())
+            sentiment = dirty->second;
+        else
+        {
+            auto cached = m_sentiments.find(key);
+            if (cached != m_sentiments.end())
+                sentiment = cached->second;
+            else
+            {
+                sentiment = SentimentRecord();
+                sentiment.key = key;
+                if (m_sentimentDatabaseAvailable &&
+                    !m_databaseLoadedSentimentPairs.count(key))
+                {
+                    m_databaseLoadedSentimentPairs.insert(key);
+                    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+                        "SELECT `score`,UNIX_TIMESTAMP(`created_at`),"
+                        "UNIX_TIMESTAMP(`updated_at`),UNIX_TIMESTAMP(`last_interaction_at`),"
+                        "UNIX_TIMESTAMP(`last_decay_at`) FROM `azeroth_voices_sentiment` "
+                        "WHERE `actor_guid`='%llu' AND `target_guid`='%llu' LIMIT 1",
+                        static_cast<unsigned long long>(key.actorGuid),
+                        static_cast<unsigned long long>(key.targetGuid)));
+                    if (result)
+                    {
+                        Field* fields = result->Fetch();
+                        sentiment.score = ClampSentimentScore(fields[0].GetInt32());
+                        sentiment.createdUnix = fields[1].GetUInt64();
+                        sentiment.updatedUnix = fields[2].GetUInt64();
+                        sentiment.lastInteractionUnix = fields[3].GetUInt64();
+                        sentiment.lastDecayUnix = fields[4].GetUInt64();
+                        sentiment.exists = true;
+                    }
+                }
+            }
+        }
+
+        if (ApplySentimentDecay(sentiment))
+            QueueSentimentWrite(sentiment);
+        CacheSentiment(sentiment);
+        return sentiment.exists;
+    }
+
+    void Manager::QueueSentimentWrite(SentimentRecord const& sentiment)
+    {
+        if (!m_config || !m_sentimentDatabaseAvailable || !sentiment.exists)
+            return;
+
+        if (!m_pendingSentimentWrites.count(sentiment.key) &&
+            m_pendingSentimentWrites.size() >= m_config->sentimentPendingWriteMaximum)
+            FlushSentimentWrites(false, true);
+        if (!m_sentimentDatabaseAvailable)
+            return;
+        m_pendingSentimentWrites[sentiment.key] = sentiment;
+    }
+
+    void Manager::ApplyDeliveredSentiment(ChatRequest const& request)
+    {
+        if (!m_config || !m_config->sentimentEnabled || !request.sentimentTracked ||
+            !request.sentimentDeltaAvailable || request.actor.kind != ActorKind::PlayerBot)
+            return;
+
+        Player* actor = ObjectAccessor::FindPlayer(ObjectGuid(request.sentiment.key.actorGuid));
+        Player* target = ObjectAccessor::FindPlayer(ObjectGuid(request.sentiment.key.targetGuid));
+        if (!actor || !actor->IsInWorld() || !Script_IsAIControlled(actor) ||
+            !IsOnlineRealPlayer(target) || actor->GetName() != request.actor.name ||
+            target->GetName() != request.sentimentTargetName)
+            return;
+
+        SentimentRecord sentiment;
+        LoadSentiment(request.sentiment.key, sentiment);
+        uint64_t const now = UnixNow();
+        sentiment.key = request.sentiment.key;
+        sentiment.score = ClampSentimentScore(sentiment.score + request.sentimentDelta);
+        sentiment.createdUnix = sentiment.createdUnix ? sentiment.createdUnix : now;
+        sentiment.updatedUnix = now;
+        sentiment.lastInteractionUnix = now;
+        sentiment.lastDecayUnix = now;
+        sentiment.exists = true;
+        CacheSentiment(sentiment);
+        QueueSentimentWrite(sentiment);
+    }
+
+    bool Manager::ResolveSentimentPair(std::string const& actorName,
+                                       std::string const& targetName,
+                                       SentimentKey& key,
+                                       std::string& resolvedActorName,
+                                       std::string& resolvedTargetName,
+                                       std::string& message) const
+    {
+        if (actorName.empty() || targetName.empty())
+        {
+            message = "Exact online PlayerBot and real-player names are required.";
+            return false;
+        }
+
+        Player* actor = ObjectAccessor::FindPlayerByName(actorName.c_str());
+        if (!actor || !actor->IsInWorld() || !Script_IsAIControlled(actor) ||
+            actor->GetName() != actorName)
+        {
+            message = "No online AI-controlled PlayerBot with that exact name was found.";
+            return false;
+        }
+        Player* target = ObjectAccessor::FindPlayerByName(targetName.c_str());
+        if (!IsOnlineRealPlayer(target) || target->GetName() != targetName)
+        {
+            message = "No online real player with that exact name was found; PlayerBots are not valid sentiment targets.";
+            return false;
+        }
+
+        key = { actor->GetObjectGuid().GetRawValue(), target->GetObjectGuid().GetRawValue() };
+        resolvedActorName = actor->GetName();
+        resolvedTargetName = target->GetName();
+        return true;
+    }
+
+    bool Manager::InspectSentiment(std::string const& actorName, std::string const& targetName,
+                                   std::string& message)
+    {
+        SentimentKey key;
+        std::string actor;
+        std::string target;
+        if (!ResolveSentimentPair(actorName, targetName, key, actor, target, message))
+            return false;
+
+        SentimentRecord sentiment;
+        bool const exists = LoadSentiment(key, sentiment);
+        std::ostringstream text;
+        text << "Sentiment " << actor << " -> " << target
+             << ": score=" << sentiment.score
+             << ", tier=" << SentimentTierForScore(sentiment.score)
+             << ", stored=" << (exists ? "yes" : "no")
+             << ", actor_guid=" << key.actorGuid
+             << ", target_guid=" << key.targetGuid;
+        if (exists)
+            text << ", last_interaction_unix=" << sentiment.lastInteractionUnix
+                 << ", last_decay_unix=" << sentiment.lastDecayUnix;
+        text << '.';
+        message = text.str();
+        return true;
+    }
+
+    bool Manager::SetSentiment(std::string const& actorName, std::string const& targetName,
+                               int32_t score, std::string& message)
+    {
+        if (score < SentimentMinimumScore || score > SentimentMaximumScore)
+        {
+            message = "Sentiment score must be an exact integer from -100 through 100.";
+            return false;
+        }
+
+        SentimentKey key;
+        std::string actor;
+        std::string target;
+        if (!ResolveSentimentPair(actorName, targetName, key, actor, target, message))
+            return false;
+
+        SentimentRecord sentiment;
+        LoadSentiment(key, sentiment);
+        uint64_t const now = UnixNow();
+        sentiment.key = key;
+        sentiment.score = score;
+        sentiment.createdUnix = sentiment.createdUnix ? sentiment.createdUnix : now;
+        sentiment.updatedUnix = now;
+        sentiment.lastInteractionUnix = now;
+        sentiment.lastDecayUnix = now;
+        sentiment.exists = true;
+        CacheSentiment(sentiment);
+        QueueSentimentWrite(sentiment);
+        message = "Sentiment " + actor + " -> " + target + " set to " +
+            std::to_string(score) + " (" + SentimentTierForScore(score) + ").";
+        return true;
+    }
+
+    bool Manager::ResetSentiment(std::string const& actorName, std::string const& targetName,
+                                 std::string& message)
+    {
+        SentimentKey key;
+        std::string actor;
+        std::string target;
+        if (!ResolveSentimentPair(actorName, targetName, key, actor, target, message))
+            return false;
+
+        m_sentiments.erase(key);
+        m_sentimentCacheOrder.erase(std::remove(m_sentimentCacheOrder.begin(),
+            m_sentimentCacheOrder.end(), key), m_sentimentCacheOrder.end());
+        m_pendingSentimentWrites.erase(key);
+        m_databaseLoadedSentimentPairs.insert(key);
+        SentimentRecord neutral;
+        neutral.key = key;
+        CacheSentiment(neutral);
+        if (m_sentimentDatabaseAvailable)
+            CharacterDatabase.PExecute(
+                "DELETE FROM `azeroth_voices_sentiment` WHERE `actor_guid`='%llu' AND `target_guid`='%llu'",
+                static_cast<unsigned long long>(key.actorGuid),
+                static_cast<unsigned long long>(key.targetGuid));
+        message = "Sentiment " + actor + " -> " + target +
+            (m_sentimentDatabaseAvailable
+                ? " reset to neutral; the persistent pair deletion was queued."
+                : " reset to neutral in RAM; the SQL table is unavailable.");
+        return true;
+    }
+
+    bool Manager::ResetAllSentiments(std::string& message)
+    {
+        m_sentiments.clear();
+        m_sentimentCacheOrder.clear();
+        m_databaseLoadedSentimentPairs.clear();
+        m_pendingSentimentWrites.clear();
+        if (m_sentimentDatabaseAvailable)
+            CharacterDatabase.PExecute("DELETE FROM `azeroth_voices_sentiment`");
+        message = m_sentimentDatabaseAvailable
+            ? "All Azeroth Voices sentiment pairs were reset; the explicit persistent reset-all deletion was queued. Personalities, history, snapshots, characters, and PlayerBots data were unchanged."
+            : "All cached sentiment pairs were reset, but the SQL table is unavailable so persistent reset-all could not be confirmed. Unrelated data was unchanged.";
+        return true;
+    }
+
+    void Manager::FlushSentimentWrites(bool force, bool ignoreDeadline)
+    {
+        if (!m_config || !m_sentimentDatabaseAvailable || m_pendingSentimentWrites.empty())
+            return;
+
+        auto const now = Clock::now();
+        if (!force && !ignoreDeadline &&
+            m_pendingSentimentWrites.size() < m_config->sentimentDatabaseFlushBatchSize &&
+            now < m_nextSentimentDatabaseFlush)
+            return;
+
+        size_t const batch = force ? m_pendingSentimentWrites.size() :
+            std::min<size_t>(m_pendingSentimentWrites.size(),
+                             m_config->sentimentDatabaseFlushBatchSize);
+        if (!CharacterDatabase.BeginTransaction())
+        {
+            sLog.outError("[AzerothVoices] Could not begin the asynchronous sentiment transaction; continuing with bounded RAM sentiment.");
+            m_sentimentDatabaseAvailable = false;
+            m_pendingSentimentWrites.clear();
+            return;
+        }
+
+        size_t written = 0;
+        while (written < batch && !m_pendingSentimentWrites.empty())
+        {
+            auto found = m_pendingSentimentWrites.begin();
+            SentimentRecord const sentiment = found->second;
+            m_pendingSentimentWrites.erase(found);
+            CharacterDatabase.PExecute(
+                "INSERT INTO `azeroth_voices_sentiment` "
+                "(`actor_guid`,`target_guid`,`score`,`last_interaction_at`,`last_decay_at`,`created_at`,`updated_at`) "
+                "VALUES ('%llu','%llu','%d',FROM_UNIXTIME('%llu'),FROM_UNIXTIME('%llu'),"
+                "FROM_UNIXTIME('%llu'),FROM_UNIXTIME('%llu')) "
+                "ON DUPLICATE KEY UPDATE `score`=VALUES(`score`),"
+                "`last_interaction_at`=VALUES(`last_interaction_at`),"
+                "`last_decay_at`=VALUES(`last_decay_at`),`updated_at`=VALUES(`updated_at`)",
+                static_cast<unsigned long long>(sentiment.key.actorGuid),
+                static_cast<unsigned long long>(sentiment.key.targetGuid), sentiment.score,
+                static_cast<unsigned long long>(sentiment.lastInteractionUnix),
+                static_cast<unsigned long long>(sentiment.lastDecayUnix),
+                static_cast<unsigned long long>(sentiment.createdUnix),
+                static_cast<unsigned long long>(sentiment.updatedUnix));
+            ++written;
+        }
+        CharacterDatabase.CommitTransaction();
+        m_nextSentimentDatabaseFlush = now +
+            std::chrono::seconds(m_config->sentimentDatabaseFlushSeconds);
+    }
+
     void Manager::MaybeQueueFollowup(ChatRequest const& request, std::string const& reply)
     {
         if (!request.allowFollowup || !m_config->randomChatterEnabled ||
@@ -2916,6 +3322,14 @@ namespace AzerothVoices
                 continue;
             }
 
+            int32_t sentimentDelta = 0;
+            bool const hasSentimentDelta = ExtractSentimentDelta(completion.responseText,
+                completion.request.sentimentDeltaLimit, sentimentDelta);
+            if (completion.request.sentimentTracked && completion.request.sentimentDeltaLimit)
+            {
+                completion.request.sentimentDeltaAvailable = hasSentimentDelta;
+                completion.request.sentimentDelta = sentimentDelta;
+            }
             std::vector<std::string> lines = Provider::SplitReply(*m_config, completion.responseText);
             if (lines.empty())
             {
@@ -3054,6 +3468,7 @@ namespace AzerothVoices
             bool delivered = Deliver(*it);
             if (delivered && it->firstLine)
             {
+                ApplyDeliveredSentiment(it->request);
                 AddHistory(it->request, it->text);
                 AddSnapshotHistory(it->request, it->request.currentSnapshot);
                 SpeakerSnapshot actorSpeaker;
@@ -3873,6 +4288,7 @@ namespace AzerothVoices
         m_historyDatabaseAvailable = false;
         m_snapshotDatabaseAvailable = false;
         m_personalityDatabaseAvailable = false;
+        m_sentimentDatabaseAvailable = false;
         if (!m_config)
             return;
 
@@ -3905,7 +4321,17 @@ namespace AzerothVoices
             else if (m_config->personalityEnabled)
                 sLog.outString("[AzerothVoices][PERSONALITY][SQL] Persistent PlayerBot personality storage is available.");
         }
-        if (m_historyDatabaseAvailable || m_snapshotDatabaseAvailable)
+        {
+            std::unique_ptr<QueryResult> table(CharacterDatabase.Query(
+                "SHOW TABLES LIKE 'azeroth_voices_sentiment'"));
+            m_sentimentDatabaseAvailable = table != nullptr;
+            if (m_config->sentimentEnabled && !m_sentimentDatabaseAvailable)
+                sLog.outError("[AzerothVoices] SQL sentiment table is missing; using bounded non-persistent RAM sentiment. Install data/sql/character/20260902_01_azeroth_voices_sentiment.sql.");
+            else if (m_config->sentimentEnabled)
+                sLog.outString("[AzerothVoices][SENTIMENT][SQL] Persistent PlayerBot-to-player sentiment storage is available.");
+        }
+        if (m_historyDatabaseAvailable || m_snapshotDatabaseAvailable ||
+            (m_config->sentimentEnabled && m_sentimentDatabaseAvailable))
             CleanupDatabase();
     }
 
@@ -3981,7 +4407,8 @@ namespace AzerothVoices
 
     void Manager::FlushDatabaseWrites(bool force)
     {
-        if (!m_config || (!m_historyDatabaseAvailable && !m_snapshotDatabaseAvailable))
+        if (!m_config || (!m_historyDatabaseAvailable && !m_snapshotDatabaseAvailable &&
+                          (!m_config->sentimentEnabled || !m_sentimentDatabaseAvailable)))
             return;
         auto const now = Clock::now();
         size_t pending = m_pendingHistoryWrites.size() + m_pendingSnapshotWrites.size();
@@ -4087,6 +4514,11 @@ namespace AzerothVoices
             CharacterDatabase.PExecute(
                 "DELETE FROM `azeroth_voices_environment_history` WHERE `created_at` < DATE_SUB(NOW(), INTERVAL %u MINUTE)",
                 m_config->snapshotDatabaseTtlMinutes);
+        if (m_config->sentimentEnabled && m_sentimentDatabaseAvailable)
+            CharacterDatabase.PExecute(
+                "DELETE FROM `azeroth_voices_sentiment` WHERE `score`=0 "
+                "AND `updated_at` < DATE_SUB(NOW(), INTERVAL %u DAY)",
+                SentimentNeutralRetentionDays);
     }
 
     void Manager::LoadRag()
@@ -4323,6 +4755,9 @@ namespace AzerothVoices
         status.personalityDatabaseAvailable = m_personalityDatabaseAvailable;
         status.personalities = m_personalities.size();
         status.personalityGenerationsPending = m_pendingPersonalityRequests.size();
+        status.sentimentDatabaseAvailable = m_sentimentDatabaseAvailable;
+        status.sentiments = m_sentiments.size();
+        status.sentimentWritesPending = m_pendingSentimentWrites.size();
         status.ragEntries = m_rag.size();
         status.ragFiles = m_ragFiles;
         status.ragParseFailures = m_ragParseFailures;
@@ -4335,6 +4770,7 @@ namespace AzerothVoices
             status.historyStorageMode = m_config->historyStorageMode;
             status.snapshotStorageMode = m_config->snapshotStorageMode;
             status.personalityEnabled = m_config->personalityEnabled;
+            status.sentimentEnabled = m_config->sentimentEnabled;
             status.ragEnabled = m_config->ragEnabled;
             status.environmentEnabled = m_config->environmentContextEnabled;
             status.snapshotEnabled = m_config->snapshotEnabled;

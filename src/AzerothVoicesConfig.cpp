@@ -167,12 +167,40 @@ namespace AzerothVoices
         c.personalityGenerateTone = Bounded("AzerothVoices.Personality.GenerateTone", 1, 0, 1) != 0;
         c.personalityGenerateOnDemand = Bounded(
             "AzerothVoices.Personality.GenerateOnDemand", 1, 0, 1) != 0;
+        c.personalityUseInRandom = Bounded(
+            "AzerothVoices.Personality.UseInRandom", 1, 0, 1) != 0;
+        c.personalityUseInEvents = Bounded(
+            "AzerothVoices.Personality.UseInEvents", 1, 0, 1) != 0;
         c.personalityGenerationRetrySeconds = Bounded(
             "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
         c.personalityMaxBackgroundCharacters = Bounded(
             "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
         c.personalityMaxPromptCharacters = Bounded(
             "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
+
+        c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 1, 0, 1) != 0;
+        c.sentimentUseInRandom = Bounded(
+            "AzerothVoices.Sentiment.UseInRandom", 0, 0, 1) != 0;
+        c.sentimentUseInEvents = Bounded(
+            "AzerothVoices.Sentiment.UseInEvents", 0, 0, 1) != 0;
+        c.sentimentConversationMaximumDelta = Bounded(
+            "AzerothVoices.Sentiment.ConversationMaximumDelta", 2, 0, 2);
+        c.sentimentInactivityGraceDays = Bounded(
+            "AzerothVoices.Sentiment.InactivityGraceDays", 7, 0, 365);
+        c.sentimentPositiveDecayPerDay = Bounded(
+            "AzerothVoices.Sentiment.PositiveDecayPerDay", 1, 0, 100);
+        c.sentimentNegativeDecayPerDay = Bounded(
+            "AzerothVoices.Sentiment.NegativeDecayPerDay", 2, 0, 100);
+        c.sentimentCacheMaximumEntries = Bounded(
+            "AzerothVoices.Sentiment.CacheMaximumEntries", 4096, 1, 100000);
+        c.sentimentPendingWriteMaximum = Bounded(
+            "AzerothVoices.Sentiment.PendingWriteMaximum", 1024, 1, 100000);
+        c.sentimentDatabaseFlushSeconds = Bounded(
+            "AzerothVoices.Sentiment.DatabaseFlushSeconds", 5, 1, 3600);
+        uint32 const sentimentDefaultFlushBatchSize = std::min<uint32>(50, c.sentimentPendingWriteMaximum);
+        c.sentimentDatabaseFlushBatchSize = Bounded(
+            "AzerothVoices.Sentiment.DatabaseFlushBatchSize", sentimentDefaultFlushBatchSize, 1,
+            c.sentimentPendingWriteMaximum);
 
         c.whisperReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Whisper", true);
         c.sayReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.Say", true);
@@ -184,18 +212,14 @@ namespace AzerothVoices
         c.worldReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.World", true);
         c.customChannelReplies = sConfig.GetBoolDefault("AzerothVoices.Replies.CustomChannels", false);
         c.npcReplies = sConfig.GetBoolDefault("AzerothVoices.NPC.Enable", true);
-        c.disableRepliesInCombat = sConfig.GetBoolDefault("AzerothVoices.DisableRepliesInCombat", true);
+        c.disableRepliesInCombat = sConfig.GetBoolDefault("AzerothVoices.DisableRepliesInCombat", false);
         c.maxResponders = Positive("AzerothVoices.MaxResponders", 2, 1);
         c.sayDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.SayDistance", 25.0f));
         c.yellDistance = std::max(c.sayDistance, sConfig.GetFloatDefault("AzerothVoices.YellDistance", 100.0f));
         c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 10.0f));
         c.npcAllowedTypes = UnsignedSet("AzerothVoices.NPC.AllowedTypes", "2,3,4,5,6,7,9", 11);
-        c.npcAllowedEntries = UnsignedSet("AzerothVoices.NPC.AllowedEntries", "");
-        c.npcExcludedEntries = UnsignedSet("AzerothVoices.NPC.ExcludedEntries", "");
-        c.npcAllowNeutral = sConfig.GetBoolDefault("AzerothVoices.NPC.AllowNeutral", false);
-        c.npcAllowHostile = sConfig.GetBoolDefault("AzerothVoices.NPC.AllowHostile", false);
-        c.npcAllowedNeutralEntries = UnsignedSet("AzerothVoices.NPC.AllowedNeutralEntries", "");
-        c.npcAllowedHostileEntries = UnsignedSet("AzerothVoices.NPC.AllowedHostileEntries", "");
+        c.npcAllowNeutralAndHostile = sConfig.GetBoolDefault(
+            "AzerothVoices.NPC.AllowNeutralAndHostile", false);
         c.npcFriendlyReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Friendly", 100);
         c.npcNeutralReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Neutral", 50);
         c.npcHostileReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Hostile", 25);
@@ -225,7 +249,8 @@ namespace AzerothVoices
         c.randomMaximumIntervalSeconds = Positive("AzerothVoices.Random.MaximumIntervalSeconds", 240, c.randomMinimumIntervalSeconds);
         c.randomFollowupChance = Percent("AzerothVoices.Random.FollowupChance", 15);
         c.randomMaximumActors = Positive("AzerothVoices.Random.MaximumActors", 2, 1);
-        c.randomScopes = Split(sConfig.GetStringDefault("AzerothVoices.Random.Scopes", "say,guild,world"), ',');
+        c.randomScopes = Split(sConfig.GetStringDefault(
+            "AzerothVoices.Random.Scopes", "say,guild,world,party"), ',');
         c.randomPrompts = Split(sConfig.GetStringDefault("AzerothVoices.Random.Prompts",
             "Make a casual observation about the current zone.|Complain briefly about leveling or grinding.|"
             "Comment on loot, repairs, travel, professions, quests, dungeons, or battlegrounds.|"

@@ -53,6 +53,34 @@ namespace AzerothVoices
         uint64_t updatedUnix = 0;
     };
 
+    struct SentimentKey
+    {
+        uint64_t actorGuid = 0;
+        uint64_t targetGuid = 0;
+
+        bool operator<(SentimentKey const& other) const
+        {
+            return actorGuid < other.actorGuid ||
+                (actorGuid == other.actorGuid && targetGuid < other.targetGuid);
+        }
+
+        bool operator==(SentimentKey const& other) const
+        {
+            return actorGuid == other.actorGuid && targetGuid == other.targetGuid;
+        }
+    };
+
+    struct SentimentRecord
+    {
+        SentimentKey key;
+        int32_t score = 0;
+        uint64_t createdUnix = 0;
+        uint64_t updatedUnix = 0;
+        uint64_t lastInteractionUnix = 0;
+        uint64_t lastDecayUnix = 0;
+        bool exists = false;
+    };
+
     struct ActorSnapshot
     {
         ActorKind kind = ActorKind::PlayerBot;
@@ -124,6 +152,7 @@ namespace AzerothVoices
         ActorSnapshot actor;
         SpeakerSnapshot speaker;
         BotPersonality personality;
+        SentimentRecord sentiment;
         ChatScope scope = ChatScope::Say;
         std::string channelName;
         std::string trigger;
@@ -133,10 +162,16 @@ namespace AzerothVoices
         std::string context;
         std::string currentSnapshot;
         std::string personalityBlock;
+        std::string sentimentBlock;
+        std::string sentimentTargetName;
         std::string historyKey;
         std::string scopeKey;
         uint32_t maxTokensOverride = 0;
+        uint32_t sentimentDeltaLimit = 0;
+        int32_t sentimentDelta = 0;
         bool personalityGenerationNeeded = false;
+        bool sentimentTracked = false;
+        bool sentimentDeltaAvailable = false;
         bool ambient = false;
         bool allowFollowup = false;
         uint32_t conversationDepth = 1;

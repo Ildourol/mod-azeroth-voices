@@ -62,9 +62,23 @@ namespace AzerothVoices
         uint32_t personalityTraitCount = 3;
         bool personalityGenerateTone = true;
         bool personalityGenerateOnDemand = true;
+        bool personalityUseInRandom = true;
+        bool personalityUseInEvents = true;
         uint32_t personalityGenerationRetrySeconds = 300;
         uint32_t personalityMaxBackgroundCharacters = 500;
         uint32_t personalityMaxPromptCharacters = 700;
+
+        bool sentimentEnabled = true;
+        bool sentimentUseInRandom = false;
+        bool sentimentUseInEvents = false;
+        uint32_t sentimentConversationMaximumDelta = 2;
+        uint32_t sentimentInactivityGraceDays = 7;
+        uint32_t sentimentPositiveDecayPerDay = 1;
+        uint32_t sentimentNegativeDecayPerDay = 2;
+        uint32_t sentimentCacheMaximumEntries = 4096;
+        uint32_t sentimentPendingWriteMaximum = 1024;
+        uint32_t sentimentDatabaseFlushSeconds = 5;
+        uint32_t sentimentDatabaseFlushBatchSize = 50;
 
         bool whisperReplies = true;
         bool sayReplies = true;
@@ -76,18 +90,13 @@ namespace AzerothVoices
         bool worldReplies = true;
         bool customChannelReplies = false;
         bool npcReplies = true;
-        bool disableRepliesInCombat = true;
+        bool disableRepliesInCombat = false;
         uint32_t maxResponders = 2;
         float sayDistance = 25.0f;
         float yellDistance = 100.0f;
         float npcDistance = 10.0f;
         std::set<uint32_t> npcAllowedTypes = { 2, 3, 4, 5, 6, 7, 9 };
-        std::set<uint32_t> npcAllowedEntries;
-        std::set<uint32_t> npcExcludedEntries;
-        bool npcAllowNeutral = false;
-        bool npcAllowHostile = false;
-        std::set<uint32_t> npcAllowedNeutralEntries;
-        std::set<uint32_t> npcAllowedHostileEntries;
+        bool npcAllowNeutralAndHostile = false;
         uint32_t npcFriendlyReplyChance = 100;
         uint32_t npcNeutralReplyChance = 50;
         uint32_t npcHostileReplyChance = 25;

@@ -47,6 +47,10 @@ namespace AzerothVoices
         bool personalityDatabaseAvailable = false;
         size_t personalities = 0;
         size_t personalityGenerationsPending = 0;
+        bool sentimentEnabled = false;
+        bool sentimentDatabaseAvailable = false;
+        size_t sentiments = 0;
+        size_t sentimentWritesPending = 0;
         bool ragEnabled = false;
         bool environmentEnabled = false;
         bool snapshotEnabled = false;
@@ -81,6 +85,13 @@ namespace AzerothVoices
         bool RegeneratePersonality(std::string const& actorName, std::string& message);
         bool DeletePersonality(std::string const& actorName, std::string& message);
         bool DeleteAllPersonalities(std::string& message);
+        bool InspectSentiment(std::string const& actorName, std::string const& targetName,
+                              std::string& message);
+        bool SetSentiment(std::string const& actorName, std::string const& targetName,
+                          int32_t score, std::string& message);
+        bool ResetSentiment(std::string const& actorName, std::string const& targetName,
+                            std::string& message);
+        bool ResetAllSentiments(std::string& message);
         void ClearHistory();
         void SetPaused(bool paused);
         bool IsPaused() const;
@@ -202,6 +213,15 @@ namespace AzerothVoices
                                                uint64_t requestId, std::string detail);
         void CancelPersonalityGeneration(uint64_t characterGuid);
         void DeletePersonalityRecord(uint64_t characterGuid);
+        bool LoadSentiment(SentimentKey const& key, SentimentRecord& sentiment);
+        void CacheSentiment(SentimentRecord sentiment);
+        bool ApplySentimentDecay(SentimentRecord& sentiment);
+        void ApplyDeliveredSentiment(ChatRequest const& request);
+        void QueueSentimentWrite(SentimentRecord const& sentiment);
+        void FlushSentimentWrites(bool force = false, bool ignoreDeadline = false);
+        bool ResolveSentimentPair(std::string const& actorName, std::string const& targetName,
+                                  SentimentKey& key, std::string& resolvedActorName,
+                                  std::string& resolvedTargetName, std::string& message) const;
         std::string SelectRag(ChatRequest const& request) const;
         void AddHistory(ChatRequest const& request, std::string const& reply);
         void AddSnapshotHistory(ChatRequest const& request, std::string const& snapshot);
@@ -230,21 +250,26 @@ namespace AzerothVoices
         std::map<std::string, std::deque<SnapshotRecord>> m_snapshotHistory;
         std::map<uint64_t, BotPersonality> m_personalities;
         std::deque<uint64_t> m_personalityCacheOrder;
+        std::map<SentimentKey, SentimentRecord> m_sentiments;
+        std::deque<SentimentKey> m_sentimentCacheOrder;
         std::vector<RagItem> m_rag;
         size_t m_ragFiles = 0;
         size_t m_ragParseFailures = 0;
         std::set<std::string> m_databaseLoadedHistoryKeys;
         std::set<std::string> m_databaseLoadedSnapshotKeys;
         std::set<uint64_t> m_databaseLoadedPersonalityGuids;
+        std::set<SentimentKey> m_databaseLoadedSentimentPairs;
         std::unordered_map<uint64_t, uint64_t> m_pendingPersonalityRequests;
         std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_personalityRetryAfter;
         std::unordered_map<uint64_t, PersonalityGenerationRecord> m_personalityGenerationStatus;
         std::deque<uint64_t> m_personalityGenerationStatusOrder;
         std::deque<PendingHistoryWrite> m_pendingHistoryWrites;
         std::deque<PendingSnapshotWrite> m_pendingSnapshotWrites;
+        std::map<SentimentKey, SentimentRecord> m_pendingSentimentWrites;
         bool m_historyDatabaseAvailable = false;
         bool m_snapshotDatabaseAvailable = false;
         bool m_personalityDatabaseAvailable = false;
+        bool m_sentimentDatabaseAvailable = false;
 
         mutable std::mutex m_queueMutex;
         mutable std::mutex m_ingressMutex;
@@ -271,6 +296,7 @@ namespace AzerothVoices
         std::chrono::steady_clock::time_point m_telemetryWindowStarted;
         std::chrono::steady_clock::time_point m_nextHistoryPrune;
         std::chrono::steady_clock::time_point m_nextDatabaseFlush;
+        std::chrono::steady_clock::time_point m_nextSentimentDatabaseFlush;
         std::chrono::steady_clock::time_point m_nextDatabaseCleanup;
         uint64_t m_telemetryApiCalls = 0;
         uint64_t m_telemetrySuccessfulResults = 0;

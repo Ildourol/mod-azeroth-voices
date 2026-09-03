@@ -22,7 +22,7 @@ AzerothVoices.Debug = 0
 AzerothVoices.Console.GeneratedMessages = 0
 # Logs HTTP-attempt, success, failure, generated-message, and preflight-rejection totals every configured interval; each retry counts as another API call. It never repeats generated text. (Default 0.)
 AzerothVoices.Console.ApiCallStats = 0
-# Length of each terminal reporting window. (Integer seconds, minimum 5; default 60.)
+# Length of each terminal reporting window. (Seconds, minimum 5; default 60.)
 AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
 
 ###################################################################################################
@@ -45,13 +45,13 @@ AzerothVoices.ParserMode = ProviderJson
 AzerothVoices.CACertFile =
 # Allows plain HTTP only for local/loopback providers, never remote HTTP. (Default 1.)
 AzerothVoices.AllowLocalHttp = 1
-# TCP/TLS connection timeout. (Integer seconds, minimum 1; default 10.)
+# TCP/TLS connection timeout. (Seconds, minimum 1; default 10.)
 AzerothVoices.ConnectTimeoutSeconds = 10
-# Provider read/write generation timeout. (Integer seconds, minimum 1; default 60.)
+# Provider read/write generation timeout. (Seconds, minimum 1; default 60.)
 AiPlayerbot.LLMGenerationTimeout = 60
-# Rejects oversized HTTP responses. (Integer bytes, minimum 1024; default 65536.)
+# Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536.)
 AzerothVoices.MaxResponseBytes = 65536
-# Requested output limit in generated provider JSON. (Integer tokens, minimum 1; default 80.)
+# Requested output limit in generated provider JSON. (Tokens, minimum 1; default 80.)
 AzerothVoices.MaxTokens = 80
 # Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default 0.8.)
 AzerothVoices.Temperature = 0.8
@@ -62,27 +62,27 @@ AzerothVoices.TopP = 0.95
 # Worker pool, queue, limits, and cooldowns
 ###################################################################################################
 
-# Fixed background HTTP workers; core objects stay on world thread. (Integer 1-32; default 8.)
+# Fixed background HTTP workers; core objects stay on world thread. (1-32; default 8.)
 AzerothVoices.WorkerThreads = 8
-# Legacy misspelled fallback used only if WorkerThreads is absent. (Integer 1-32; default 8.)
+# Legacy misspelled fallback used only if WorkerThreads is absent. (1-32; default 8.)
 AiPlayerbot.LLMMaxSimultaniousGenerations = 8
-# Hard pending-queue memory bound. (Integer requests, minimum 1; default 128.)
+# Hard pending-queue memory bound. (Requests, minimum 1; default 128.)
 AzerothVoices.QueueMaximum = 128
-# Queue capacity reserved for direct/group replies. (Integer 0-QueueMaximum; default 32.)
+# Queue capacity reserved for direct/group replies. (0-QueueMaximum; default 32.)
 AzerothVoices.HighPriorityReserve = 32
-# Global budget shared by all workers. (Integer requests/minute, minimum 1; default 60.)
+# Global budget shared by all workers. (Requests/minute, minimum 1; default 60.)
 AzerothVoices.GlobalRequestsPerMinute = 60
-# Drops queued requests that are no longer timely. (Integer seconds, minimum 1; default 90.)
+# Drops queued requests that are no longer timely. (Seconds, minimum 1; default 90.)
 AzerothVoices.RequestTTLSeconds = 90
-# Cooldown before an actor gives another normal reply. (Integer seconds, minimum 0; default 10.)
+# Cooldown before an actor gives another normal reply. (Seconds, minimum 0; default 10.)
 AzerothVoices.ActorCooldownSeconds = 10
-# Longer per-actor random-chatter cooldown. (Integer seconds, minimum 0; default 120.)
+# Longer per-actor random-chatter cooldown. (Seconds, minimum 0; default 120.)
 AzerothVoices.AmbientActorCooldownSeconds = 120
-# Coalesces rapid non-whispers from one speaker. (Integer seconds, minimum 0; default 3.)
+# Coalesces rapid non-whispers from one speaker. (Seconds, minimum 0; default 3.)
 AzerothVoices.SpeakerCooldownSeconds = 3
-# Retries transient connection, 429, and 5xx failures. (Integer retries, minimum 0; default 1.)
+# Retries transient connection, 429, and 5xx failures. (Retries, minimum 0; default 1.)
 AzerothVoices.RetryMaximum = 1
-# Base increasing delay between retries. (Integer milliseconds, minimum 0; default 500.)
+# Base increasing delay between retries. (Milliseconds, minimum 0; default 500.)
 AzerothVoices.RetryBackoffMilliseconds = 500
 
 ###################################################################################################
@@ -99,7 +99,7 @@ AiPlayerbot.LLMPrompt = <receiver name>: <initial message>
 AiPlayerbot.LLMPostPrompt = <bot name>:
 # Shared prompt for a nearby NPC speaker. (Text template; default below.)
 AiPlayerbot.LLMRpgPrompt = You are <bot name>, an NPC in <bot subzone>, <bot zone>. Reply briefly in character.
-# Caps the combined personality, live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Integer characters, minimum 0; default 4096.)
+# Caps the combined personality, live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Characters, minimum 0; default 4096.)
 AiPlayerbot.LLMContextLength = 4096
 # 0 isolates history by speaker/scope; 1 shares actor-wide history. (Default 0.)
 AiPlayerbot.LLMGlobalContext = 0
@@ -130,12 +130,53 @@ AzerothVoices.Personality.TraitCount = 3
 AzerothVoices.Personality.GenerateTone = 1
 # Generates missing personalities when a PlayerBot first enters an accepted dialogue request; accepted values 0/1; default 1.
 AzerothVoices.Personality.GenerateOnDemand = 1
+# Uses the persistent PlayerBot personality in random/ambient and generated-follow-up prompts; accepted values 0/1; default 1.
+AzerothVoices.Personality.UseInRandom = 1
+# Uses the persistent PlayerBot personality in automatic and adapter event prompts; accepted values 0/1; default 1.
+AzerothVoices.Personality.UseInEvents = 1
 # Sets the minimum delay after failed generation before the same bot can retry; accepted range 10-86400 seconds; default 300.
 AzerothVoices.Personality.GenerationRetrySeconds = 300
 # Bounds a generated stored background; accepted range 100-1500 characters; default 500.
 AzerothVoices.Personality.MaxBackgroundChars = 500
 # Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 700.
 AzerothVoices.Personality.MaxPromptChars = 700
+
+###################################################################################################
+# PlayerBot-to-real-player sentiment
+###################################################################################################
+#
+# Sentiment is one directional: an AI-controlled PlayerBot actor toward one online real-player
+# target. NPC actors, NPC targets, PlayerBot targets, and PlayerBot-to-PlayerBot pairs are rejected.
+# The model sees only the C++-derived tier; GMs can inspect the exact -100..100 score. Dialogue
+# piggybacks one small hidden delta on the existing provider response, so no second API call is made.
+# A valid delta is applied only after the first generated line is delivered successfully. Score
+# changes are limited to a real player's direct Whisper, Party with exactly one PlayerBot in the
+# subgroup, named Party when several PlayerBots share the subgroup, or named Say/World message.
+# Event and Random requests can read the tier when enabled below but never change it. Neutral SQL
+# rows older than 90 days are removed by the existing hourly database cleanup.
+
+# Enables bounded sentiment context, updates, lazy decay, cache, and persistence; accepted values 0/1; default 1.
+AzerothVoices.Sentiment.Enable = 1
+# Uses the anchor real player's relationship tier in random/ambient prompts without changing the score; accepted values 0/1; default 0.
+AzerothVoices.Sentiment.UseInRandom = 0
+# Uses the real event subject's relationship tier in event prompts without changing the score; accepted values 0/1; default 0.
+AzerothVoices.Sentiment.UseInEvents = 0
+# Hard maximum magnitude for a model-reported qualifying direct player-chat change; accepted range 0-2; default 2. Zero keeps tier context but disables dialogue changes.
+AzerothVoices.Sentiment.ConversationMaximumDelta = 2
+# Full inactive days before lazy decay can begin; accepted range 0-365; default 7. No background sweep is performed.
+AzerothVoices.Sentiment.InactivityGraceDays = 7
+# Positive points removed per full inactive day after the grace period; accepted range 0-100; default 1.
+AzerothVoices.Sentiment.PositiveDecayPerDay = 1
+# Negative points moved toward neutral per full inactive day after the grace period; accepted range 0-100; default 2, so grudges fade faster than friendship.
+AzerothVoices.Sentiment.NegativeDecayPerDay = 2
+# Maximum lazily loaded relationship pairs in the world-thread RAM hot cache; accepted range 1-100000; default 4096.
+AzerothVoices.Sentiment.CacheMaximumEntries = 4096
+# Maximum distinct dirty relationship pairs waiting for SQL; accepted range 1-100000; default 1024. Repeated changes to one pair are coalesced.
+AzerothVoices.Sentiment.PendingWriteMaximum = 1024
+# Maximum delay before dirty sentiment upserts are queued; accepted range 1-3600 seconds; default 5.
+AzerothVoices.Sentiment.DatabaseFlushSeconds = 5
+# Distinct dirty pairs queued per normal flush; accepted range 1-PendingWriteMaximum; default 50, clamped to PendingWriteMaximum when that cap is lower.
+AzerothVoices.Sentiment.DatabaseFlushBatchSize = 50
 
 ###################################################################################################
 # Chat scopes, NPCs, distances, and response selection
@@ -161,24 +202,14 @@ AzerothVoices.Replies.World = 1
 AzerothVoices.Replies.CustomChannels = 0
 # Used to classify and deliver world-chat messages. (Channel name; default World.)
 AzerothVoices.WorldChannelName = World
-# Allows eligible static NPCs in ambient chatter, event reactions, and reactions to human or PlayerBot Say. Friendly NPCs are admitted by default; neutral and hostile NPCs require their category switch or entry override below. Pet, summon, guardian, totem, charmed, trigger, critter, and temporary speakers remain rejected. NPC output is Say only. (Default 1.)
+# Allows eligible static NPCs in ambient chatter, event reactions, and reactions to human or PlayerBot Say. Friendly NPCs are admitted by default; neutral and hostile NPCs require the combined switch below. Pet, summon, guardian, totem, charmed, trigger, critter, and temporary speakers remain rejected. NPC output is Say only. (Default 1.)
 AzerothVoices.NPC.Enable = 1
 # NPC candidate search radius around the local event subject, human/PlayerBot speaker, or random real-player anchor. It is also the maximum actor-to-actor distance for every generated follow-up pair containing an NPC. Both follow-up actors must share one real-human observer within SayDistance. (Decimal yards, minimum 1; default 10.)
 AzerothVoices.NPC.Distance = 10
-# Creature types eligible for generated NPC speech. Defaults to Dragonkin, Demon, Elemental, Giant, Undead, Humanoid, and Mechanical. Entry overrides bypass only this type list; all existing NPC safety, faction, audience, distance, and combat checks still apply. (Comma-separated creature_template.type values 0-11; default 2,3,4,5,6,7,9.)
+# Creature types eligible for generated NPC speech. Defaults to Dragonkin, Demon, Elemental, Giant, Undead, Humanoid, and Mechanical; all NPC safety, faction, audience, distance, and combat checks still apply. (Comma-separated creature_template.type values 0-11; default 2,3,4,5,6,7,9.)
 AzerothVoices.NPC.AllowedTypes = 2,3,4,5,6,7,9
-# Individual creature_template.entry values allowed to bypass AllowedTypes. ExcludedEntries still takes priority. (Comma-separated entry IDs; default empty.)
-AzerothVoices.NPC.AllowedEntries =
-# Individual creature_template.entry values always rejected from generated NPC speech, even when their type is allowed. (Comma-separated entry IDs; default empty.)
-AzerothVoices.NPC.ExcludedEntries =
-# Allows all neutral NPC entries through the faction gate. This does not bypass the type/entry or existing safety criteria. (Default 0.)
-AzerothVoices.NPC.AllowNeutral = 0
-# Allows all hostile NPC entries through the faction gate. This does not bypass the type/entry or existing safety criteria. Combat suppression still applies. (Default 0.)
-AzerothVoices.NPC.AllowHostile = 0
-# Neutral creature_template.entry values allowed through the faction gate when AllowNeutral is 0. (Comma-separated entry IDs; default empty.)
-AzerothVoices.NPC.AllowedNeutralEntries =
-# Hostile creature_template.entry values allowed through the faction gate when AllowHostile is 0. (Comma-separated entry IDs; default empty.)
-AzerothVoices.NPC.AllowedHostileEntries =
+# Allows both neutral and hostile NPC categories through the faction gate. This does not bypass AllowedTypes or the existing ownership, temporary-creature, audience, distance, or combat rules. (Default 0.)
+AzerothVoices.NPC.AllowNeutralAndHostile = 0
 # The three disposition chances below are an additional probability gate alongside the existing targeted, direct-address, name-mention, overhear, event, random, and follow-up chances. They apply to every eligible NPC-speaking path and never bypass NPC safety, faction, distance, audience, or combat checks.
 # Chance that an otherwise selected NPC friendly toward the current conversational counterpart speaks. (Percentage; default 100.)
 AzerothVoices.NPC.ReplyChance.Friendly = 100
@@ -193,9 +224,9 @@ AzerothVoices.NPC.TargetedReplyChance = 100
 AzerothVoices.NPC.TargetedOtherNPCJoinChance = 5
 # Chance that each PlayerBot within NPC.Distance joins a real player's selected-NPC Say conversation. (Percentage; default 10.)
 AzerothVoices.NPC.TargetedPlayerBotJoinChance = 10
-# Prevents actors currently in combat from being selected. (Default 1.)
-AzerothVoices.DisableRepliesInCombat = 1
-# Maximum responders to one incoming message. (Integer actors, minimum 1; default 2.)
+# Prevents actors currently in combat from being selected when set to 1. Combat replies are enabled by default. (Default 0.)
+AzerothVoices.DisableRepliesInCombat = 0
+# Maximum responders to one incoming message. (Actors, minimum 1; default 2.)
 AzerothVoices.MaxResponders = 2
 # Local Say listener/responder and real-human observer distance for PlayerBots and NPCs. PlayerBots never count as observers. (Decimal yards, minimum 1; default 25.)
 AzerothVoices.SayDistance = 25
@@ -237,16 +268,16 @@ AzerothVoices.CommandBlacklist = .,! ,/,autogear,talents,summon,release,revive,a
 
 # Enables scheduled ambient chatter around online real players. (Default 1.)
 AzerothVoices.Random.Enable = 1
-# Lower bound before the next ambient attempt. (Integer seconds, minimum 5; default 90.)
+# Lower bound before the next ambient attempt. (Seconds, minimum 5; default 90.)
 AzerothVoices.Random.MinimumIntervalSeconds = 90
-# Upper interval bound. (Integer seconds, at least MinimumIntervalSeconds; default 240.)
+# Upper interval bound. (Seconds, at least MinimumIntervalSeconds; default 240.)
 AzerothVoices.Random.MaximumIntervalSeconds = 240
 # Chance another actor replies after ambient chatter, a bot-originated Say/Yell/group/guild/world/custom reaction, or an event line; the corresponding bot-to-bot or RPG interaction cap is then applied. Every follow-up repeats the selected scope's real-audience rule. (Percentage; default 15.)
 AzerothVoices.Random.FollowupChance = 15
-# Generated conversation chain cap; 1 disables follow-ups. (Integer generated turns, minimum 1; default 2.)
+# Generated conversation chain cap; 1 disables follow-ups. (Generated turns, minimum 1; default 2.)
 AzerothVoices.Random.MaximumActors = 2
-# Chooses ambient-chat delivery scopes; a disabled or unavailable group scope safely falls back to Say. Say and Yell use SayDistance and YellDistance, party requires a real player in the bot's subgroup, raid a real raid member, guild/officer a real guild listener, World one online real player, and channel the custom-channel audience gate. (Comma-separated say/yell/party/raid/guild/officer/world/channel; default say,guild,world.)
-AzerothVoices.Random.Scopes = say,guild,world
+# Chooses ambient-chat delivery scopes; a disabled or unavailable group scope safely falls back to Say. Party is used only when Random selects Party and requires the selected PlayerBot to share a subgroup with an online real player. If no eligible local Say speaker exists, that Random attempt is skipped. Say and Yell otherwise use SayDistance and YellDistance, raid and guild/officer use real membership, World requires one online real player, and channel uses the custom-channel audience gate. (Comma-separated say/yell/party/raid/guild/officer/world/channel; default say,guild,world,party.)
+AzerothVoices.Random.Scopes = say,guild,world,party
 # General ambient topic instructions. (Pipe-separated text choices; default below.)
 AzerothVoices.Random.Prompts = Make a casual observation about the current zone.|Complain briefly about leveling or grinding.|Comment on loot, repairs, travel, professions, quests, dungeons, or battlegrounds.|Make a short joke that fits World of Warcraft.|Mention what you want to do next in the game.
 # Question-style ambient instructions. (Pipe-separated text choices; default below.)
@@ -266,9 +297,9 @@ AzerothVoices.Random.WorldPrompts = Start a short world-chat topic about zones, 
 AzerothVoices.Environment.Enable = 1
 # Radius for bounded nearby alive creature names, including friendly, neutral, or hostile creatures. (Decimal yards, clamped 1-100; default 25.)
 AzerothVoices.Environment.Distance = 25
-# Maximum nearby creature names after bounded collection; 0 disables them. (Integer entries, clamped 0-50; default 5.)
+# Maximum nearby creature names after bounded collection; 0 disables them. (Entries, clamped 0-50; default 5.)
 AzerothVoices.Environment.MaximumCreatures = 5
-# Combined equipment/backpack item-name cap; 0 disables item names. (Integer entries, clamped 0-50; default 8.)
+# Combined equipment/backpack item-name cap; 0 disables item names. (Entries, clamped 0-50; default 8.)
 AzerothVoices.Environment.MaximumItems = 8
 # Includes bounded PlayerBot equipment names in context. (Default 1.)
 AzerothVoices.Environment.IncludeEquipment = 1
@@ -294,9 +325,9 @@ AzerothVoices.Events.Enable = 1
 AzerothVoices.Events.ResponderChance = 25
 # Chance an AI PlayerBot comments on its own event through Guild, preferred Party, or fallback Say after the selected scope's audience check passes. (Percentage; default 5.)
 AzerothVoices.Events.SelfCommentChance = 5
-# Maximum other responders to one event. (Integer actors, minimum 1; default 2.)
+# Maximum other responders to one event. (Actors, minimum 1; default 2.)
 AzerothVoices.Events.MaximumResponders = 2
-# Per-subject/per-event repeat cooldown. (Integer seconds, minimum 0; default 60.)
+# Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 60.)
 AzerothVoices.Events.CooldownSeconds = 60
 # Initial chance for an automatic creature-kill event. (Percentage; default 8.)
 AzerothVoices.Events.Chance.CreatureDefeated = 8
@@ -351,40 +382,40 @@ AzerothVoices.Events.Chance.GameEventStopped = 30
 
 # Delays delivery so generated chat appears naturally typed. (Default 1.)
 AzerothVoices.Typing.Enable = 1
-# Fixed delay added to each line. (Integer milliseconds, minimum 0; default 0.)
+# Fixed delay added to each line. (Milliseconds, minimum 0; default 0.)
 AzerothVoices.Typing.BaseDelayMilliseconds = 0
-# Main natural typing delay. (Integer ms/character, minimum 0; default 200.)
+# Main natural typing delay. (Ms/character, minimum 0; default 200.)
 AzerothVoices.Typing.DelayPerCharacterMilliseconds = 200
 # Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
 AzerothVoices.Typing.SubtractGenerationTime = 1
-# Truncates cleaned in-game output. (Integer characters, minimum 1; default 220.)
+# Truncates cleaned in-game output. (Characters, minimum 1; default 220.)
 AzerothVoices.Reply.MaximumCharacters = 220
-# Maximum delivered lines per request. (Integer lines, minimum 1; default 3.)
+# Maximum delivered lines per request. (Lines, minimum 1; default 3.)
 AzerothVoices.Reply.MaximumLines = 3
 
 ###################################################################################################
 # Bounded conversation and surrounding-chat history
 ###################################################################################################
 
-# 0 disables conversation history, 1 keeps bounded history only in RAM until restart, and 2 persists it in the character database with a bounded lazy-loaded RAM cache (falling back to RAM if the module tables are unavailable). (Integer mode 0/1/2; default 2.)
+# 0 disables conversation history, 1 keeps bounded history only in RAM until restart, and 2 persists it in the character database with a bounded lazy-loaded RAM cache (falling back to RAM if the module tables are unavailable). (Mode 0/1/2; default 2.)
 AzerothVoices.History.StorageMode = 2
 # --- SQL MODE SETTINGS (StorageMode = 2) ---
-# Used only when StorageMode = 2 (SQL); integer turns, default 20. Caps persistent rows and lazy-loaded hot-cache turns per conversation.
+# Used only when StorageMode = 2 (SQL); turns, default 20. Caps persistent rows and lazy-loaded hot-cache turns per conversation.
 AzerothVoices.History.DatabaseMaximumTurns = 20
-# Used only when StorageMode = 2 (SQL); integer minutes, default 10080 (7 days). Older persistent conversation turns are not loaded and are deleted by cleanup.
+# Used only when StorageMode = 2 (SQL); minutes, default 10080 (7 days). Older persistent conversation turns are not loaded and are deleted by cleanup.
 AzerothVoices.History.DatabaseTTLMinutes = 10080
-# Used only when a StorageMode = 2 (SQL) feature has queued rows; integer seconds, default 5. Sets the maximum delay before batched history/snapshot writes flush.
+# Used only when a StorageMode = 2 (SQL) feature has queued rows; seconds, default 5. Sets the maximum delay before batched history/snapshot writes flush.
 AzerothVoices.History.DatabaseFlushSeconds = 5
-# Used only when a StorageMode = 2 (SQL) feature has queued rows; integer rows, default 20. Flushes the shared history/snapshot transaction when this many rows wait.
+# Used only when a StorageMode = 2 (SQL) feature has queued rows; rows, default 20. Flushes the shared history/snapshot transaction when this many rows wait.
 AzerothVoices.History.DatabaseFlushBatchSize = 20
 # --- RAM MODE SETTINGS (StorageMode = 1) ---
-# Used only when StorageMode = 1 (RAM); integer turns, default 6. Caps retained turns per conversation until worldserver restarts.
+# Used only when StorageMode = 1 (RAM); turns, default 6. Caps retained turns per conversation until worldserver restarts.
 AzerothVoices.History.RamMaximumTurns = 6
-# Prompt-age limit for conversation turns in RAM or the SQL hot cache. (Integer minutes, minimum 1; default 30.)
+# Prompt-age limit for conversation turns in RAM or the SQL hot cache. (Minutes, minimum 1; default 30.)
 AzerothVoices.History.TTLMinutes = 30
-# Hard rendered conversation-history cap per provider request. (Integer characters, minimum 128; default 2500.)
+# Hard rendered conversation-history cap per provider request. (Characters, minimum 128; default 2500.)
 AzerothVoices.History.MaximumCharacters = 2500
-# Hard bound on in-memory conversation buckets in StorageMode 1 or 2. (Integer keys, minimum 1; default 2048.)
+# Hard bound on in-memory conversation buckets in StorageMode 1 or 2. (Keys, minimum 1; default 2048.)
 AzerothVoices.History.MaximumConversations = 2048
 # Introduces previous conversation context. (Text template; default below.)
 AzerothVoices.History.HeaderTemplate = Recent conversation with <sender name>, use it only as context:
@@ -395,13 +426,13 @@ AzerothVoices.History.FooterTemplate = New message from <sender name>: <initial 
 
 # Adds recent lines only from the same whisper, group, guild, channel, or local map-area scope so references such as "him" or "that" retain context. (Default 1.)
 AzerothVoices.SurroundingChat.Enable = 1
-# Hard per-scope recent-line cap. (Integer lines, minimum 0; default 8.)
+# Hard per-scope recent-line cap. (Lines, minimum 0; default 8.)
 AzerothVoices.SurroundingChat.MaximumLines = 8
-# Discards stale surrounding lines. (Integer minutes, minimum 1; default 5.)
+# Discards stale surrounding lines. (Minutes, minimum 1; default 5.)
 AzerothVoices.SurroundingChat.TTLMinutes = 5
-# Rendered surrounding-context cap. (Integer characters, minimum 128; default 1200.)
+# Rendered surrounding-context cap. (Characters, minimum 128; default 1200.)
 AzerothVoices.SurroundingChat.MaximumCharacters = 1200
-# Hard bound on RAM scope buckets. (Integer scopes, minimum 1; default 512.)
+# Hard bound on RAM scope buckets. (Scopes, minimum 1; default 512.)
 AzerothVoices.SurroundingChat.MaximumScopes = 512
 
 ###################################################################################################
@@ -424,37 +455,37 @@ AzerothVoices.Snapshot.IncludeLineOfSight = 1
 AzerothVoices.Snapshot.IncludeNearbyPlayers = 1
 # Shared bounded search radius for snapshot creature, game-object, and nearby-player collection; group distance is reported for same-map members. (Decimal yards, clamped 1-100; default 40.)
 AzerothVoices.Snapshot.Distance = 40
-# Maximum other group members rendered in the current snapshot; 0 omits the group-member list. (Integer entries, clamped 0-40; default 5.)
+# Maximum other group members rendered in the current snapshot; 0 omits the group-member list. (Entries, clamped 0-40; default 5.)
 AzerothVoices.Snapshot.MaximumGroupMembers = 5
-# Maximum deduplicated highest-rank usable spell names rendered in the current snapshot; 0 omits spells. (Integer entries, clamped 0-100; default 20.)
+# Maximum deduplicated highest-rank usable spell names rendered in the current snapshot; 0 omits spells. (Entries, clamped 0-100; default 20.)
 AzerothVoices.Snapshot.MaximumSpells = 20
-# Maximum occupied quest-log entries rendered in the current snapshot; 0 omits quests. (Integer entries, clamped 0-20; default 10.)
+# Maximum occupied quest-log entries rendered in the current snapshot; 0 omits quests. (Entries, clamped 0-20; default 10.)
 AzerothVoices.Snapshot.MaximumQuests = 10
-# Maximum line-of-sight creatures rendered after bounded collection and nearest-first sorting; 0 omits creatures. (Integer entries, clamped 0-50; default 10.)
+# Maximum line-of-sight creatures rendered after bounded collection and nearest-first sorting; 0 omits creatures. (Entries, clamped 0-50; default 10.)
 AzerothVoices.Snapshot.MaximumCreatures = 10
-# Maximum spawned line-of-sight game objects rendered after bounded collection and nearest-first sorting; 0 omits game objects. (Integer entries, clamped 0-50; default 8.)
+# Maximum spawned line-of-sight game objects rendered after bounded collection and nearest-first sorting; 0 omits game objects. (Entries, clamped 0-50; default 8.)
 AzerothVoices.Snapshot.MaximumGameObjects = 8
-# Maximum non-GM nearby players rendered after bounded collection and nearest-first sorting; 0 omits players. (Integer entries, clamped 0-50; default 8.)
+# Maximum non-GM nearby players rendered after bounded collection and nearest-first sorting; 0 omits players. (Entries, clamped 0-50; default 8.)
 AzerothVoices.Snapshot.MaximumPlayers = 8
-# Hard cap on the complete current detailed snapshot before it enters the request context budget. (Integer characters, clamped 256-16000; default 3500.)
+# Hard cap on the complete current detailed snapshot before it enters the request context budget. (Characters, clamped 256-16000; default 3500.)
 AzerothVoices.Snapshot.MaximumCharacters = 3500
 # Replaces {combat}, {group}, {spells}, {quests}, {line_of_sight}, and {nearby_players}; disabled or empty sections insert no text. (Text template with literal \n line breaks; default below.)
 AzerothVoices.Snapshot.PromptTemplate = "CURRENT PLAYERBOT SNAPSHOT:\n{combat}\n{group}\n{spells}\n{quests}\n{line_of_sight}\n{nearby_players}"
-# Controls only older delivered snapshots: 0 stores none while the current snapshot still works, 1 stores bounded RAM until restart, and 2 persists SQL plus a lazy RAM cache (falling back to bounded RAM if tables are unavailable). (Integer mode 0/1/2; default 0.)
+# Controls only older delivered snapshots: 0 stores none while the current snapshot still works, 1 stores bounded RAM until restart, and 2 persists SQL plus a lazy RAM cache (falling back to bounded RAM if tables are unavailable). (Mode 0/1/2; default 0.)
 AzerothVoices.Snapshot.StorageMode = 0
 # --- SQL MODE SETTINGS (StorageMode = 2) ---
-# Used only when StorageMode = 2 (SQL); integer snapshots, default 10. Caps persistent rows and lazy-loaded hot-cache snapshots per PlayerBot.
+# Used only when StorageMode = 2 (SQL); snapshots, default 10. Caps persistent rows and lazy-loaded hot-cache snapshots per PlayerBot.
 AzerothVoices.Snapshot.DatabaseMaximumSnapshots = 10
-# Used only when StorageMode = 2 (SQL); integer minutes, default 10080 (7 days). Older persistent snapshots are not loaded and are deleted by cleanup.
+# Used only when StorageMode = 2 (SQL); minutes, default 10080 (7 days). Older persistent snapshots are not loaded and are deleted by cleanup.
 AzerothVoices.Snapshot.DatabaseTTLMinutes = 10080
 # --- RAM MODE SETTINGS (StorageMode = 1) ---
-# Used only when StorageMode = 1 (RAM); integer snapshots, default 3. Caps retained snapshots per PlayerBot until worldserver restarts.
+# Used only when StorageMode = 1 (RAM); snapshots, default 3. Caps retained snapshots per PlayerBot until worldserver restarts.
 AzerothVoices.Snapshot.RamMaximumSnapshots = 3
-# Prompt-age limit for older snapshots in RAM or the SQL hot cache; the current live snapshot is never aged out. (Integer minutes, minimum 1; default 30.)
+# Prompt-age limit for older snapshots in RAM or the SQL hot cache; the current live snapshot is never aged out. (Minutes, minimum 1; default 30.)
 AzerothVoices.Snapshot.HistoryTTLMinutes = 30
-# Hard combined prompt cap for older snapshots, separate from the richer current-snapshot cap. (Integer characters, minimum 128; default 1600.)
+# Hard combined prompt cap for older snapshots, separate from the richer current-snapshot cap. (Characters, minimum 128; default 1600.)
 AzerothVoices.Snapshot.HistoryMaximumCharacters = 1600
-# Hard bound on in-memory PlayerBot snapshot-history buckets in StorageMode 1 or 2. (Integer actors, minimum 1; default 2048.)
+# Hard bound on in-memory PlayerBot snapshot-history buckets in StorageMode 1 or 2. (Actors, minimum 1; default 2048.)
 AzerothVoices.Snapshot.HistoryMaximumActors = 2048
 
 ###################################################################################################
@@ -465,11 +496,11 @@ AzerothVoices.Snapshot.HistoryMaximumActors = 2048
 AzerothVoices.RAG.Enable = 0
 # Loads every .json file here and also checks the installed and source-tree module data paths so one value works in both deployments. (Directory path; default below.)
 AzerothVoices.RAG.Directory = modules/mod-azeroth-voices/data/rag/
-# Maximum RAG excerpts per provider request. (Integer entries, minimum 1; default 3.)
+# Maximum RAG excerpts per provider request. (Entries, minimum 1; default 3.)
 AzerothVoices.RAG.MaximumItems = 3
 # Minimum local weighted similarity required to include an entry; lower values increase coverage and noise, higher values increase precision and may miss useful lore, with 0.2-0.4 recommended. (Decimal 0.0-1.0; default 0.3.)
 AzerothVoices.RAG.SimilarityThreshold = 0.3
-# Total structured RAG prompt cap. (Integer characters, minimum 128; default 1200.)
+# Total structured RAG prompt cap. (Characters, minimum 128; default 1200.)
 AzerothVoices.RAG.MaximumCharacters = 1200
 # Reloads JSON when the module restarts via `.av restart`. (Default 1.)
 AzerothVoices.RAG.ReloadOnRestart = 1
