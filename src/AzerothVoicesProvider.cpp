@@ -1,6 +1,7 @@
 #include "AzerothVoicesProvider.h"
 
 #include "AzerothVoicesPersonality.h"
+#include "AzerothVoicesSentiment.h"
 
 #include "httplib.h"
 #include "json.hpp"
@@ -364,31 +365,41 @@ namespace AzerothVoices
     {
         try
         {
+            ChatRequest prepared = request;
+            std::string const sentimentDeltaInstruction =
+                BuildSentimentDeltaInstruction(prepared.sentimentDeltaLimit);
+            if (!sentimentDeltaInstruction.empty())
+            {
+                if (!prepared.systemPrompt.empty())
+                    prepared.systemPrompt += "\n\n";
+                prepared.systemPrompt += sentimentDeltaInstruction;
+            }
+
             Json body;
             if (!config.apiJsonTemplate.empty())
             {
                 body = Json::parse(config.apiJsonTemplate);
-                ApplyPlaceholders(body, request);
-                ApplyTokenOverride(body, config, request);
+                ApplyPlaceholders(body, prepared);
+                ApplyTokenOverride(body, config, prepared);
             }
             else if (Lower(config.providerMode) == "responses")
             {
                 body["model"] = config.model;
-                body["instructions"] = request.systemPrompt;
-                body["input"] = request.context.empty() ? request.userPrompt : request.context + "\n\n" + request.userPrompt;
-                body["max_output_tokens"] = request.maxTokensOverride
-                    ? request.maxTokensOverride : config.maxTokens;
+                body["instructions"] = prepared.systemPrompt;
+                body["input"] = prepared.context.empty() ? prepared.userPrompt : prepared.context + "\n\n" + prepared.userPrompt;
+                body["max_output_tokens"] = prepared.maxTokensOverride
+                    ? prepared.maxTokensOverride : config.maxTokens;
             }
             else
             {
                 body["model"] = config.model;
                 body["messages"] = Json::array();
-                body["messages"].push_back({ { "role", "system" }, { "content", request.systemPrompt } });
-                if (!request.context.empty())
-                    body["messages"].push_back({ { "role", "system" }, { "content", request.context } });
-                body["messages"].push_back({ { "role", "user" }, { "content", request.userPrompt } });
-                body["max_tokens"] = request.maxTokensOverride
-                    ? request.maxTokensOverride : config.maxTokens;
+                body["messages"].push_back({ { "role", "system" }, { "content", prepared.systemPrompt } });
+                if (!prepared.context.empty())
+                    body["messages"].push_back({ { "role", "system" }, { "content", prepared.context } });
+                body["messages"].push_back({ { "role", "user" }, { "content", prepared.userPrompt } });
+                body["max_tokens"] = prepared.maxTokensOverride
+                    ? prepared.maxTokensOverride : config.maxTokens;
                 body["temperature"] = config.temperature;
                 body["top_p"] = config.topP;
             }

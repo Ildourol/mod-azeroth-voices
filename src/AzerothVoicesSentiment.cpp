@@ -80,20 +80,42 @@ namespace AzerothVoices
         return false;
     }
 
+    std::string BuildSentimentToneHint(std::string const& targetName, int32_t score)
+    {
+        std::ostringstream block;
+        block << "Relationship toward " << targetName << ": " << SentimentTierForScore(score)
+              << ". Reflect this subtly in interpersonal tone. The player's current message, current "
+                 "situation, recent conversation history, and personality take priority. Do not let "
+                 "relationship tone alter facts, safety, or game-state truth.";
+        return block.str();
+    }
+
+    std::string BuildSentimentDeltaInstruction(uint32_t deltaLimit)
+    {
+        uint32_t const limit = std::min<uint32_t>(deltaLimit, 2);
+        if (!limit)
+            return "";
+
+        std::ostringstream block;
+        block << "Output metadata rule: after composing the spoken dialogue, append exactly one "
+                 "[[AV_SENTIMENT:N]] marker on its own line, where N is an integer from -"
+              << limit << " to +" << limit
+              << ". Base N only on how the real player's latest interpersonal words changed the "
+                 "speaker's regard toward that player; use 0 when there is no meaningful change. "
+                 "Compose the dialogue for the game situation first and do not change, distort, or "
+                 "justify the spoken reply to fit N. The marker is hidden machine metadata, is not "
+                 "spoken, and is the only exception to an instruction to return only spoken dialogue.";
+        return block.str();
+    }
+
     std::string BuildSentimentPromptBlock(std::string const& targetName, int32_t score,
                                           uint32_t deltaLimit)
     {
-        std::ostringstream block;
-        block << "Relationship to " << targetName << ": " << SentimentTierForScore(score)
-              << ". Use this only for interpersonal tone, never facts, safety, or game-state truth.";
-        if (deltaLimit)
-        {
-            block << " End with [[AV_SENTIMENT:N]] on its own line, where N is one value from -"
-                  << deltaLimit << " to +" << deltaLimit
-                  << " for the regard change caused by this player's words; use 0 if none. "
-                     "This metadata is removed before delivery.";
-        }
-        return block.str();
+        // Keep the existing manager call surface while separating relationship tone from
+        // response-format metadata. The provider appends the delta instruction separately so
+        // this block remains conversational context only.
+        (void)deltaLimit;
+        return BuildSentimentToneHint(targetName, score);
     }
 
     bool ExtractSentimentDelta(std::string& response, uint32_t deltaLimit, int32_t& delta)
