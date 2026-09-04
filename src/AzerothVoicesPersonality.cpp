@@ -125,9 +125,8 @@ namespace AzerothVoices
                << "Return exactly one JSON object and no markdown or explanation. The object must contain only "
                << "traits, tone, and background. traits must be an array of exactly "
                << config.personalityTraitCount
-               << " distinct concise descriptors chosen from different personality dimensions such as temperament, "
-                  "social style, outlook, courage, values, humor, demeanor, drive, loyalty, or discipline. "
-                  "Traits must be mutually compatible and must not merely restate race or class. ";
+               << " distinct concise descriptors chosen freely so their combination feels specific, varied, and "
+                  "internally coherent. Do not use a fixed trait checklist, and do not merely restate race or class. ";
 
         if (config.personalityGenerateTone)
             prompt << "tone must be a concise speaking-style description derived from all traits. ";
@@ -137,15 +136,21 @@ namespace AzerothVoices
         if (!config.personalityGenerateBackground)
             prompt << "background must be an empty string. ";
         else if (config.personalityBackgroundMode == 0)
-            prompt << "background must be a short Vanilla/Turtle WoW-compatible backstory for an actual character "
-                      "living in Azeroth. It may include upbringing, family, mentors, training, formative events, "
-                      "motivations, fears, ambitions, and reasons for adventuring. Avoid later-expansion assumptions. ";
+            prompt << "background must be a short, freely imagined backstory for an actual character living in "
+                      "Vanilla/Turtle WoW-era Azeroth. Invent it without a fixed biography template or supplied story "
+                      "ingredients. Keep it plausible for the supplied race, class, faction, and gender, avoid "
+                      "later-expansion assumptions, and favor a distinctive believable premise over a generic WoW archetype. ";
         else
-            prompt << "background must be a short fictional real-world WoW-player persona. It may include life stage, "
-                      "work or school, family, play schedule, guild or raid memories, PvE/PvP preferences, humor, and "
-                      "casual or hardcore habits. Do not impersonate a real person and avoid gratuitous modern-platform references. ";
+            prompt << "background must be a short, freely imagined fictional real-world backstory for a person who "
+                      "plays World of Warcraft. Invent the player's life and relationship with WoW without a fixed "
+                      "biography template or supplied life ingredients. Treat the supplied race, class, faction, and "
+                      "gender as properties of the in-game avatar only and do not infer the real person's identity "
+                      "from them. Do not impersonate a real person, favor a distinctive believable persona over a "
+                      "generic gamer stereotype, and avoid gratuitous modern-platform references. ";
 
-        prompt << "Keep background at or below " << config.personalityMaxBackgroundCharacters
+        prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
+                  "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. "
+               << "Keep background at or below " << config.personalityMaxBackgroundCharacters
                << " characters. JSON shape: {\"traits\":[\"...\"],\"tone\":\"...\",\"background\":\"...\"}.";
         return prompt.str();
     }
