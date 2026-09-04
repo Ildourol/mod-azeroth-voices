@@ -140,9 +140,51 @@ namespace AzerothVoices
         c.globalRequestsPerMinute = Positive("AzerothVoices.GlobalRequestsPerMinute", 60, 1);
         c.speakerCooldownSeconds = Positive("AzerothVoices.SpeakerCooldownSeconds", 3);
 
-        c.globalPrompt = Trim(sConfig.GetStringDefault("AzerothVoices.GlobalPrompt",
-            "You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. "
-            "Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says."));
+        std::string globalMode = Trim(sConfig.GetStringDefault("AzerothVoices.GlobalMode", "Roleplay"));
+        std::transform(globalMode.begin(), globalMode.end(), globalMode.begin(), [](unsigned char value) {
+            return static_cast<char>(std::tolower(value));
+        });
+        if (globalMode == "normal")
+            c.globalMode = GlobalMode::Normal;
+        else
+        {
+            if (globalMode != "roleplay")
+                sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.GlobalMode='%s' is invalid; using Roleplay.",
+                    globalMode.c_str());
+            c.globalMode = GlobalMode::Roleplay;
+        }
+
+        std::string const legacyGlobalPrompt = Trim(
+            sConfig.GetStringDefault("AzerothVoices.GlobalPrompt", ""));
+        std::string const defaultRoleplayPrompt =
+            "You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth "
+            "and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real "
+            "lived experience. Stay in character and do not narrate actions. Never mention AI, prompts, policies, "
+            "APIs, automation, game servers, controlling a character, or being a real-world player. Return only "
+            "what the speaker says.";
+        std::string const defaultNormalPrompt =
+            "You create short, natural World of Warcraft chat. Interaction metadata: speaker=<bot type>; "
+            "counterpart=<other type>; counterpart-race=<other race>. If the speaker is an NPC or counterpart-race "
+            "is NPC, speak entirely in-world as a believable Vanilla/Turtle WoW character and never talk like "
+            "someone at a computer. Otherwise the speaker is a PlayerBot representing a believable real human "
+            "playing World of Warcraft: talk naturally like a real player about quests, leveling, gear, builds, "
+            "talents, dungeons, guilds, PvP, travel, wipes, groups, and game mechanics when relevant; do not pretend "
+            "Azeroth is real unless the conversation itself is roleplay. Avoid forced gamer slang and repetitive "
+            "stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Return only "
+            "what the speaker says.";
+        std::string const roleplayFallback = legacyGlobalPrompt.empty()
+            ? defaultRoleplayPrompt : legacyGlobalPrompt;
+        c.globalPromptRoleplay = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.GlobalPrompt.Roleplay", roleplayFallback.c_str()));
+        c.globalPromptNormal = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.GlobalPrompt.Normal", defaultNormalPrompt.c_str()));
+        if (c.globalPromptRoleplay.empty())
+            c.globalPromptRoleplay = roleplayFallback;
+        if (c.globalPromptNormal.empty())
+            c.globalPromptNormal = defaultNormalPrompt;
+        c.globalPrompt = c.globalMode == GlobalMode::Normal
+            ? c.globalPromptNormal : c.globalPromptRoleplay;
+
         c.prePrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrePrompt",
             "You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. "
             "<bot personality block>"));
