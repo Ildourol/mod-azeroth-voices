@@ -9,6 +9,12 @@
 
 namespace AzerothVoices
 {
+    enum class GlobalMode : uint8_t
+    {
+        Roleplay,
+        Normal
+    };
+
     struct ResponderLimit
     {
         uint32_t maximum = 2;
@@ -61,6 +67,9 @@ namespace AzerothVoices
         uint32_t globalRequestsPerMinute = 60;
         uint32_t speakerCooldownSeconds = 3;
 
+        GlobalMode globalMode = GlobalMode::Roleplay;
+        std::string globalPromptRoleplay;
+        std::string globalPromptNormal;
         std::string globalPrompt;
         std::string prePrompt;
         std::string prompt;
