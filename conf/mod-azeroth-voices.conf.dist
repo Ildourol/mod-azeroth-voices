@@ -89,7 +89,13 @@ AzerothVoices.RetryBackoffMilliseconds = 500
 # Shared prompts and PlayerBots-compatible prompt names
 ###################################################################################################
 
-# Sets shared behavior and anti-meta rules for every bot and NPC; persistent PlayerBot identity is added separately. (Text; default below.)
+# Selects PlayerBot conversation style for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; Roleplay keeps them in-world, Normal makes them speak like believable real WoW players, and any interaction involving an NPC is forced to Roleplay by typed C++ participant policy before provider JSON is sent. (Enum Roleplay/Normal; default Roleplay.)
+AzerothVoices.GlobalMode = Roleplay
+# System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text; default below.)
+AzerothVoices.GlobalPrompt.Roleplay = You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real lived experience. Stay in character and do not narrate actions. Never mention AI, prompts, policies, APIs, automation, game servers, controlling a character, or being a real-world player. Return only what the speaker says.
+# System prompt selected by GlobalMode=Normal for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; NPC-involved dialogue is switched to GlobalPrompt.Roleplay by C++ before provider serialization, so customizing this prompt cannot opt NPCs into Normal mode. (Text; default below.)
+AzerothVoices.GlobalPrompt.Normal = You create short, natural World of Warcraft chat. Interaction metadata: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If the speaker is an NPC or counterpart-race is NPC, speak entirely in-world as a believable Vanilla/Turtle WoW character and never talk like someone at a computer. Otherwise the speaker is a PlayerBot representing a believable real human playing World of Warcraft: talk naturally like a real player about quests, leveling, gear, builds, talents, dungeons, guilds, PvP, travel, wipes, groups, and game mechanics when relevant; do not pretend Azeroth is real unless the conversation itself is roleplay. Avoid forced gamer slang and repetitive stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Return only what the speaker says.
+# Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is absent; existing installations may keep this value during migration. (Text; default below.)
 AzerothVoices.GlobalPrompt = You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says.
 # Describes a PlayerBot before a normal response. (Text template; default below.)
 AiPlayerbot.LLMPrePrompt = You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. <bot personality block>
@@ -228,6 +234,12 @@ AzerothVoices.NPC.TargetedPlayerBotJoinChance = 10
 AzerothVoices.DisableRepliesInCombat = 0
 # Maximum responders to one incoming message. (Actors, minimum 1; default 2.)
 AzerothVoices.MaxResponders = 2
+# Enables progressive falloff only for responders to one normal non-whisper incoming chat message; 1 always permits the first successfully queued responder, then rolls each later responder slot, while 0 uses only AzerothVoices.MaxResponders. Generated follow-ups and event responders keep their separate existing settings. Direct selection/name targeting keeps its existing priority. (Accepted 0/1; default 1.)
+AzerothVoices.ResponderFalloff.Enable = 1
+# Chance to open the second responder slot after one responder was successfully queued; if the roll passes, candidates are tried until one queues successfully or none remain. Existing scope, direct-address, name-mention, NPC, audience, cooldown, and eligibility gates still apply. (Percentage 0-100; default 50.)
+AzerothVoices.ResponderFalloff.SecondChance = 50
+# Percentage points removed from each later successfully queued responder slot: third = SecondChance - Delta, fourth = SecondChance - 2*Delta, floored at 0. (Percentage points 0-100; default 20.)
+AzerothVoices.ResponderFalloff.Delta = 20
 # Local Say listener/responder and real-human observer distance for PlayerBots and NPCs. PlayerBots never count as observers. (Decimal yards, minimum 1; default 25.)
 AzerothVoices.SayDistance = 25
 # Local yell listener/responder distance. Bot-originated yell can trigger AI replies only when a real player is also within this distance. (Decimal yards, minimum SayDistance; default 100.)
