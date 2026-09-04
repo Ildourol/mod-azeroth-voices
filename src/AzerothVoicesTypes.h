@@ -13,6 +13,13 @@ namespace AzerothVoices
         Creature
     };
 
+    enum class SpeakerKind : uint8_t
+    {
+        RealPlayer,
+        PlayerBot,
+        Creature
+    };
+
     enum class ChatScope : uint8_t
     {
         Say,
@@ -119,6 +126,16 @@ namespace AzerothVoices
         uint32_t groupId = 0;
         uint32_t guildId = 0;
         bool isBot = false;
+
+        SpeakerKind ResolvedKind() const
+        {
+            // Creature speakers are value-snapshotted with the established NPC
+            // race/class markers. Keep isBot for existing Manager call sites while
+            // exposing one typed three-way participant distinction to new policy.
+            if (race == "NPC" || className == "NPC")
+                return SpeakerKind::Creature;
+            return isBot ? SpeakerKind::PlayerBot : SpeakerKind::RealPlayer;
+        }
     };
 
     struct HistoryTurn
