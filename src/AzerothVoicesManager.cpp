@@ -2103,20 +2103,51 @@ namespace AzerothVoices
             RecordSurroundingChat(scope, channelName, candidates.front().actor, speakerSnapshot, message);
 
         bool accepted = false;
-        uint32_t maximum = scope == ChatScope::Whisper ? 1 : m_config->maxResponders;
-        for (size_t i = 0; i < candidates.size() && i < maximum; ++i)
+        uint32_t acceptedResponders = 0;
+        size_t candidateIndex = 0;
+        uint32_t const maximum = scope == ChatScope::Whisper
+            ? 1 : m_config->maxResponders.maximum;
+        while (candidateIndex < candidates.size() && acceptedResponders < maximum)
         {
-            bool direct = scope == ChatScope::Whisper || candidates[i].score >= 80 ||
-                candidates[i].selectedNpcTarget;
-            RequestPriority priority = direct ? RequestPriority::Direct :
-                ((scope == ChatScope::Party || scope == ChatScope::Raid || scope == ChatScope::Guild || scope == ChatScope::Officer)
-                    ? RequestPriority::Group : RequestPriority::Nearby);
-            std::string trigger = direct ? "direct-chat" : "overheard-chat";
-            if (candidates[i].targetedNpcConversation)
-                trigger = candidates[i].selectedNpcTarget
-                    ? "targeted-npc-direct" : "targeted-npc-join";
-            accepted = QueueDialogue(candidates[i].actor, speakerSnapshot, scope, channelName,
-                trigger, message, priority, false, allowAiFollowup) || accepted;
+            if (scope != ChatScope::Whisper && m_config->maxResponders.falloffEnabled &&
+                acceptedResponders > 0)
+            {
+                uint64_t const reduction =
+                    static_cast<uint64_t>(m_config->maxResponders.chanceDelta) *
+                    (acceptedResponders - 1);
+                uint32_t const nextChance = reduction >= m_config->maxResponders.secondChance
+                    ? 0
+                    : m_config->maxResponders.secondChance - static_cast<uint32_t>(reduction);
+                if (!Roll(nextChance))
+                    break;
+            }
+
+            bool responderAccepted = false;
+            while (candidateIndex < candidates.size())
+            {
+                Candidate const& candidate = candidates[candidateIndex++];
+                bool const direct = scope == ChatScope::Whisper || candidate.score >= 80 ||
+                    candidate.selectedNpcTarget;
+                RequestPriority const priority = direct ? RequestPriority::Direct :
+                    ((scope == ChatScope::Party || scope == ChatScope::Raid ||
+                      scope == ChatScope::Guild || scope == ChatScope::Officer)
+                        ? RequestPriority::Group : RequestPriority::Nearby);
+                std::string trigger = direct ? "direct-chat" : "overheard-chat";
+                if (candidate.targetedNpcConversation)
+                    trigger = candidate.selectedNpcTarget
+                        ? "targeted-npc-direct" : "targeted-npc-join";
+                if (!QueueDialogue(candidate.actor, speakerSnapshot, scope, channelName,
+                    trigger, message, priority, false, allowAiFollowup))
+                    continue;
+
+                accepted = true;
+                responderAccepted = true;
+                ++acceptedResponders;
+                break;
+            }
+
+            if (!responderAccepted)
+                break;
         }
         if (accepted && scope != ChatScope::Whisper && m_config->speakerCooldownSeconds)
             m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
