@@ -70,7 +70,37 @@ namespace AzerothVoices
             return value;
         }
 
-        std::unordered_map<std::string, std::string> Placeholders(ChatRequest const& request)
+        std::string ScopeName(ChatScope scope)
+        {
+            switch (scope)
+            {
+                case ChatScope::Say: return "say";
+                case ChatScope::Yell: return "yell";
+                case ChatScope::Whisper: return "whisper";
+                case ChatScope::Party: return "party";
+                case ChatScope::Raid: return "raid";
+                case ChatScope::Guild: return "guild";
+                case ChatScope::Officer: return "officer";
+                case ChatScope::Channel: return "channel";
+                case ChatScope::World: return "world";
+            }
+            return "say";
+        }
+
+        std::string SpeakerKindName(SpeakerKind kind)
+        {
+            switch (kind)
+            {
+                case SpeakerKind::PlayerBot: return "playerbot";
+                case SpeakerKind::Creature: return "NPC";
+                case SpeakerKind::RealPlayer: return "player";
+            }
+            return "player";
+        }
+
+        std::unordered_map<std::string, std::string> Placeholders(
+            ChatRequest const& request, bool resolveCreatureSpeaker = true,
+            bool includeProviderOnly = true)
         {
             std::unordered_map<std::string, std::string> values;
             values["<bot name>"] = request.actor.name;
@@ -98,7 +128,10 @@ namespace AzerothVoices
             values["<other class>"] = request.speaker.className;
             values["<other gender>"] = request.speaker.gender;
             values["<other faction>"] = request.speaker.faction;
-            values["<other type>"] = request.speaker.isBot ? "playerbot" : "player";
+            SpeakerKind const speakerKind = resolveCreatureSpeaker
+                ? request.speaker.ResolvedKind()
+                : (request.speaker.isBot ? SpeakerKind::PlayerBot : SpeakerKind::RealPlayer);
+            values["<other type>"] = SpeakerKindName(speakerKind);
             values["<unit type>"] = values["<other type>"];
             values["<unit name>"] = request.speaker.name;
             values["<unit subname>"] = "";
@@ -108,25 +141,36 @@ namespace AzerothVoices
             values["<unit faction>"] = request.speaker.faction;
             values["<unit class>"] = request.speaker.className;
             values["<initial message>"] = request.incomingMessage;
-            values["<context>"] = request.context;
-            values["<prompt>"] = request.userPrompt;
-            values["<pre prompt>"] = request.systemPrompt;
-            values["<post prompt>"] = "";
+            values["<channel name>"] = request.channelName.empty()
+                ? ScopeName(request.scope) : request.channelName;
+            values["<trigger>"] = request.trigger;
+            if (includeProviderOnly)
+            {
+                values["<context>"] = request.context;
+                values["<prompt>"] = request.userPrompt;
+                values["<pre prompt>"] = request.systemPrompt;
+                values["<post prompt>"] = "";
+            }
             return values;
         }
 
-        void ApplyPlaceholders(std::string& value, ChatRequest const& request)
+        void ApplyPlaceholders(std::string& value, ChatRequest const& request,
+                               bool resolveCreatureSpeaker = true,
+                               bool includeProviderOnly = true)
         {
-            for (auto const& pair : Placeholders(request))
+            for (auto const& pair : Placeholders(
+                     request, resolveCreatureSpeaker, includeProviderOnly))
                 ReplaceAll(value, pair.first, pair.second);
         }
 
-        void ApplyPlaceholders(Json& value, ChatRequest const& request)
+        void ApplyPlaceholders(Json& value, ChatRequest const& request,
+                               bool resolveCreatureSpeaker = true,
+                               bool includeProviderOnly = true)
         {
             if (value.is_string())
             {
                 std::string text = value.get<std::string>();
-                ApplyPlaceholders(text, request);
+                ApplyPlaceholders(text, request, resolveCreatureSpeaker, includeProviderOnly);
                 value = text;
                 return;
             }
@@ -134,7 +178,7 @@ namespace AzerothVoices
             if (value.is_array() || value.is_object())
             {
                 for (auto it = value.begin(); it != value.end(); ++it)
-                    ApplyPlaceholders(*it, request);
+                    ApplyPlaceholders(*it, request, resolveCreatureSpeaker, includeProviderOnly);
             }
         }
 
@@ -366,6 +410,30 @@ namespace AzerothVoices
         try
         {
             ChatRequest prepared = request;
+            if (prepared.kind == RequestKind::Dialogue)
+            {
+                bool const npcInteraction = prepared.actor.kind == ActorKind::Creature ||
+                    prepared.speaker.ResolvedKind() == SpeakerKind::Creature;
+                std::string desiredGlobalPrompt =
+                    (npcInteraction || config.globalMode == GlobalMode::Roleplay)
+                        ? config.globalPromptRoleplay : config.globalPromptNormal;
+                std::string currentGlobalPrompt = config.globalPrompt;
+
+                // Manager currently expands the configured global prompt before the
+                // value-owned request reaches a worker. Recreate that exact legacy
+                // expansion only to identify the prefix, then replace it with the
+                // typed effective prompt. This keeps history/sentiment/personality
+                // layers untouched while making NPC roleplay a C++-enforced rule.
+                ApplyPlaceholders(currentGlobalPrompt, prepared, false, false);
+                ApplyPlaceholders(desiredGlobalPrompt, prepared, true, false);
+                if (!currentGlobalPrompt.empty() &&
+                    prepared.systemPrompt.compare(0, currentGlobalPrompt.size(), currentGlobalPrompt) == 0)
+                {
+                    prepared.systemPrompt.replace(
+                        0, currentGlobalPrompt.size(), desiredGlobalPrompt);
+                }
+            }
+
             std::string const sentimentDeltaInstruction =
                 BuildSentimentDeltaInstruction(prepared.sentimentDeltaLimit);
             if (!sentimentDeltaInstruction.empty())
