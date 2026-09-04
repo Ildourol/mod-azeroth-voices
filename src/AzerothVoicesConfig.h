@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
-#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -25,23 +24,7 @@ namespace AzerothVoices
 
         operator uint32_t() const
         {
-            if (!falloffEnabled || maximum <= 1 ||
-                (secondChance >= 100 && chanceDelta == 0))
-                return maximum;
-
-            static thread_local std::mt19937 engine(std::random_device{}());
-            std::uniform_int_distribution<uint32_t> roll(1, 100);
-            uint32_t responders = 1;
-            while (responders < maximum)
-            {
-                uint64_t const reduction = static_cast<uint64_t>(chanceDelta) * (responders - 1);
-                uint32_t const chance = reduction >= secondChance
-                    ? 0 : secondChance - static_cast<uint32_t>(reduction);
-                if (!chance || roll(engine) > chance)
-                    break;
-                ++responders;
-            }
-            return responders;
+            return maximum;
         }
     };
 
