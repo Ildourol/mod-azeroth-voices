@@ -246,10 +246,6 @@ namespace AzerothVoices
             {
                 if (reputationFaction->CanHaveReputation())
                 {
-                    // Reputation factions override the template masks in this
-                    // core. Evaluate their DBC base standing for every normal
-                    // playable race/class combination, independent of whichever
-                    // faction the nearby observer happens to use.
                     for (uint8 race = 1; race < MAX_RACES; ++race)
                     {
                         uint32 const raceMask = 1u << (race - 1);
@@ -285,11 +281,6 @@ namespace AzerothVoices
                     Player::GetFactionForRace(race));
                 if (!playableFaction)
                     continue;
-
-                // Match this core's faction-template reaction order. A normal
-                // Alliance or Horde NPC is allowed when it is genuinely friendly
-                // to at least one playable race, independent of the observer's
-                // faction. Merely being non-hostile never qualifies.
                 if (creatureFaction->IsHostileTo(*playableFaction))
                     hostileToPlayableFaction = true;
                 else if (creatureFaction->IsFriendlyTo(*playableFaction) ||
@@ -305,11 +296,6 @@ namespace AzerothVoices
             if (!creature || !creature->IsInWorld() || !creature->IsAlive() ||
                 !creature->GetCreatureInfo())
                 return NpcEligibilityResult::Invalid;
-
-            // Generic, static database creatures are the only valid NPC
-            // speakers. This excludes pets, guardians/summons, totems,
-            // charmed/possessed units, triggers, critters, and other temporary
-            // combat entities without depending on service npc_flags.
             if (creature->IsPet() || creature->IsTotem() || creature->IsTemporarySummon() ||
                 creature->IsCharmed() || !creature->GetCharmerOrOwnerGuid().IsEmpty() ||
                 creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED | UNIT_FLAG_POSSESSED) ||
@@ -422,12 +408,6 @@ namespace AzerothVoices
                     else
                         onlineRealPlayer = true;
                 }
-
-                // Channel membership lookup is private in this core. If the
-                // public member count exceeds every online bot that could
-                // possibly be in the cross-faction channel, at least one member is
-                // necessarily a real player. This conservative test may skip
-                // calls, but it cannot approve a provably bot-only channel.
                 return onlineRealPlayer && channel->GetNumPlayers() > onlineBots;
             }
 
@@ -1511,9 +1491,6 @@ namespace AzerothVoices
         request.conversationDepth = conversationDepth;
         if (Enqueue(std::move(request)))
             return true;
-
-        // Enqueue repeats the queue invariants for safety. This should only be
-        // reachable if lifecycle state changed after the world-thread preflight.
         RecordPreflightRejection(PreflightReason::Unavailable);
         return false;
     }
@@ -1755,8 +1732,6 @@ namespace AzerothVoices
             rag = std::move(block);
         }
 
-        // Allocate the fixed context budget by importance. The final ordering
-        // keeps the authoritative live snapshot closest to the new user turn.
         size_t const fixedContext = request.personalityBlock.size() + request.sentimentBlock.size();
         size_t remaining = m_config->contextLength > fixedContext
             ? m_config->contextLength - fixedContext : 0;
@@ -1809,11 +1784,6 @@ namespace AzerothVoices
             dispositionTarget->GetMapId() == speaker->GetMapId()
                 ? dispositionTarget : static_cast<WorldObject const*>(speaker);
 
-        // A real player's Say while explicitly selecting an eligible NPC uses
-        // a separate, tightly local selection policy. The selected NPC is
-        // considered first; other NPCs and PlayerBots may join using their own
-        // configured chances, but every participant starts within NPC.Distance
-        // of the human speaker.
         Creature* selectedNpc = nullptr;
         bool targetedNpcConversation = false;
         if (!ambient && allowNpcs && m_config->npcReplies && scope == ChatScope::Say &&
@@ -1896,10 +1866,32 @@ namespace AzerothVoices
                 if (entry.second)
                     onlinePlayers.push_back(entry.second);
         }
+
+        std::set<uint64_t> explicitlyMentionedPlayerBots;
+        if (!ambient && scope != ChatScope::Whisper &&
+            m_config->exclusiveNameMentionResponder)
+        {
+            for (Player* bot : onlinePlayers)
+            {
+                if (bot == speaker || !bot->IsInWorld() || !bot->IsAlive() ||
+                    !Script_IsAIControlled(bot) ||
+                    bot->GetObjectGuid().GetRawValue() == excludedActor)
+                    continue;
+                if (IsExplicitPlayerBotNameMention(message, bot->GetName()))
+                    explicitlyMentionedPlayerBots.insert(bot->GetObjectGuid().GetRawValue());
+            }
+        }
+        bool const exclusivePlayerBotMention = !explicitlyMentionedPlayerBots.empty();
+        if (exclusivePlayerBotMention)
+            targetedNpcConversation = false;
+
         for (Player* bot : onlinePlayers)
         {
             if (bot == speaker || !bot->IsInWorld() || !bot->IsAlive() ||
                 !Script_IsAIControlled(bot) || bot->GetObjectGuid().GetRawValue() == excludedActor)
+                continue;
+            if (exclusivePlayerBotMention &&
+                !explicitlyMentionedPlayerBots.count(bot->GetObjectGuid().GetRawValue()))
                 continue;
             if (m_config->disableRepliesInCombat && bot->IsInCombat())
             {
@@ -1975,7 +1967,8 @@ namespace AzerothVoices
             result.push_back(std::move(candidate));
         }
 
-        if (allowNpcs && m_config->npcReplies && scope == ChatScope::Say)
+        if (!exclusivePlayerBotMention && allowNpcs && m_config->npcReplies &&
+            scope == ChatScope::Say)
         {
             float const distance = m_config->npcDistance;
             MaNGOS::AllCreaturesInRange check(speaker, distance);
@@ -2100,13 +2093,7 @@ namespace AzerothVoices
         }
 
         bool const speakerIsBot = Script_IsAIControlled(speaker);
-        // NPCs can answer both real players and PlayerBots in Say. NPC.Distance
-        // limits candidate discovery; the per-NPC preflight also requires a
-        // real human observer within SayDistance before prompt creation.
         bool const allowNpcReply = scope == ChatScope::Say;
-        // Bot-originated dialogue may continue in every supported public/group
-        // scope. Whisper remains human-directed and never starts AI-to-AI
-        // follow-ups. MaybeQueueFollowup repeats the scope audience rules.
         bool const allowAiFollowup = speakerIsBot && scope != ChatScope::Whisper;
         std::vector<Candidate> candidates = CollectCandidates(
             speaker, scope, targetName, message, false, allowNpcReply);
@@ -2211,10 +2198,6 @@ namespace AzerothVoices
 
         if (guildEvent)
         {
-            // Guild membership hooks copy the guild id into ingress so a
-            // guild-leave reaction still targets the guild after the core has
-            // cleared the subject's membership. No real guild listener means
-            // no prompt and therefore no provider call.
             if (!eventGuildId || !IsScopeEnabled(*m_config, ChatScope::Guild) ||
                 !FindOnlineRealGuildAudience(eventGuildId, ChatScope::Guild))
             {
@@ -2245,9 +2228,6 @@ namespace AzerothVoices
             return;
         }
 
-        // Non-guild events prefer Party for PlayerBots in the subject's party
-        // subgroup. Say is the local fallback and is also the only event scope
-        // available to NPC responders.
         if (subjectIsBot && Roll(m_config->eventSelfCommentChance))
         {
             bool const hasPartyAudience = IsScopeEnabled(*m_config, ChatScope::Party) &&
@@ -2363,8 +2343,6 @@ namespace AzerothVoices
         if (candidates.empty())
             return false;
 
-        // NPC ambient speech is intentionally started only when a second nearby
-        // actor exists, so a lone quest giver does not continually monologue.
         if (candidates.front().actor.kind == ActorKind::Creature && candidates.size() < 2)
         {
             auto bot = std::find_if(candidates.begin(), candidates.end(), [](Candidate const& candidate) {
@@ -2829,11 +2807,6 @@ namespace AzerothVoices
             SentimentKey const expired = m_sentimentCacheOrder.front();
             m_sentimentCacheOrder.pop_front();
             m_sentiments.erase(expired);
-            // A dirty entry remains authoritative in m_pendingSentimentWrites.
-            // Once that bounded write is queued, a later cache miss must be
-            // allowed to read SQL again instead of being mistaken for a known
-            // neutral/missing pair. This also keeps the lazy-load marker set
-            // bounded by the hot cache rather than by lifetime traffic.
             m_databaseLoadedSentimentPairs.erase(expired);
         }
     }
@@ -3201,10 +3174,6 @@ namespace AzerothVoices
         std::vector<Candidate> candidates = CollectCandidates(anchor, request.scope, "", reply,
             true, true, request.actor.guid, 0, previousActor);
 
-        // Any follow-up pair containing an NPC must remain close enough to be
-        // a plausible local exchange. Both actors must also be observable by
-        // the same real-human anchor. NPC.Distance is 10 yards by default and
-        // SayDistance is 25 yards by default.
         if (request.scope == ChatScope::Say)
         {
             candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
@@ -3233,11 +3202,6 @@ namespace AzerothVoices
         if (candidates.empty())
             return;
 
-        // Prefer the AI that caused the previous line when it remains an
-        // eligible candidate. This makes bot-to-bot, bot-to-NPC, NPC-to-bot,
-        // and PlayerBot-subject event exchanges answer the triggering actor
-        // before introducing another participant. Real humans are never in the
-        // candidate list, so human-triggered lines cannot generate a human.
         auto triggeringActor = std::find_if(candidates.begin(), candidates.end(),
             [&](Candidate const& candidate) {
                 return request.speaker.guid && candidate.actor.guid == request.speaker.guid;
@@ -3513,10 +3477,6 @@ namespace AzerothVoices
                 return false;
         }
 
-        // PlayerBots joining a real player's explicitly targeted NPC
-        // conversation must still be within NPC.Distance of that same player
-        // after provider latency. NPC actors receive this pair check in the
-        // shared NPC exchange validation immediately below.
         bool const targetedNpcConversation = request.scope == ChatScope::Say &&
             request.trigger.compare(0, 13, "targeted-npc-") == 0;
         if (targetedNpcConversation && request.actor.kind == ActorKind::PlayerBot)
@@ -3529,9 +3489,6 @@ namespace AzerothVoices
                 return false;
         }
 
-        // Revalidate local NPC exchanges after provider latency. Any pair that
-        // contains an NPC must still be within NPC.Distance, and one real
-        // human must simultaneously be within SayDistance of both speakers.
         if (request.scope == ChatScope::Say && request.speaker.guid)
         {
             ObjectGuid const previousGuid(request.speaker.guid);

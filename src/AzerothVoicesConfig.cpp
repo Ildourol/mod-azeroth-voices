@@ -227,6 +227,8 @@ namespace AzerothVoices
         c.targetedNpcJoinChance = Percent("AzerothVoices.NPC.TargetedOtherNPCJoinChance", 5);
         c.targetedNpcPlayerBotJoinChance = Percent(
             "AzerothVoices.NPC.TargetedPlayerBotJoinChance", 10);
+        c.exclusiveNameMentionResponder = Bounded(
+            "AzerothVoices.NameMention.ExclusiveResponder", 1, 0, 1) != 0;
         c.directAddressChance = Percent("AzerothVoices.Chance.DirectAddress", 100);
         c.nameMentionChance = Percent("AzerothVoices.Chance.NameMention", 70);
         c.overhearChance = Percent("AzerothVoices.Chance.Overhear", 8);

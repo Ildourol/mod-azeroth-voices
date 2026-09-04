@@ -103,6 +103,7 @@ namespace AzerothVoices
         uint32_t targetedNpcReplyChance = 100;
         uint32_t targetedNpcJoinChance = 5;
         uint32_t targetedNpcPlayerBotJoinChance = 10;
+        bool exclusiveNameMentionResponder = true;
         uint32_t directAddressChance = 100;
         uint32_t nameMentionChance = 70;
         uint32_t overhearChance = 8;

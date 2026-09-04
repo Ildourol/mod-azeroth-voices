@@ -233,6 +233,8 @@ AzerothVoices.SayDistance = 25
 # Local yell listener/responder distance. Bot-originated yell can trigger AI replies only when a real player is also within this distance. (Decimal yards, minimum SayDistance; default 100.)
 AzerothVoices.YellDistance = 100
 
+# When 1, any full online PlayerBot name explicitly mentioned in Say, Yell, Party, Raid, Guild, Officer, World, or custom-channel chat makes only explicitly named PlayerBots eligible; unmentioned PlayerBots and NPCs are suppressed, while the existing NameMention chance still decides whether a named bot replies. Whisper is already single-target. (Accepted 0/1; default 1.)
+AzerothVoices.NameMention.ExclusiveResponder = 1
 # Chance a selected or directly whispered actor answers. (Percentage; default 100.)
 AzerothVoices.Chance.DirectAddress = 100
 # Chance an actor named in the message answers. (Percentage; default 70.)
@@ -333,7 +335,7 @@ AzerothVoices.Events.CooldownSeconds = 60
 AzerothVoices.Events.Chance.CreatureDefeated = 8
 # Initial chance for an automatic PvP-kill event. (Percentage; default 40.)
 AzerothVoices.Events.Chance.PlayerDefeated = 40
-# Initial chance for an automatic player-death event. (Percentage; default 25.)
+# Initial chance for automatic player-death event. (Percentage; default 25.)
 AzerothVoices.Events.Chance.Died = 25
 # Initial chance for automatic non-rare loot chatter. (Percentage; default 8.)
 AzerothVoices.Events.Chance.ItemLooted = 8
