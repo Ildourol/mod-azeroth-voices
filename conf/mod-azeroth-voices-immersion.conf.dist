@@ -4,9 +4,9 @@
 
 [worldserver]
 
-# Enables progressive responder falloff for normal non-whisper chat; 1 keeps the existing randomized ordinary-candidate ordering for the first responder, then progressively lowers how many additional responders are allowed, while 0 restores the normal AzerothVoices.MaxResponders cap. Direct whisper/selection/name targeting keeps its existing priority. (Accepted 0/1; default 1.)
+# Enables progressive falloff only for responders to one normal non-whisper incoming chat message; 1 always permits the first successfully queued responder, then rolls each later responder slot, while 0 uses only AzerothVoices.MaxResponders. Generated follow-ups and event responders keep their separate existing settings. Direct selection/name targeting keeps its existing priority. (Accepted 0/1; default 1.)
 AzerothVoices.ResponderFalloff.Enable = 1
-# Chance that a second responder is allowed after the first; existing scope, direct-address, name-mention, NPC, audience, cooldown, and eligibility gates still apply. (Percentage 0-100; default 50.)
+# Chance to open the second responder slot after one responder was successfully queued; if the roll passes, candidates are tried until one queues successfully or none remain. Existing scope, direct-address, name-mention, NPC, audience, cooldown, and eligibility gates still apply. (Percentage 0-100; default 50.)
 AzerothVoices.ResponderFalloff.SecondChance = 50
-# Percentage points removed from each later responder chance: third = SecondChance - Delta, fourth = SecondChance - 2*Delta, floored at 0. (Percentage points 0-100; default 20.)
+# Percentage points removed from each later successfully queued responder slot: third = SecondChance - Delta, fourth = SecondChance - 2*Delta, floored at 0. (Percentage points 0-100; default 20.)
 AzerothVoices.ResponderFalloff.Delta = 20
