@@ -214,6 +214,10 @@ namespace AzerothVoices
         c.npcReplies = sConfig.GetBoolDefault("AzerothVoices.NPC.Enable", true);
         c.disableRepliesInCombat = sConfig.GetBoolDefault("AzerothVoices.DisableRepliesInCombat", false);
         c.maxResponders = Positive("AzerothVoices.MaxResponders", 2, 1);
+        c.maxResponders.falloffEnabled = Bounded(
+            "AzerothVoices.ResponderFalloff.Enable", 1, 0, 1) != 0;
+        c.maxResponders.secondChance = Percent("AzerothVoices.ResponderFalloff.SecondChance", 50);
+        c.maxResponders.chanceDelta = Percent("AzerothVoices.ResponderFalloff.Delta", 20);
         c.sayDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.SayDistance", 25.0f));
         c.yellDistance = std::max(c.sayDistance, sConfig.GetFloatDefault("AzerothVoices.YellDistance", 100.0f));
         c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 10.0f));

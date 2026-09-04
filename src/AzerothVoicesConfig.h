@@ -3,12 +3,48 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <random>
 #include <set>
 #include <string>
 #include <vector>
 
 namespace AzerothVoices
 {
+    struct ResponderLimit
+    {
+        uint32_t maximum = 2;
+        bool falloffEnabled = true;
+        uint32_t secondChance = 50;
+        uint32_t chanceDelta = 20;
+
+        ResponderLimit& operator=(uint32_t value)
+        {
+            maximum = value;
+            return *this;
+        }
+
+        operator uint32_t() const
+        {
+            if (!falloffEnabled || maximum <= 1 ||
+                (secondChance >= 100 && chanceDelta == 0))
+                return maximum;
+
+            static thread_local std::mt19937 engine(std::random_device{}());
+            std::uniform_int_distribution<uint32_t> roll(1, 100);
+            uint32_t responders = 1;
+            while (responders < maximum)
+            {
+                uint64_t const reduction = static_cast<uint64_t>(chanceDelta) * (responders - 1);
+                uint32_t const chance = reduction >= secondChance
+                    ? 0 : secondChance - static_cast<uint32_t>(reduction);
+                if (!chance || roll(engine) > chance)
+                    break;
+                ++responders;
+            }
+            return responders;
+        }
+    };
+
     struct Config
     {
         bool enabled = true;
@@ -91,7 +127,7 @@ namespace AzerothVoices
         bool customChannelReplies = false;
         bool npcReplies = true;
         bool disableRepliesInCombat = false;
-        uint32_t maxResponders = 2;
+        ResponderLimit maxResponders;
         float sayDistance = 25.0f;
         float yellDistance = 100.0f;
         float npcDistance = 10.0f;

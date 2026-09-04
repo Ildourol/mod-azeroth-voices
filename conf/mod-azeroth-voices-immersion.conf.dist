@@ -1,0 +1,12 @@
+###################################################################################################
+# Azeroth Voices - immersion responder selection for TortoiseWoW/vMaNGOS
+###################################################################################################
+
+[worldserver]
+
+# Enables progressive responder falloff for normal non-whisper chat; 1 keeps the existing randomized ordinary-candidate ordering for the first responder, then progressively lowers how many additional responders are allowed, while 0 restores the normal AzerothVoices.MaxResponders cap. Direct whisper/selection/name targeting keeps its existing priority. (Accepted 0/1; default 1.)
+AzerothVoices.ResponderFalloff.Enable = 1
+# Chance that a second responder is allowed after the first; existing scope, direct-address, name-mention, NPC, audience, cooldown, and eligibility gates still apply. (Percentage 0-100; default 50.)
+AzerothVoices.ResponderFalloff.SecondChance = 50
+# Percentage points removed from each later responder chance: third = SecondChance - Delta, fourth = SecondChance - 2*Delta, floored at 0. (Percentage points 0-100; default 20.)
+AzerothVoices.ResponderFalloff.Delta = 20
