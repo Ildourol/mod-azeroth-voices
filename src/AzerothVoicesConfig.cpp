@@ -122,6 +122,18 @@ namespace AzerothVoices
         c.requestTimeoutSeconds = Positive("AiPlayerbot.LLMGenerationTimeout", 60, 1);
         c.maxResponseBytes = Positive("AzerothVoices.MaxResponseBytes", 65536, 1024);
         c.maxTokens = Positive("AzerothVoices.MaxTokens", 80, 1);
+        c.reasoningEffort = Trim(sConfig.GetStringDefault("AzerothVoices.ReasoningEffort", "Auto"));
+        std::transform(c.reasoningEffort.begin(), c.reasoningEffort.end(), c.reasoningEffort.begin(), [](unsigned char value) {
+            return static_cast<char>(std::tolower(value));
+        });
+        if (c.reasoningEffort != "auto" && c.reasoningEffort != "minimal" &&
+            c.reasoningEffort != "low" && c.reasoningEffort != "medium" &&
+            c.reasoningEffort != "high")
+        {
+            sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.ReasoningEffort='%s' is invalid; using Auto.",
+                c.reasoningEffort.c_str());
+            c.reasoningEffort = "auto";
+        }
         c.temperature = std::max(0.0f, std::min(2.0f,
             sConfig.GetFloatDefault("AzerothVoices.Temperature", 0.8f)));
         c.topP = std::max(0.0f, std::min(1.0f,
