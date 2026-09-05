@@ -126,7 +126,7 @@ AiPlayerbot.LLMBlockedReplyChannels =
 
 # Enables persistent PlayerBot personalities and backgrounds; accepted values 0/1; default 1; disabling preserves stored data and previous chat behavior.
 AzerothVoices.Personality.Enable = 1
-# Selects background style; 0 = roleplay Azeroth character, 1 = fictional real-world WoW player persona; default 1.
+# Selects background style; 0 = roleplay Azeroth character, 1 = fictional real-world WoW player persona with a randomly generated adult age (18-60) included in the story; default 1.
 AzerothVoices.Personality.BackgroundMode = 1
 # Generates and persists a background story for missing personalities; accepted values 0/1; default 1; disabling preserves stored backgrounds.
 AzerothVoices.Personality.GenerateBackground = 1
@@ -161,8 +161,8 @@ AzerothVoices.Personality.MaxPromptChars = 700
 # Event and Random requests can read the tier when enabled below but never change it. Neutral SQL
 # rows older than 90 days are removed by the existing hourly database cleanup.
 
-# Enables bounded sentiment context, updates, lazy decay, cache, and persistence; accepted values 0/1; default 1.
-AzerothVoices.Sentiment.Enable = 1
+# Enables bounded sentiment context, updates, lazy decay, cache, and persistence; accepted values 0/1; default 0.
+AzerothVoices.Sentiment.Enable = 0
 # Uses the anchor real player's relationship tier in random/ambient prompts without changing the score; accepted values 0/1; default 0.
 AzerothVoices.Sentiment.UseInRandom = 0
 # Uses the real event subject's relationship tier in event prompts without changing the score; accepted values 0/1; default 0.

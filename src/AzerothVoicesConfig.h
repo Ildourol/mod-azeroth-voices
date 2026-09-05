@@ -96,7 +96,7 @@ namespace AzerothVoices
         uint32_t personalityMaxBackgroundCharacters = 500;
         uint32_t personalityMaxPromptCharacters = 700;
 
-        bool sentimentEnabled = true;
+        bool sentimentEnabled = false;
         bool sentimentUseInRandom = false;
         bool sentimentUseInEvents = false;
         uint32_t sentimentConversationMaximumDelta = 2;

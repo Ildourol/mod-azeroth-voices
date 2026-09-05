@@ -30,7 +30,7 @@ The local reference-module trees were treated strictly as feature references. Al
 - Optional older snapshot retention in bounded RAM or SQL under the same Snapshot system; the current snapshot and lightweight live environment always override stale records.
 - Optional structured local JSON RAG with deterministic weighted similarity and the complete adapted Vanilla/Turtle corpus; the former text-file knowledge subsystem has been removed.
 - Persistent per-PlayerBot personalities keyed by character GUID, with 1-5 generated traits, optional speaking tone and background, roleplay or fictional real-world-player mode, lazy generation, SQL persistence, and a bounded RAM hot cache. The distributed default is the fictional real-world WoW player background mode.
-- Persistent one-directional PlayerBot-to-real-player sentiment, with a `-100…100` score, C++-derived tiers, direct-chat-only bounded changes, lazy asymmetric decay, bounded lazy RAM/SQL storage, stale-neutral cleanup, and private moderator controls.
+- Optional persistent one-directional PlayerBot-to-real-player sentiment, disabled by default, with a `-100…100` score, C++-derived tiers, direct-chat-only bounded changes, lazy asymmetric decay, bounded lazy RAM/SQL storage, stale-neutral cleanup, and private moderator controls.
 - Dynamic current talent specialization and point-split context derived on the world thread; talent changes affect later prompts without rewriting persistent identity.
 - Typing delay compatible with the restored PlayerBots behavior: generation time can be subtracted from the character-based delay.
 - Optional terminal telemetry for one-time per-message details and periodic counters-only API-call/result summaries.
@@ -338,7 +338,7 @@ AzerothVoices.Personality.MaxBackgroundChars = 500
 AzerothVoices.Personality.MaxPromptChars = 700
 ```
 
-Background mode `0` creates a fictional character who lives in Azeroth, grounded in Vanilla/Turtle-compatible race, class, faction, upbringing, formative events, and motivations. Mode `1`—the default—creates a fictional real-world WoW player persona with believable work/school/family, schedule, guild, raid, PvE/PvP, and MMO-culture details; it never impersonates a real person. The modes are mutually exclusive. Disabling background or tone generation does not automatically delete existing stored fields, and disabling the personality master toggle neither generates nor inserts personality context and does not delete SQL data.
+Background mode `0` creates a fictional character who lives in Azeroth, grounded in Vanilla/Turtle-compatible race, class, faction, upbringing, formative events, and motivations. Mode `1`—the default—creates a fictional real-world WoW player persona with believable work/school/family, schedule, guild, raid, PvE/PvP, and MMO-culture details; each newly generated background chooses and states a specific adult real-life age from 18 through 60. It never impersonates a real person. The modes are mutually exclusive. Disabling background or tone generation does not automatically delete existing stored fields, and disabling the personality master toggle neither generates nor inserts personality context and does not delete SQL data.
 
 All PlayerBot dialogue reaches the common `BuildRequest` path, so the same identity can affect whisper, say/yell, party/raid, guild/officer, world/custom channel, event, random/ambient, follow-up, and GM live-generation prompts. `UseInRandom` and `UseInEvents` can omit personality from those trigger families without deleting the stored identity. Traits are instructions for vocabulary, opinions, humor, emotions, confidence, caution, and social behavior—not text the bot should recite. The live talent tree and point split are recalculated from the current character spellbook for every actor snapshot, so a respec changes later prompts without modifying the persistent row.
 
@@ -354,7 +354,7 @@ Available prompt placeholders are:
 
 ## PlayerBot-to-player sentiment V1
 
-`AzerothVoices.Sentiment.Enable = 1` tracks only one direction: an AI-controlled PlayerBot's regard toward a real player. A pair changes automatically only when a valid hidden model delta accompanies a successfully delivered first line from a qualifying player-written interaction, or through an exact moderator `set` command. Whisper always qualifies. Party qualifies automatically when exactly one online PlayerBot shares the real speaker's subgroup; with several subgroup PlayerBots, only a bot whose full name is mentioned qualifies. Say and World require the responding bot's full name as a case-insensitive whole-word mention. Yell, Raid, Guild, Officer, custom channels, AI-written chat, generated follow-ups, gameplay Events, and Random chatter never change sentiment. NPC actors and targets, PlayerBot targets, and real-player actors remain excluded.
+When `AzerothVoices.Sentiment.Enable = 1`, sentiment tracks only one direction: an AI-controlled PlayerBot's regard toward a real player. The feature is disabled by default. A pair changes automatically only when a valid hidden model delta accompanies a successfully delivered first line from a qualifying player-written interaction, or through an exact moderator `set` command. Whisper always qualifies. Party qualifies automatically when exactly one online PlayerBot shares the real speaker's subgroup; with several subgroup PlayerBots, only a bot whose full name is mentioned qualifies. Say and World require the responding bot's full name as a case-insensitive whole-word mention. Yell, Raid, Guild, Officer, custom channels, AI-written chat, generated follow-ups, gameplay Events, and Random chatter never change sentiment. NPC actors and targets, PlayerBot targets, and real-player actors remain excluded.
 
 The exact score is an integer from `-100` through `100`. C++ derives the tier on demand: `hostile` at `-40` or below, `cold` from `-39` through `-10`, `neutral` from `-9` through `9`, `warm` from `10` through `39`, and `trusted` from `40` upward. SQL stores no tier column. The model receives only a short tier block and is explicitly told to use it for interpersonal tone rather than facts, safety, or current game state.
 
@@ -363,7 +363,7 @@ Qualifying direct conversation asks the same provider response for a final `[[AV
 Defaults are:
 
 ```ini
-AzerothVoices.Sentiment.Enable = 1
+AzerothVoices.Sentiment.Enable = 0
 AzerothVoices.Sentiment.UseInRandom = 0
 AzerothVoices.Sentiment.UseInEvents = 0
 AzerothVoices.Sentiment.ConversationMaximumDelta = 2

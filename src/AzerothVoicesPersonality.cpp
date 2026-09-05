@@ -143,10 +143,11 @@ namespace AzerothVoices
         else
             prompt << "background must be a short, freely imagined fictional real-world backstory for a person who "
                       "plays World of Warcraft. Invent the player's life and relationship with WoW without a fixed "
-                      "biography template or supplied life ingredients. Treat the supplied race, class, faction, and "
-                      "gender as properties of the in-game avatar only and do not infer the real person's identity "
-                      "from them. Do not impersonate a real person, favor a distinctive believable persona over a "
-                      "generic gamer stereotype, and avoid gratuitous modern-platform references. ";
+                      "biography template or supplied life ingredients. Choose one specific adult real-life age at "
+                      "random from 18 through 60 and state that age naturally in the background story. Treat the "
+                      "supplied race, class, faction, and gender as properties of the in-game avatar only and do not "
+                      "infer the real person's identity from them. Do not impersonate a real person, favor a distinctive "
+                      "believable persona over a generic gamer stereotype, and avoid gratuitous modern-platform references. ";
 
         prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
                   "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. "

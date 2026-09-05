@@ -220,7 +220,7 @@ namespace AzerothVoices
         c.personalityMaxPromptCharacters = Bounded(
             "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
 
-        c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 1, 0, 1) != 0;
+        c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 0, 0, 1) != 0;
         c.sentimentUseInRandom = Bounded(
             "AzerothVoices.Sentiment.UseInRandom", 0, 0, 1) != 0;
         c.sentimentUseInEvents = Bounded(
