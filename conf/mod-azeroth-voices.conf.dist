@@ -53,6 +53,8 @@ AiPlayerbot.LLMGenerationTimeout = 60
 AzerothVoices.MaxResponseBytes = 65536
 # Requested output limit in generated provider JSON. (Tokens, minimum 1; default 80.)
 AzerothVoices.MaxTokens = 80
+# Reasoning effort for generated GPT-5-family requests; Auto uses Minimal for original GPT-5/mini/nano and None for later GPT-5 versions, while Minimal/Low/Medium/High select an explicit level. Minimal is translated to None on later GPT-5 versions, and non-GPT-5 models are unchanged. Custom AiPlayerbot.LLMApiJson templates keep ownership of their own reasoning fields. (Enum Auto/Minimal/Low/Medium/High; default Auto.)
+AzerothVoices.ReasoningEffort = Auto
 # Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default 0.8.)
 AzerothVoices.Temperature = 0.8
 # Nucleus sampling; invalid values are clamped. (Decimal 0.0-1.0; default 0.95.)
