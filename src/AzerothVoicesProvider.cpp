@@ -86,6 +86,58 @@ namespace AzerothVoices
             return !UsesModernCompletionLimit(config);
         }
 
+        bool IsModelOrDatedSnapshot(std::string const& model, std::string const& base)
+        {
+            return model == base || StartsWith(model, base + "-20");
+        }
+
+        bool IsOriginalGpt5ReasoningModel(Config const& config)
+        {
+            std::string const model = ModelLeaf(config.model);
+            return IsModelOrDatedSnapshot(model, "gpt-5") ||
+                   IsModelOrDatedSnapshot(model, "gpt-5-mini") ||
+                   IsModelOrDatedSnapshot(model, "gpt-5-nano");
+        }
+
+        bool SupportsReasoningEffort(Config const& config)
+        {
+            std::string const model = ModelLeaf(config.model);
+            if (IsOriginalGpt5ReasoningModel(config))
+                return true;
+            if (!StartsWith(model, "gpt-5."))
+                return false;
+            return model.find("-chat") == std::string::npos;
+        }
+
+        std::string EffectiveReasoningEffort(Config const& config)
+        {
+            if (!SupportsReasoningEffort(config))
+                return "";
+
+            bool const originalGpt5 = IsOriginalGpt5ReasoningModel(config);
+            if (config.reasoningEffort.empty() || config.reasoningEffort == "auto")
+                return originalGpt5 ? "minimal" : "none";
+
+            // Original GPT-5 supports minimal/low/medium/high. Later GPT-5
+            // generations use none instead of minimal, so keep the config
+            // portable by translating only that one legacy level.
+            if (!originalGpt5 && config.reasoningEffort == "minimal")
+                return "none";
+            return config.reasoningEffort;
+        }
+
+        void ApplyReasoningEffort(Json& body, Config const& config)
+        {
+            std::string const effort = EffectiveReasoningEffort(config);
+            if (effort.empty())
+                return;
+
+            if (Lower(config.providerMode) == "responses")
+                body["reasoning"] = { { "effort", effort } };
+            else
+                body["reasoning_effort"] = effort;
+        }
+
         void ReplaceAll(std::string& value, std::string const& from, std::string const& to)
         {
             if (from.empty())
@@ -357,6 +409,47 @@ namespace AzerothVoices
             return "";
         }
 
+        std::string DescribeEmptyText(Json const& root)
+        {
+            if (root.is_object() && root.count("choices") && root["choices"].is_array() && !root["choices"].empty())
+            {
+                Json const& choice = root["choices"][0];
+                if (choice.is_object() && choice.count("message") && choice["message"].is_object() &&
+                    choice["message"].count("content"))
+                {
+                    std::ostringstream detail;
+                    detail << "provider returned no visible text";
+                    if (choice.count("finish_reason") && choice["finish_reason"].is_string())
+                        detail << "; finish_reason=" << choice["finish_reason"].get<std::string>();
+
+                    if (root.count("usage") && root["usage"].is_object())
+                    {
+                        Json const& usage = root["usage"];
+                        if (usage.count("completion_tokens") && usage["completion_tokens"].is_number_integer())
+                            detail << "; completion_tokens=" << usage["completion_tokens"].get<long long>();
+                        if (usage.count("completion_tokens_details") && usage["completion_tokens_details"].is_object())
+                        {
+                            Json const& details = usage["completion_tokens_details"];
+                            if (details.count("reasoning_tokens") && details["reasoning_tokens"].is_number_integer())
+                                detail << "; reasoning_tokens=" << details["reasoning_tokens"].get<long long>();
+                        }
+                    }
+                    return detail.str();
+                }
+            }
+
+            if (root.is_object() && root.count("output") && root["output"].is_array())
+            {
+                std::ostringstream detail;
+                detail << "provider returned no visible text";
+                if (root.count("status") && root["status"].is_string())
+                    detail << "; status=" << root["status"].get<std::string>();
+                return detail.str();
+            }
+
+            return "provider JSON did not contain a supported text field";
+        }
+
         std::string LegacyParse(Config const& config, ChatRequest const& request, std::string const& raw, std::string& error)
         {
             try
@@ -495,6 +588,7 @@ namespace AzerothVoices
                 body["input"] = prepared.context.empty() ? prepared.userPrompt : prepared.context + "\n\n" + prepared.userPrompt;
                 body["max_output_tokens"] = prepared.maxTokensOverride
                     ? prepared.maxTokensOverride : config.maxTokens;
+                ApplyReasoningEffort(body, config);
             }
             else
             {
@@ -506,6 +600,7 @@ namespace AzerothVoices
                 body["messages"].push_back({ { "role", "user" }, { "content", prepared.userPrompt } });
                 body[TokenLimitField(config)] = prepared.maxTokensOverride
                     ? prepared.maxTokensOverride : config.maxTokens;
+                ApplyReasoningEffort(body, config);
                 if (SupportsLegacySamplingControls(config))
                 {
                     body["temperature"] = config.temperature;
@@ -536,7 +631,7 @@ namespace AzerothVoices
             std::string content = ExtractContent(root);
             if (content.empty())
             {
-                error = "provider JSON did not contain a supported text field";
+                error = DescribeEmptyText(root);
                 return "";
             }
             return SanitizeReply(content);
