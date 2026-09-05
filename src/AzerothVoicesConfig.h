@@ -62,6 +62,7 @@ namespace AzerothVoices
         uint32_t requestTimeoutSeconds = 60;
         uint32_t maxResponseBytes = 65536;
         uint32_t maxTokens = 80;
+        std::string reasoningEffort = "auto";
         float temperature = 0.8f;
         float topP = 0.95f;
 
