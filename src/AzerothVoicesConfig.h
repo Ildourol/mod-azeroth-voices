@@ -34,6 +34,15 @@ namespace AzerothVoices
         }
     };
 
+    struct TypingDelayRange
+    {
+        uint32_t minimum = 150;
+        uint32_t maximum = 250;
+
+        TypingDelayRange& operator=(uint32_t legacyDelayMilliseconds);
+        operator uint32_t() const;
+    };
+
     struct Config
     {
         bool enabled = true;
@@ -179,7 +188,7 @@ namespace AzerothVoices
 
         bool typingSimulationEnabled = true;
         uint32_t typingBaseDelayMilliseconds = 0;
-        uint32_t typingDelayPerCharacterMilliseconds = 200;
+        TypingDelayRange typingDelayPerCharacterMilliseconds;
         bool subtractGenerationTime = true;
         uint32_t maximumReplyCharacters = 220;
         uint32_t maximumReplyLines = 3;

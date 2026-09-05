@@ -260,7 +260,7 @@ namespace AzerothVoices
         ActorSnapshot const actor = SnapshotCombatCreature(creature, player);
         SpeakerSnapshot const speaker = SnapshotCombatPlayer(player);
         std::string const instruction =
-            "The real player " + player->GetName() +
+            std::string("The real player ") + player->GetName() +
             " has just initiated a fresh combat by attacking you. React with one short, random, "
             "in-character spoken line about being attacked. You may threaten, protest, taunt, warn, "
             "or challenge the attacker as appropriate for this creature. Do not narrate actions.";

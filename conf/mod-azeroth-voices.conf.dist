@@ -404,8 +404,11 @@ AzerothVoices.Events.Chance.GameEventStopped = 30
 AzerothVoices.Typing.Enable = 1
 # Fixed delay added to each line. (Milliseconds, minimum 0; default 0.)
 AzerothVoices.Typing.BaseDelayMilliseconds = 0
-# Main natural typing delay. (Ms/character, minimum 0; default 200.)
-AzerothVoices.Typing.DelayPerCharacterMilliseconds = 200
+# Minimum natural typing delay; one speed is randomly selected between the minimum and maximum for each delivered reply line. (Ms/character, minimum 0; default 150.)
+AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 150
+# Maximum natural typing delay; values below the minimum are swapped safely. (Ms/character, minimum 0; default 250.)
+AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 250
+# Legacy compatibility: if both range keys above are absent, AzerothVoices.Typing.DelayPerCharacterMilliseconds is still accepted as one fixed per-character delay.
 # Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
 AzerothVoices.Typing.SubtractGenerationTime = 1
 # Truncates cleaned in-game output. (Characters, minimum 1; default 220.)
