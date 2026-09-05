@@ -376,7 +376,7 @@ namespace AzerothVoices
         c.typingBaseDelayMilliseconds = Positive("AzerothVoices.Typing.BaseDelayMilliseconds", 0);
         c.typingDelayPerCharacterMilliseconds = Positive("AzerothVoices.Typing.DelayPerCharacterMilliseconds", 200);
         c.subtractGenerationTime = sConfig.GetBoolDefault("AzerothVoices.Typing.SubtractGenerationTime", true);
-        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 220, 1);
+        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 180, 1);
         c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 3, 1);
 
         bool const legacyHistoryEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);
