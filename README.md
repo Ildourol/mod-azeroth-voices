@@ -14,9 +14,10 @@ The local reference-module trees were treated strictly as feature references. Al
 
 - Player-to-bot replies in whisper, say, yell, party, raid, guild, officer, world, and optionally custom channels.
 - Bot-to-bot whisper replies are disabled. Bot-originated say/yell requires a nearby real player; bot-only party/raid chat is disabled, with party requiring a real member in the bot's subgroup and raid requiring a real raid member both before queueing and again before delivery. Guild/officer replies require a real member of the corresponding audience. World replies require one online real player anywhere on the server, while custom-channel replies retain the conservative public-count gate. Channel reply actors are not faction-filtered.
-- NPC generation is limited to ambient chatter, qualifying nearby event reactions, and reactions to human or PlayerBot Say. NPCs use Say only, are discovered within `NPC.Distance` of the speaker/anchor (10 yards by default), require a real human within `SayDistance` of the generated NPC (25 yards by default), and must be a static creature of an allowed type. Neutral and hostile categories are excluded by default and share the single `NPC.AllowNeutralAndHostile` opt-in; entry allow/exclude overrides have been removed. Owned, charmed, summoned, pet, guardian, totem, trigger, critter, and temporary creatures remain excluded without using service `npc_flags`. When a real player explicitly selects an eligible NPC and speaks in Say, the selected NPC is considered first; other eligible NPCs and PlayerBots within `NPC.Distance` may join using the three `NPC.Targeted*Chance` controls. The 10-yard participant rule is rechecked before delivery. Replies while actors are in combat are enabled by default and can still be disabled globally.
+- NPC generation covers ambient chatter, qualifying nearby event reactions, fresh-combat opening reactions, and reactions to human or PlayerBot Say. NPCs use Say only, are discovered within `NPC.Distance` of normal speakers/anchors (10 yards by default), require a real human within `SayDistance` (25 yards by default), and must be a static creature of an allowed type. Neutral and hostile categories are enabled by default through `NPC.AllowNeutralAndHostile = 1`, while the normal NPC paths retain separate friendly/neutral/hostile probability gates. Owned, charmed, summoned, pet, guardian, totem, trigger, critter, and temporary creatures remain excluded without using service `npc_flags`. When a real player explicitly selects an eligible NPC and speaks in Say, the selected NPC is considered first; other eligible NPCs and PlayerBots within `NPC.Distance` may join using the three `NPC.Targeted*Chance` controls. Replies while actors are in combat are enabled by default and can still be disabled globally.
+- Fresh-combat creature speech is a separate one-shot path: when a real player moves from out of combat into combat by attacking a creature, only that exact opening creature can roll `NPC.CombatStart.Chance` (30% by default) for one short generated Say line. Pulling or attacking another creature while the same combat remains active cannot trigger another opening line. The latch resets only after the player leaves combat, and `NPC.CombatStart.CooldownSeconds` adds a separate per-real-player accepted-reaction cooldown (60 seconds by default). Body-aggro without a player attack does not qualify.
 - Random chatter defaults to `say,guild,world,party`. Party is used only when Random selects the Party scope and requires the chosen PlayerBot to share a subgroup with an online real player. Say remains Say; when no eligible local Say speaker exists, that Random attempt is skipped. World chatter occurs only when Random selects the configured World scope. Other scopes retain their normal audience rules; there is no separate Party-priority or Random-distance option.
-- A follow-up chance for short PlayerBot/NPC conversations after ambient lines, bot-originated replies in every non-whisper scope, and event lines. The triggering AI is preferred for the next turn when still eligible. Each turn repeats the scope's real-audience rule; `AiPlayerbot.LLMBotToBotChatChance` caps PlayerBot-to-PlayerBot follow-ups, while `AiPlayerbot.LLMRpgAIChatChance` caps any follow-up involving an NPC. Every follow-up pair containing an NPC must be within `NPC.Distance` actor-to-actor and share one real-human observer within `SayDistance`; these checks repeat before delivery. NPC turns remain Say-only, and lone NPCs do not start ambient monologues.
+- A follow-up chance for short PlayerBot/NPC conversations after ambient lines, bot-originated replies in every non-whisper scope, and event lines. The triggering AI is preferred for the next turn when still eligible. Each turn repeats the scope's real-audience rule; `AiPlayerbot.LLMBotToBotChatChance` caps PlayerBot-to-PlayerBot follow-ups, while `AiPlayerbot.LLMRpgAIChatChance` caps any follow-up involving an NPC. Every follow-up pair containing an NPC must be within `NPC.Distance` actor-to-actor and share one real-human observer within `SayDistance`; these checks repeat before delivery. NPC turns remain Say-only, and lone NPCs do not start ambient monologues. Combat-start reactions deliberately disable generated follow-ups.
 - Event chatter for deaths, kills, loot, quests, learned spells, duels, levels, guild login/join/leave, plus a public event-adapter method for other scripts. Guild join/leave/login/promotion/demotion and a guilded level-up use Guild and require an online real guild listener. Other events prioritize Party for PlayerBots in the subject's party subgroup, then use local Say for remaining PlayerBot or NPC responders. Every generated actor passes the audience rule for its actual delivery scope before a provider request is built.
 - Lightweight live environment context (map, zone, subzone, dungeon/combat/group state, nearby creatures, equipped items, and optionally backpack items), built only on the world thread and capped by configuration.
 - Fixed worker pool, priority queues, a reserved high-priority section, global rate limit, TTLs, cooldowns, retry/backoff, and stale-request replacement.
@@ -28,7 +29,7 @@ The local reference-module trees were treated strictly as feature references. Al
 - Optional rich PlayerBot snapshots containing combat/resources/target, group members, highest useful spell ranks, active quests, line-of-sight creatures/game objects, and nearby players, all captured through bounded world-thread searches.
 - Optional older snapshot retention in bounded RAM or SQL under the same Snapshot system; the current snapshot and lightweight live environment always override stale records.
 - Optional structured local JSON RAG with deterministic weighted similarity and the complete adapted Vanilla/Turtle corpus; the former text-file knowledge subsystem has been removed.
-- Persistent per-PlayerBot personalities keyed by character GUID, with 1-5 generated traits, optional speaking tone and background, roleplay or fictional real-world-player mode, lazy generation, SQL persistence, and a bounded RAM hot cache.
+- Persistent per-PlayerBot personalities keyed by character GUID, with 1-5 generated traits, optional speaking tone and background, roleplay or fictional real-world-player mode, lazy generation, SQL persistence, and a bounded RAM hot cache. The distributed default is the fictional real-world WoW player background mode.
 - Persistent one-directional PlayerBot-to-real-player sentiment, with a `-100…100` score, C++-derived tiers, direct-chat-only bounded changes, lazy asymmetric decay, bounded lazy RAM/SQL storage, stale-neutral cleanup, and private moderator controls.
 - Dynamic current talent specialization and point-split context derived on the world thread; talent changes affect later prompts without rewriting persistent identity.
 - Typing delay compatible with the restored PlayerBots behavior: generation time can be subtracted from the character-based delay.
@@ -122,7 +123,7 @@ Missing PlayerBot personalities use the same bounded worker/provider/completion 
 
 Sentiment adds no worker-side live state and no second provider request. A value-owned tier/instruction crosses to the worker; the world thread strips and validates returned metadata, then re-resolves the PlayerBot and real player before applying a delivered delta.
 
-Workers never retain or manipulate `Player`, `Creature`, `Unit`, `Guild`, `Group`, or `WorldSession` pointers. All object lookup and chat delivery happens after map updates in the world update hook.
+Workers never retain or manipulate `Player`, `Creature`, `Unit`, `Guild`, `Group`, or `WorldSession` pointers. All object lookup and chat delivery happens after map updates in the world update hook. The combat-start detector also runs on `PlayerScript::OnUpdate` on the game/world thread; it stores only real-player GUID keys and timestamps, then the normal request pipeline copies value snapshots before worker dispatch.
 
 ## Dependencies
 
@@ -172,7 +173,7 @@ cmake --install build
 
 The 2 September 2026 source audit used the checked-out Windows x64 Visual Studio 2022 build configured with PlayerBots enabled, Turtle addons enabled, extractors disabled, and static modules. CMake discovered `AzerothVoicesSentiment.cpp`, generated a static loader that calls `Addmod_azeroth_voicesScripts`, and generated install rules for the module config, data tree, and README. Standalone C++ boundary checks passed for score clamping, every tier edge, exact case-insensitive whole-name matching, metadata stripping, the absolute `±2` delta clamp, and zero-delta tier-only prompt text. The module target, linked Release `mangosd` target, and complete configured Release solution built successfully; the resulting worldserver executable is `bin/Release/mangosd.exe`.
 
-This is source and build evidence only. The migration was not applied, the install target was not run, the worldserver was not started, no external provider was called, and live in-game behavior remains to be validated on the intended server and character database.
+This is source and build evidence only for that V0.6 validation record. The newer combat-start/default changes described here require a fresh build and live-game validation.
 
 ## Install the configuration
 
@@ -209,6 +210,8 @@ automatically imported from `aiplayerbot.conf`. The module's only master switch
 is `AzerothVoices.Enable`. Keep the `[worldserver]` section header at the top of
 the module configuration; TortoiseWoW ignores settings outside a named INI
 section.
+
+The distributed dialogue defaults use `AzerothVoices.GlobalMode = Normal`, `AiPlayerbot.LLMPrompt = <sender name>: <initial message>`, and an empty `AiPlayerbot.LLMPostPrompt`. `<sender name>` is the incoming speaker; the responding actor is already identified by the system/pre-prompt, so the old `<bot name>:` post-cue is no longer emitted by default.
 
 ### Keep the API key out of the config
 
@@ -323,7 +326,7 @@ Configuration defaults are:
 
 ```ini
 AzerothVoices.Personality.Enable = 1
-AzerothVoices.Personality.BackgroundMode = 0
+AzerothVoices.Personality.BackgroundMode = 1
 AzerothVoices.Personality.GenerateBackground = 1
 AzerothVoices.Personality.TraitCount = 3
 AzerothVoices.Personality.GenerateTone = 1
@@ -335,7 +338,7 @@ AzerothVoices.Personality.MaxBackgroundChars = 500
 AzerothVoices.Personality.MaxPromptChars = 700
 ```
 
-Background mode `0` creates a fictional character who lives in Azeroth, grounded in Vanilla/Turtle-compatible race, class, faction, upbringing, formative events, and motivations. Mode `1` creates a fictional real-world WoW player persona with believable work/school/family, schedule, guild, raid, PvE/PvP, and MMO-culture details; it never impersonates a real person. The modes are mutually exclusive. Disabling background or tone generation does not automatically delete existing stored fields, and disabling the personality master toggle neither generates nor inserts personality context and does not delete SQL data.
+Background mode `0` creates a fictional character who lives in Azeroth, grounded in Vanilla/Turtle-compatible race, class, faction, upbringing, formative events, and motivations. Mode `1`—the default—creates a fictional real-world WoW player persona with believable work/school/family, schedule, guild, raid, PvE/PvP, and MMO-culture details; it never impersonates a real person. The modes are mutually exclusive. Disabling background or tone generation does not automatically delete existing stored fields, and disabling the personality master toggle neither generates nor inserts personality context and does not delete SQL data.
 
 All PlayerBot dialogue reaches the common `BuildRequest` path, so the same identity can affect whisper, say/yell, party/raid, guild/officer, world/custom channel, event, random/ambient, follow-up, and GM live-generation prompts. `UseInRandom` and `UseInEvents` can omit personality from those trigger families without deleting the stored identity. Traits are instructions for vocabulary, opinions, humor, emotions, confidence, caution, and social behavior—not text the bot should recite. The live talent tree and point split are recalculated from the current character spellbook for every actor snapshot, so a respec changes later prompts without modifying the persistent row.
 
@@ -468,6 +471,8 @@ At startup look for the current concise startup line plus the enabled storage li
 ```
 
 Then run `.av status` and `.av test`. For a deliberate bot-delivery test, run `.av live BotName Reply exactly: API OK`. If the provider works but normal chat does not, verify the relevant `Replies.*` switch, chance, channel name and cooldown, and confirm that the target passes `Script_IsAIControlled`.
+
+For the combat-start path, test from fully out of combat: attack one eligible neutral or hostile creature and confirm at most one opening Say line can be queued; attack a second creature before combat ends and confirm it cannot trigger; then leave combat fully and start a new fight after the configured cooldown to confirm the latch resets.
 
 ### Terminal message and API telemetry
 

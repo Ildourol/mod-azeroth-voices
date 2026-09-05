@@ -140,18 +140,18 @@ namespace AzerothVoices
         c.globalRequestsPerMinute = Positive("AzerothVoices.GlobalRequestsPerMinute", 60, 1);
         c.speakerCooldownSeconds = Positive("AzerothVoices.SpeakerCooldownSeconds", 3);
 
-        std::string globalMode = Trim(sConfig.GetStringDefault("AzerothVoices.GlobalMode", "Roleplay"));
+        std::string globalMode = Trim(sConfig.GetStringDefault("AzerothVoices.GlobalMode", "Normal"));
         std::transform(globalMode.begin(), globalMode.end(), globalMode.begin(), [](unsigned char value) {
             return static_cast<char>(std::tolower(value));
         });
-        if (globalMode == "normal")
-            c.globalMode = GlobalMode::Normal;
+        if (globalMode == "roleplay")
+            c.globalMode = GlobalMode::Roleplay;
         else
         {
-            if (globalMode != "roleplay")
-                sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.GlobalMode='%s' is invalid; using Roleplay.",
+            if (globalMode != "normal")
+                sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.GlobalMode='%s' is invalid; using Normal.",
                     globalMode.c_str());
-            c.globalMode = GlobalMode::Roleplay;
+            c.globalMode = GlobalMode::Normal;
         }
 
         std::string const legacyGlobalPrompt = Trim(
@@ -188,8 +188,8 @@ namespace AzerothVoices
         c.prePrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrePrompt",
             "You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. "
             "<bot personality block>"));
-        c.prompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrompt", "<receiver name>: <initial message>"));
-        c.postPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPostPrompt", "<bot name>:"));
+        c.prompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPrompt", "<sender name>: <initial message>"));
+        c.postPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMPostPrompt", ""));
         c.rpgPrompt = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMRpgPrompt",
             "You are <bot name>, an NPC in <bot subzone>, <bot zone>. Reply briefly in character."));
         c.contextLength = Positive("AiPlayerbot.LLMContextLength", 4096);
@@ -202,7 +202,7 @@ namespace AzerothVoices
         c.blockedChannels = Split(sConfig.GetStringDefault("AiPlayerbot.LLMBlockedReplyChannels", ""), ',');
 
         c.personalityEnabled = Bounded("AzerothVoices.Personality.Enable", 1, 0, 1) != 0;
-        c.personalityBackgroundMode = Bounded("AzerothVoices.Personality.BackgroundMode", 0, 0, 1);
+        c.personalityBackgroundMode = Bounded("AzerothVoices.Personality.BackgroundMode", 1, 0, 1);
         c.personalityGenerateBackground = Bounded(
             "AzerothVoices.Personality.GenerateBackground", 1, 0, 1) != 0;
         c.personalityTraitCount = Bounded("AzerothVoices.Personality.TraitCount", 3, 1, 5);
@@ -265,10 +265,13 @@ namespace AzerothVoices
         c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 10.0f));
         c.npcAllowedTypes = UnsignedSet("AzerothVoices.NPC.AllowedTypes", "2,3,4,5,6,7,9", 11);
         c.npcAllowNeutralAndHostile = sConfig.GetBoolDefault(
-            "AzerothVoices.NPC.AllowNeutralAndHostile", false);
+            "AzerothVoices.NPC.AllowNeutralAndHostile", true);
         c.npcFriendlyReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Friendly", 100);
         c.npcNeutralReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Neutral", 50);
         c.npcHostileReplyChance = Percent("AzerothVoices.NPC.ReplyChance.Hostile", 25);
+        c.npcCombatStartEnabled = sConfig.GetBoolDefault("AzerothVoices.NPC.CombatStart.Enable", true);
+        c.npcCombatStartChance = Percent("AzerothVoices.NPC.CombatStart.Chance", 30);
+        c.npcCombatStartCooldownSeconds = Positive("AzerothVoices.NPC.CombatStart.CooldownSeconds", 60);
         c.targetedNpcReplyChance = Percent("AzerothVoices.NPC.TargetedReplyChance", 100);
         c.targetedNpcJoinChance = Percent("AzerothVoices.NPC.TargetedOtherNPCJoinChance", 5);
         c.targetedNpcPlayerBotJoinChance = Percent(

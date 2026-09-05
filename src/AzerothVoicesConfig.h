@@ -67,7 +67,7 @@ namespace AzerothVoices
         uint32_t globalRequestsPerMinute = 60;
         uint32_t speakerCooldownSeconds = 3;
 
-        GlobalMode globalMode = GlobalMode::Roleplay;
+        GlobalMode globalMode = GlobalMode::Normal;
         std::string globalPromptRoleplay;
         std::string globalPromptNormal;
         std::string globalPrompt;
@@ -85,7 +85,7 @@ namespace AzerothVoices
         std::vector<std::string> blockedChannels;
 
         bool personalityEnabled = true;
-        uint32_t personalityBackgroundMode = 0;
+        uint32_t personalityBackgroundMode = 1;
         bool personalityGenerateBackground = true;
         uint32_t personalityTraitCount = 3;
         bool personalityGenerateTone = true;
@@ -124,10 +124,13 @@ namespace AzerothVoices
         float yellDistance = 100.0f;
         float npcDistance = 10.0f;
         std::set<uint32_t> npcAllowedTypes = { 2, 3, 4, 5, 6, 7, 9 };
-        bool npcAllowNeutralAndHostile = false;
+        bool npcAllowNeutralAndHostile = true;
         uint32_t npcFriendlyReplyChance = 100;
         uint32_t npcNeutralReplyChance = 50;
         uint32_t npcHostileReplyChance = 25;
+        bool npcCombatStartEnabled = true;
+        uint32_t npcCombatStartChance = 30;
+        uint32_t npcCombatStartCooldownSeconds = 60;
         uint32_t targetedNpcReplyChance = 100;
         uint32_t targetedNpcJoinChance = 5;
         uint32_t targetedNpcPlayerBotJoinChance = 10;

@@ -233,6 +233,7 @@ namespace AzerothVoices
     }
 
     void RegisterAzerothVoicesCommand();
+    void RegisterAzerothVoicesCombatScripts();
 
     void RegisterAzerothVoicesScripts()
     {
@@ -240,6 +241,7 @@ namespace AzerothVoices
         new AzerothVoicesPlayerScript();
         new AzerothVoicesServerScript();
         new AzerothVoicesGuildScript();
+        RegisterAzerothVoicesCombatScripts();
     }
 }
 

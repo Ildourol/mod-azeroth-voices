@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <vector>
 
+class Creature;
 class Player;
 class WorldObject;
 
@@ -77,6 +78,7 @@ namespace AzerothVoices
                         std::string const& targetName = "", std::string const& channelName = "");
         void HandleEvent(Player* subject, std::string const& eventName, std::string const& detail = "",
                          uint32_t guildId = 0);
+        void HandleCombatStart(Player* player, Creature* creature);
 
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
