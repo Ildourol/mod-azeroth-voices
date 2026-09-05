@@ -413,8 +413,8 @@ AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
 # Legacy compatibility: if both range keys above are absent, AzerothVoices.Typing.DelayPerCharacterMilliseconds is still accepted as one fixed per-character delay.
 # Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
 AzerothVoices.Typing.SubtractGenerationTime = 1
-# Truncates cleaned in-game output. (Characters, minimum 1; default 220.)
-AzerothVoices.Reply.MaximumCharacters = 220
+# Truncates cleaned in-game output. (Characters, minimum 1; default 180.)
+AzerothVoices.Reply.MaximumCharacters = 180
 # Maximum delivered lines per request. (Lines, minimum 1; default 3.)
 AzerothVoices.Reply.MaximumLines = 3
 
