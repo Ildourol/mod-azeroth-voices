@@ -50,6 +50,42 @@ namespace AzerothVoices
             return value;
         }
 
+        bool StartsWith(std::string const& value, std::string const& prefix)
+        {
+            return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
+        }
+
+        std::string ModelLeaf(std::string model)
+        {
+            model = Lower(Trim(model));
+            size_t const slash = model.rfind('/');
+            if (slash != std::string::npos)
+                model.erase(0, slash + 1);
+            return model;
+        }
+
+        bool UsesModernCompletionLimit(Config const& config)
+        {
+            std::string const model = ModelLeaf(config.model);
+            return StartsWith(model, "gpt-5") ||
+                   StartsWith(model, "o1") ||
+                   StartsWith(model, "o3") ||
+                   StartsWith(model, "o4");
+        }
+
+        char const* TokenLimitField(Config const& config)
+        {
+            if (Lower(config.providerMode) == "responses")
+                return "max_output_tokens";
+            return UsesModernCompletionLimit(config)
+                ? "max_completion_tokens" : "max_tokens";
+        }
+
+        bool SupportsLegacySamplingControls(Config const& config)
+        {
+            return !UsesModernCompletionLimit(config);
+        }
+
         void ReplaceAll(std::string& value, std::string const& from, std::string const& to)
         {
             if (from.empty())
@@ -193,6 +229,11 @@ namespace AzerothVoices
                 body["max_tokens"] = request.maxTokensOverride;
                 applied = true;
             }
+            if (body.count("max_completion_tokens"))
+            {
+                body["max_completion_tokens"] = request.maxTokensOverride;
+                applied = true;
+            }
             if (body.count("max_output_tokens"))
             {
                 body["max_output_tokens"] = request.maxTokensOverride;
@@ -201,10 +242,7 @@ namespace AzerothVoices
             if (applied)
                 return;
 
-            if (Lower(config.providerMode) == "responses")
-                body["max_output_tokens"] = request.maxTokensOverride;
-            else
-                body["max_tokens"] = request.maxTokensOverride;
+            body[TokenLimitField(config)] = request.maxTokensOverride;
         }
 
         bool ParseEndpoint(std::string const& endpoint, ParsedEndpoint& parsed, std::string& error)
@@ -466,10 +504,13 @@ namespace AzerothVoices
                 if (!prepared.context.empty())
                     body["messages"].push_back({ { "role", "system" }, { "content", prepared.context } });
                 body["messages"].push_back({ { "role", "user" }, { "content", prepared.userPrompt } });
-                body["max_tokens"] = prepared.maxTokensOverride
+                body[TokenLimitField(config)] = prepared.maxTokensOverride
                     ? prepared.maxTokensOverride : config.maxTokens;
-                body["temperature"] = config.temperature;
-                body["top_p"] = config.topP;
+                if (SupportsLegacySamplingControls(config))
+                {
+                    body["temperature"] = config.temperature;
+                    body["top_p"] = config.topP;
+                }
             }
 
             if (!body.count("model") && !config.model.empty())
