@@ -191,7 +191,7 @@ namespace AzerothVoices
         uint32_t typingBaseDelayMilliseconds = 0;
         TypingDelayRange typingDelayPerCharacterMilliseconds;
         bool subtractGenerationTime = true;
-        uint32_t maximumReplyCharacters = 220;
+        uint32_t maximumReplyCharacters = 180;
         uint32_t maximumReplyLines = 3;
 
         uint32_t historyStorageMode = 2;
