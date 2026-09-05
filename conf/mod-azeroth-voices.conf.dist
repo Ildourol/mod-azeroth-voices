@@ -51,8 +51,8 @@ AzerothVoices.ConnectTimeoutSeconds = 10
 AiPlayerbot.LLMGenerationTimeout = 60
 # Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536.)
 AzerothVoices.MaxResponseBytes = 65536
-# Requested output limit in generated provider JSON. (Tokens, minimum 1; default 80.)
-AzerothVoices.MaxTokens = 80
+# Requested output limit in generated provider JSON. (Tokens, minimum 1; default 512.)
+AzerothVoices.MaxTokens = 512
 # Reasoning effort for generated GPT-5-family requests; Auto uses Minimal for original GPT-5/mini/nano and None for later GPT-5 versions, while Minimal/Low/Medium/High select an explicit level. Minimal is translated to None on later GPT-5 versions, and non-GPT-5 models are unchanged. Custom AiPlayerbot.LLMApiJson templates keep ownership of their own reasoning fields. (Enum Auto/Minimal/Low/Medium/High; default Auto.)
 AzerothVoices.ReasoningEffort = Auto
 # Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default 0.8.)
@@ -406,10 +406,10 @@ AzerothVoices.Events.Chance.GameEventStopped = 30
 AzerothVoices.Typing.Enable = 1
 # Fixed delay added to each line. (Milliseconds, minimum 0; default 0.)
 AzerothVoices.Typing.BaseDelayMilliseconds = 0
-# Minimum natural typing delay; one speed is randomly selected between the minimum and maximum for each delivered reply line. (Ms/character, minimum 0; default 150.)
-AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 150
-# Maximum natural typing delay; values below the minimum are swapped safely. (Ms/character, minimum 0; default 250.)
-AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 250
+# Minimum natural typing delay; one speed is randomly selected between the minimum and maximum for each delivered reply line. (Ms/character, minimum 0; default 100.)
+AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 100
+# Maximum natural typing delay; values below the minimum are swapped safely. (Ms/character, minimum 0; default 200.)
+AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
 # Legacy compatibility: if both range keys above are absent, AzerothVoices.Typing.DelayPerCharacterMilliseconds is still accepted as one fixed per-character delay.
 # Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
 AzerothVoices.Typing.SubtractGenerationTime = 1

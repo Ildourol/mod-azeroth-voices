@@ -36,8 +36,8 @@ namespace AzerothVoices
 
     struct TypingDelayRange
     {
-        uint32_t minimum = 150;
-        uint32_t maximum = 250;
+        uint32_t minimum = 100;
+        uint32_t maximum = 200;
 
         TypingDelayRange& operator=(uint32_t legacyDelayMilliseconds);
         operator uint32_t() const;
@@ -61,7 +61,7 @@ namespace AzerothVoices
         uint32_t connectTimeoutSeconds = 10;
         uint32_t requestTimeoutSeconds = 60;
         uint32_t maxResponseBytes = 65536;
-        uint32_t maxTokens = 80;
+        uint32_t maxTokens = 512;
         std::string reasoningEffort = "auto";
         float temperature = 0.8f;
         float topP = 0.95f;

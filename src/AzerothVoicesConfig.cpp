@@ -121,7 +121,7 @@ namespace AzerothVoices
         c.connectTimeoutSeconds = Positive("AzerothVoices.ConnectTimeoutSeconds", 10, 1);
         c.requestTimeoutSeconds = Positive("AiPlayerbot.LLMGenerationTimeout", 60, 1);
         c.maxResponseBytes = Positive("AzerothVoices.MaxResponseBytes", 65536, 1024);
-        c.maxTokens = Positive("AzerothVoices.MaxTokens", 80, 1);
+        c.maxTokens = Positive("AzerothVoices.MaxTokens", 512, 1);
         c.reasoningEffort = Trim(sConfig.GetStringDefault("AzerothVoices.ReasoningEffort", "Auto"));
         std::transform(c.reasoningEffort.begin(), c.reasoningEffort.end(), c.reasoningEffort.begin(), [](unsigned char value) {
             return static_cast<char>(std::tolower(value));

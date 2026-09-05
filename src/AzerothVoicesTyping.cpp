@@ -15,8 +15,8 @@ namespace AzerothVoices
 {
     namespace
     {
-        constexpr uint32_t DefaultMinimumTypingDelayMilliseconds = 150;
-        constexpr uint32_t DefaultMaximumTypingDelayMilliseconds = 250;
+        constexpr uint32_t DefaultMinimumTypingDelayMilliseconds = 100;
+        constexpr uint32_t DefaultMaximumTypingDelayMilliseconds = 200;
         constexpr int32_t MissingTypingDelay = std::numeric_limits<int32_t>::min();
 
         uint32_t NormalizeTypingDelay(char const* key, int32_t value, uint32_t fallback)
@@ -46,7 +46,7 @@ namespace AzerothVoices
         bool const hasLegacy = configuredLegacy != MissingTypingDelay;
 
         // Preserve an existing fixed-delay installation when neither new range
-        // key is present. New installations default to a 150-250 ms range.
+        // key is present. New installations default to a 100-200 ms range.
         if (!hasMinimum && !hasMaximum && hasLegacy)
         {
             uint32_t const fixedDelay = NormalizeTypingDelay(
