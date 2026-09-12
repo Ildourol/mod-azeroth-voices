@@ -1,5 +1,7 @@
 #include "AzerothVoicesManager.h"
 
+#include "AzerothVoicesBossDialogue.h"
+
 #include "Creature.h"
 #include "Database/DBCStores.h"
 #include "Map.h"
@@ -234,6 +236,48 @@ namespace AzerothVoices
 
     void Manager::HandleCombatStart(Player* player, Creature* creature)
     {
+        // V0.8 group boss-pull chatter is independent of the NPC combat-start
+        // reaction: it fires for a classified boss even when NPC reactions are
+        // disabled, and it never touches the creature's AI, threat or facing.
+        if (m_started && !m_stopping && !m_paused && m_config && m_config->enabled &&
+            player && creature && player->IsInWorld() && creature->IsInWorld() &&
+            !Script_IsAIControlled(player) && creature->IsAlive() &&
+            player->IsInCombat() && player->GetVictim() == creature &&
+            player->GetMapId() == creature->GetMapId() &&
+            (m_config->groupChatterEnabled || m_config->raidChatterEnabled))
+        {
+            CreatureInfo const* info = creature->GetCreatureInfo();
+            bool const boss = info && ((info->entry && IsCuratedBossEntry(info->entry)) ||
+                info->rank == CREATURE_ELITE_WORLDBOSS);
+            if (boss)
+            {
+                Player* anchor = nullptr;
+                bool raid = false;
+                std::vector<Player*> const bots = GroupBotsForEvent(player, anchor, raid);
+                if (anchor && !bots.empty())
+                {
+                    uint32_t groupId = 0;
+                    CollectGroupBots(anchor, raid, groupId);
+                    std::string const subject = std::string("the group has just engaged ") +
+                        creature->GetName();
+                    if (GroupTriggerReady(groupId, GroupTrigger::BossPull,
+                            m_config->groupBossPullCooldownSeconds) &&
+                        Roll(m_config->groupBossPullChance) &&
+                        QueueGroupChatter(GroupTrigger::BossPull, anchor, subject, false))
+                        NoteGroupTrigger(groupId, GroupTrigger::BossPull,
+                            m_config->groupBossPullCooldownSeconds);
+                    if (raid && m_config->raidChatterEnabled &&
+                        GroupTriggerReady(groupId, GroupTrigger::BattleCry,
+                            m_config->raidBattleCryCooldownSeconds) &&
+                        Roll(m_config->raidBattleCryChance) &&
+                        QueueGroupChatter(GroupTrigger::BattleCry, anchor,
+                            "shout a short battle cry for the raid as the boss is engaged", false))
+                        NoteGroupTrigger(groupId, GroupTrigger::BattleCry,
+                            m_config->raidBattleCryCooldownSeconds);
+                }
+            }
+        }
+
         if (!m_started || m_stopping || m_paused || !m_config || !m_config->enabled ||
             !m_config->npcCombatStartEnabled || !m_config->npcReplies || !m_config->sayReplies ||
             !player || !creature || !player->IsInWorld() || !creature->IsInWorld() ||

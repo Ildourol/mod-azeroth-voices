@@ -8,6 +8,7 @@
 #include "QuestDef.h"
 #include "ScriptObjects.h"
 #include "SharedDefines.h"
+#include "Spell.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
 
@@ -17,6 +18,8 @@
 
 namespace AzerothVoices
 {
+    void HandleAddonCommandFromPlayer(Player* player, std::string const& arguments);
+
     namespace
     {
         std::string Lower(std::string value)
@@ -43,6 +46,35 @@ namespace AzerothVoices
                 case CHAT_MSG_CHANNEL: scope = ChatScope::Channel; return true;
                 default: return false;
             }
+        }
+
+        // `.llmc` is the stock Chatter Companion addon command channel. It is
+        // consumed here when the core command parser did not already claim it
+        // (that path runs first whenever PlayerCommands is enabled).
+        bool IsAddonCommand(std::string const& message)
+        {
+            std::string const prefix = ".llmc";
+            if (message.size() < prefix.size())
+                return false;
+            for (size_t i = 0; i < prefix.size(); ++i)
+                if (std::tolower(static_cast<unsigned char>(message[i])) != prefix[i])
+                    return false;
+            return message.size() == prefix.size() ||
+                std::isspace(static_cast<unsigned char>(message[prefix.size()])) != 0;
+        }
+
+        // `.avaddon` is the native Turtle WoW AzerothVoices addon command transport.
+        // It travels as framed chunks in Say chat and is suppressed before broadcast.
+        bool IsAvaddonCommand(std::string const& message)
+        {
+            std::string const prefix = ".avaddon";
+            if (message.size() < prefix.size())
+                return false;
+            for (size_t i = 0; i < prefix.size(); ++i)
+                if (std::tolower(static_cast<unsigned char>(message[i])) != prefix[i])
+                    return false;
+            return message.size() == prefix.size() ||
+                std::isspace(static_cast<unsigned char>(message[prefix.size()])) != 0;
         }
 
         class AzerothVoicesWorldScript final : public WorldScript
@@ -85,17 +117,23 @@ namespace AzerothVoices
             AzerothVoicesPlayerScript()
                 : PlayerScript("AzerothVoicesPlayerScript", {
                     PLAYERHOOK_ON_PLAYER_JUST_DIED,
+                    PLAYERHOOK_ON_PLAYER_RELEASED_GHOST,
                     PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST,
                     PLAYERHOOK_ON_PVP_KILL,
                     PLAYERHOOK_ON_CREATURE_KILL,
                     PLAYERHOOK_ON_LEVEL_CHANGED,
                     PLAYERHOOK_ON_LEARN_SPELL,
+                    PLAYERHOOK_ON_SPELL_CAST,
                     PLAYERHOOK_ON_DUEL_REQUEST,
                     PLAYERHOOK_ON_DUEL_START,
                     PLAYERHOOK_ON_DUEL_END,
                     PLAYERHOOK_ON_LOGIN,
+                    PLAYERHOOK_ON_LOGOUT,
+                    PLAYERHOOK_ON_UPDATE_ZONE,
+                    PLAYERHOOK_ON_MAP_CHANGED,
                     PLAYERHOOK_ON_LOOT_ITEM,
-                    PLAYERHOOK_ON_CHAT_COMMAND })
+                    PLAYERHOOK_ON_CHAT_COMMAND,
+                    PLAYERHOOK_CAN_USE_GROUP_CHAT })
             {
             }
 
@@ -104,9 +142,33 @@ namespace AzerothVoices
             {
                 if (!player || language == LANG_ADDON || type == CHAT_MSG_CHANNEL)
                     return;
+                if (type == CHAT_MSG_SAY)
+                {
+                    if (IsAvaddonCommand(message))
+                    {
+                        Manager::Instance().HandleAvaddonSay(player, message);
+                        return;
+                    }
+                    if (IsAddonCommand(message))
+                    {
+                        HandleAddonCommandFromPlayer(player, message.substr(5));
+                        return;
+                    }
+                }
                 ChatScope scope;
                 if (ToScope(type, scope))
                     Manager::Instance().HandleChat(player, scope, message, target);
+            }
+
+            bool CanUseGroupChat(Player* /*player*/, uint32 type, uint32 language,
+                                 std::string& message) override
+            {
+                // Addon control frames are acted on in OnChatCommand; they must
+                // never be broadcast as spoken Say chat.
+                if (type == CHAT_MSG_SAY && language != LANG_ADDON &&
+                    (IsAddonCommand(message) || IsAvaddonCommand(message)))
+                    return false;
+                return true;
             }
 
             void OnPlayerJustDied(Player* player) override
@@ -126,7 +188,36 @@ namespace AzerothVoices
 
             void OnCreatureKill(Player* killer, Creature* killed) override
             {
-                Manager::Instance().HandleEvent(killer, "creature_defeated", killed ? killed->GetName() : "");
+                Manager::Instance().HandleEvent(killer, "creature_defeated",
+                    killed ? killed->GetName() : "", 0,
+                    killed && killed->GetCreatureInfo() ? killed->GetCreatureInfo()->entry : 0,
+                    killed && killed->GetCreatureInfo() ? killed->GetCreatureInfo()->rank : 0);
+            }
+
+            void OnPlayerReleasedGhost(Player* player) override
+            {
+                Manager::Instance().HandleEvent(player, "released_ghost");
+            }
+
+            void OnSpellCast(Player* player, Spell* /*spell*/, bool /*skipCheck*/) override
+            {
+                Manager::Instance().HandleEvent(player, "spell_cast");
+            }
+
+            void OnUpdateZone(Player* player, uint32 /*newZone*/, uint32 /*newArea*/) override
+            {
+                Manager::Instance().HandleEvent(player, "zone_changed");
+            }
+
+            void OnMapChanged(Player* player) override
+            {
+                Manager::Instance().HandlePlayerMapChanged(player);
+            }
+
+            void OnLogout(Player* player) override
+            {
+                Manager::Instance().OnPlayerLogout(player);
+                Manager::Instance().HandleEvent(player, "player_logout");
             }
 
             void OnLevelChanged(Player* player, uint8 oldLevel) override
@@ -165,15 +256,17 @@ namespace AzerothVoices
             {
                 std::string detail;
                 std::string eventName = "item_looted";
+                uint32_t quality = 0;
                 if (item && item->GetProto())
                 {
                     detail = item->GetProto()->Name1 + " x" + std::to_string(count);
+                    quality = item->GetProto()->Quality;
                     if (item->GetProto()->Quality >= ITEM_QUALITY_EPIC)
                         eventName = "epic_item";
                     else if (item->GetProto()->Quality >= ITEM_QUALITY_RARE)
                         eventName = "rare_item";
                 }
-                Manager::Instance().HandleEvent(player, eventName, detail);
+                Manager::Instance().HandleEvent(player, eventName, detail, 0, 0, 0, quality);
             }
         };
 
