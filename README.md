@@ -23,7 +23,7 @@ The local reference-module trees were treated strictly as feature references. Al
 - Native Turtle WoW 1.18.1 `AzerothVoices` companion addon (Interface 11200) with backward compatibility for legacy Chatter clients: user-level `.avaddon` and `.llmc` command handling, framed `AZEROTH_VOICES` addon message responses and legacy `CHATTER_ADDON` system responses without GM privileges, percent-encoded wire fields with the `-` empty sentinel, a contact-scoped known-bot roster, single-window UI, and addon-compatible personality modes for replacing the three supplied traits and for regenerating only the background story.
 - Party and raid chatter: grouped bots comment on idle moments, dungeon entry, zone changes, kills, boss pulls and kills, wipes, deaths, corpse runs, resurrects, loot by rarity, quest accept/objective/completion, spell casts, low health and mana, nearby objects, and bot questions, with an ordered one-owner rule that keeps the existing event responders from reacting to the same situation twice.
 - Guild depth: ambient guild conversations with participant/zone/history references, a bounded one-line login greeting, and reply gating (per-speaker debounce plus recent-speaker suppression) on top of the existing guild reply path.
-- A deterministic bot memory ledger: fixed-template C++ summaries of first meetings, party membership, quests, dungeon clears, boss kills, PvP kills, wipes, level-ups and achievements, stored per bot/player pair, injected as a bounded prompt block, and deleted by the addon's Forget button or `.av memory forget`.
+- A deterministic bot memory ledger: fixed-template C++ summaries of first meetings, party membership, quests, dungeon clears, boss kills, PvP kills, wipes, and level-ups, stored per bot/player pair, injected as a bounded prompt block, and deleted by the addon's Forget button or `.av memory forget`.
 - A follow-up chance for short PlayerBot/NPC conversations after ambient lines, bot-originated replies in every non-whisper scope, and event lines. The triggering AI is preferred for the next turn when still eligible. Each turn repeats the scope's real-audience rule; `AiPlayerbot.LLMBotToBotChatChance` caps PlayerBot-to-PlayerBot follow-ups, while `AiPlayerbot.LLMRpgAIChatChance` caps any follow-up involving an NPC. Every follow-up pair containing an NPC must be within `NPC.Distance` actor-to-actor and share one real-human observer within `SayDistance`; these checks repeat before delivery. NPC turns remain Say-only, and lone NPCs do not start ambient monologues. Combat-start reactions deliberately disable generated follow-ups.
 - Event chatter for deaths, kills, loot, quests, learned spells, duels, levels, guild login/join/leave, plus a public event-adapter method for other scripts. Guild join/leave/login/promotion/demotion and a guilded level-up use Guild and require an online real guild listener. Other events prioritize Party for PlayerBots in the subject's party subgroup, then use local Say for remaining PlayerBot or NPC responders. Every generated actor passes the audience rule for its actual delivery scope before a provider request is built.
 - Lightweight live environment context (map, zone, subzone, dungeon/combat/group state, nearby creatures, equipped items, and optionally backpack items), built only on the world thread and capped by configuration.
@@ -541,7 +541,7 @@ Guild and officer replies from real players gain a 5-second per-speaker debounce
 
 `AzerothVoices.Memory.Enable = 1` gives each PlayerBot a small, durable ledger of facts about the real players it has grouped with. Rows are written by C++ from verified facts using fixed templates, for example `We killed Edwin VanCleef together in The Deadmines.` or `I watched Alice reach level 42.` No provider call is made to create them and no player-written text is ever stored.
 
-Memories are keyed by bot/player pair in `azeroth_voices_bot_memory`, lazily loaded into a bounded hot cache (4096 pairs), written through a coalesced dirty queue, pruned to the newest 30 rows per pair on write, and deleted after 180 days without an update by the hourly cleanup. Types and their generation chances: `first_met` 20, `party_member` 25, `quest_completed` 25, `dungeon_completed` 30, `level_up` 40, `boss_kill` 50, `pvp_kill` 20, `wipe` 50, `achievement` 30. A "first met" row is written only when the bot holds no memory of that player yet, and a dungeon-completed row only when the group leaves an instance in which it killed at least one classified boss.
+Memories are keyed by bot/player pair in `azeroth_voices_bot_memory`, lazily loaded into a bounded hot cache (4096 pairs), written through a coalesced dirty queue, pruned to the newest 30 rows per pair on write, and deleted after 180 days without an update by the hourly cleanup. Types and their generation chances: `first_met` 20, `party_member` 25, `quest_completed` 25, `dungeon_completed` 30, `level_up` 40, `boss_kill` 50, `pvp_kill` 20, `wipe` 50. A "first met" row is written only when the bot holds no memory of that player yet, and a dungeon-completed row only when the group leaves an instance in which it killed at least one classified boss.
 
 Retrieval injects a bounded `THINGS YOU REMEMBER ABOUT <player>` block (3 items, 600 characters, ranked by importance then recency) that is charged against the context budget below personality and sentiment. Direct conversations may always draw on it; ambient and group lines use it only on a 15 % recall roll, so repeated lines do not all talk about the past.
 
@@ -608,22 +608,17 @@ Memory `inspect` reports the cached count, imports the newest rows for that pair
 
 All commands require the existing vMaNGOS moderator/GM security level and respond privately through the command handler. After editing the config, use the core's config reload command, which reloads Azeroth Voices automatically, or restart `mangosd`. `.av restart` only recycles the manager with settings already loaded by the core. `.av status` and `.av test` sanitize the endpoint and never display the API key.
 
-## Debug diagnostics
+### Event adapter for other modules and scripted NPCs
 
-`AzerothVoices.Debug = 1` enables a few concise activity messages, such as ambient chatter queueing, RAG match counts, and successful or discarded reply delivery. There are no debug levels, category framework, request tracing, prompt dumps, or performance profiling. Serious production failures still use normal worldserver error logging. Use `.av test` for a private in-game GM summary.
-
-
-## Event adapter for other modules and scripted NPCs
-
-The core does not expose generic hooks for every event from AzerothCore's `mod-ollama-chat` (for example arbitrary achievements, guild rank changes, or every game-event start). Another Tortoise module can submit such an event without modifying PlayerBots:
+The core hooks handle events directly. Another Tortoise module can also submit custom events without modifying PlayerBots:
 
 ```cpp
 #include "AzerothVoicesManager.h"
 
-AzerothVoices::Manager::Instance().HandleEvent(player, "achievement", achievementName);
+AzerothVoices::Manager::Instance().HandleEvent(player, "dungeon_completed", dungeonName);
 ```
 
-Supported adapter event names are `achievement`, `pet_defeated`, `used_object`,
+Supported adapter event names are `pet_defeated`, `used_object`,
 `guild_promotion`, `guild_demotion`, `dungeon_completed`,
 `game_event_started`, and `game_event_stopped`. Event-specific chances are
 controlled in `mod-azeroth-voices.conf`. Guild promotion/demotion should be submitted while the
@@ -633,6 +628,11 @@ subject and generated PlayerBot share the party subgroup, then fall back to Say;
 reactions remain Say-only.
 
 Likewise, direct chat still needs only a `Player*`, a scope, and text. This is the supported extension seam for quest scripts, dungeon modules, world events, and future scripted-NPC systems.
+
+## Debug diagnostics
+
+`AzerothVoices.Debug = 1` enables a few concise activity messages, such as ambient chatter queueing, RAG match counts, and successful or discarded reply delivery. There are no debug levels, category framework, request tracing, prompt dumps, or performance profiling. Serious production failures still use normal worldserver error logging. Use `.av test` for a private in-game GM summary.
+
 
 ## Operational checks
 

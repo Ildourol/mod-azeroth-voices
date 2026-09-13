@@ -75,7 +75,6 @@ namespace AzerothVoices
             case MemoryType::BossKill: return "boss_kill";
             case MemoryType::PvpKill: return "pvp_kill";
             case MemoryType::Wipe: return "wipe";
-            case MemoryType::Achievement: return "achievement";
             case MemoryType::Count: break;
         }
         return "first_met";
@@ -108,7 +107,6 @@ namespace AzerothVoices
             case MemoryType::BossKill: return 80;
             case MemoryType::PvpKill: return 35;
             case MemoryType::Wipe: return 75;
-            case MemoryType::Achievement: return 55;
             case MemoryType::Count: break;
         }
         return 25;
@@ -167,11 +165,6 @@ namespace AzerothVoices
                 if (facts.instance.empty())
                     return false;
                 text << "Our group wiped in " << facts.instance << '.';
-                break;
-            case MemoryType::Achievement:
-                if (!AllPresent({ &facts.achievement }))
-                    return false;
-                text << "They earned " << facts.achievement << '.';
                 break;
             case MemoryType::Count:
                 return false;

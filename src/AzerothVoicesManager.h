@@ -5,6 +5,7 @@
 #include "AzerothVoicesInstanceLore.h"
 #include "AzerothVoicesMemory.h"
 #include "AzerothVoicesPacing.h"
+#include "AzerothVoicesPartyGate.h"
 #include "AzerothVoicesSocial.h"
 #include "AzerothVoicesTypes.h"
 
@@ -83,6 +84,14 @@ namespace AzerothVoices
         uint64_t thinkingFallbacks = 0;
         size_t instanceLoreEntries = 0;
         size_t generalPacingWindows = 0;
+        size_t partyPacingWindows = 0;
+        size_t pendingGuildGreetings = 0;
+        size_t guildSessionHistories = 0;
+        bool generalChatterEnabled = true;
+        size_t generalSpeakersOnCooldown = 0;
+        size_t gossipTargetsOnCooldown = 0;
+        bool targetedNpcBotCommentsEnabled = true;
+        uint32_t targetedNpcBotCommentChance = 15;
         bool ragEnabled = false;
         bool environmentEnabled = false;
         bool snapshotEnabled = false;
@@ -112,6 +121,7 @@ namespace AzerothVoices
                          uint32_t creatureRank = 0, uint32_t itemQuality = 0);
         void HandleCombatStart(Player* player, Creature* creature);
         void HandlePlayerMapChanged(Player* player);
+        void HandleGameEventState(uint16_t eventId, bool started, std::string const& description = "");
 
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
@@ -152,6 +162,7 @@ namespace AzerothVoices
         void SetPaused(bool paused);
         bool IsPaused() const;
         StatusSnapshot GetStatus() const;
+        bool IsWorldChannel(std::string const& channelName) const;
 
     private:
         Manager();
@@ -341,7 +352,11 @@ namespace AzerothVoices
                            ProximityScene const* scene = nullptr,
                            BossPresence const* boss = nullptr,
                            bool bossDirected = false,
-                           GroupConversation const* groupScene = nullptr);
+                           GroupConversation const* groupScene = nullptr,
+                           ActorSnapshot const* targetedNpc = nullptr);
+        void MaybeQueueTargetedNpcObserverComment(Player* speaker, Creature* targetedNpc,
+                                                  std::string const& message,
+                                                  std::string const& channelName);
         bool PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
                                ChatScope scope, std::string const& channelName,
                                std::string const& trigger, RequestPriority priority,
@@ -367,8 +382,12 @@ namespace AzerothVoices
         void NoteBossLineDelivered(ChatRequest const& request, std::string const& text);
         void LoadInstanceLore();
         void PruneGeneralPacing();
+        void PrunePartyPacing();
         bool ReserveGeneralPacing(ChatScope scope, std::string const& channelName,
                                   ActorSnapshot const& location, size_t lines);
+        void RunGeneralChatter();
+        void ScheduleNextGeneralTrigger();
+        void PruneGeneralChatter();
         void RunGroupChatter();
         void RunGuildChatter();
         void PruneGroupAndGuildState();
@@ -380,6 +399,12 @@ namespace AzerothVoices
                                  std::string const& detail, uint32_t creatureEntry,
                                  uint32_t creatureRank);
         bool HandleGuildLoginGreeting(Player* member);
+        void ProcessPendingGuildGreetings();
+        void CancelPendingGuildGreeting(uint64_t playerGuid);
+        bool QueueGuildPlayerReply(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                                   std::string const& message, bool addressByName,
+                                   std::string const& callbackTopic, bool followupQuestion,
+                                   uint32_t initialDelaySeconds);
         bool QueueGroupChatter(GroupTrigger trigger, Player* anchor, std::string const& detail,
                                bool conversation = false, uint64_t excludedSpeaker = 0);
         void MaybeQueueGroupTurn(ChatRequest const& request, std::string const& reply);
@@ -410,7 +435,8 @@ namespace AzerothVoices
                                  ProximityScene const* scene = nullptr,
                                  BossPresence const* boss = nullptr,
                                  bool bossDirected = false,
-                                 GroupConversation const* groupScene = nullptr);
+                                 GroupConversation const* groupScene = nullptr,
+                                 ActorSnapshot const* targetedNpc = nullptr);
         std::vector<Candidate> CollectCandidates(Player* speaker, ChatScope scope,
                                                   std::string const& targetName,
                                                   std::string const& message,
@@ -497,8 +523,16 @@ namespace AzerothVoices
         std::map<uint64_t, std::chrono::steady_clock::time_point> m_guildGreetingCooldowns;
         std::map<uint64_t, std::chrono::steady_clock::time_point> m_guildReplyDebounce;
         std::map<uint32_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> m_guildLastSpeaker;
+        std::map<uint32_t, std::chrono::steady_clock::time_point> m_guildPlayerConversationUntil;
+        std::map<uint32_t, std::deque<uint64_t>> m_guildRecentSpeakers;
+        std::map<GuildSessionKey, GuildSessionHistoryRing> m_guildSessionHistory;
+        std::map<uint64_t, PendingGuildGreeting> m_pendingGuildGreetings;
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;
         DeliveryTimeline m_generalPacing;
+        DeliveryTimeline m_partyPacing;
+        std::chrono::steady_clock::time_point m_nextGeneralTrigger;
+        GeneralSpeakerTracker m_generalSpeakerTracker;
+        GossipTargetTracker m_gossipTargetTracker;
         InstanceLoreRegistry m_instanceLore;
         std::vector<RagItem> m_rag;
         size_t m_ragFiles = 0;

@@ -83,6 +83,7 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesInstanceLore.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesMemory.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesPacing.cpp"
+      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesPartyGate.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesPersonality.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesProximity.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesReasoning.cpp"

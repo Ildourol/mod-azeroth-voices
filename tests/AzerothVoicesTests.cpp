@@ -14,6 +14,7 @@
 #include "AzerothVoicesInstanceLore.h"
 #include "AzerothVoicesMemory.h"
 #include "AzerothVoicesPacing.h"
+#include "AzerothVoicesPartyGate.h"
 #include "AzerothVoicesPersonality.h"
 #include "AzerothVoicesProximity.h"
 #include "AzerothVoicesReasoning.h"
@@ -578,7 +579,6 @@ int main()
     facts.quest = "The Defias Brotherhood";
     facts.boss = "Edwin VanCleef";
     facts.victim = "Grunt";
-    facts.achievement = "Level 60";
     facts.playerName = "Alice";
     facts.level = 42;
 
@@ -592,8 +592,6 @@ int main()
         "boss-kill summary includes the instance");
     Check(BuildMemorySummary(MemoryType::LevelUp, facts, summary) &&
         summary == "I watched Alice reach level 42.", "level-up summary names the player");
-    Check(BuildMemorySummary(MemoryType::Achievement, facts, summary) &&
-        summary == "They earned Level 60.", "achievement summary template");
     MemoryFacts emptyFacts;
     Check(!BuildMemorySummary(MemoryType::BossKill, emptyFacts, summary),
         "a memory without its required facts is refused");
@@ -965,6 +963,442 @@ int main()
         Check(!isChannelScope(1), "packet hook ignores CHAT_MSG_SAY");
         Check(!isChannelScope(2), "packet hook ignores CHAT_MSG_PARTY");
         Check(!isChannelScope(7), "packet hook ignores CHAT_MSG_WHISPER");
+    }
+
+    // 5. Warband / Playerbots Command Ignore and Blacklist Verification
+    {
+        // Special command prefixes and punctuation symbols
+        Check(IsCommandIgnored(".bot add Bob"), "dot command is ignored");
+        Check(IsCommandIgnored(".bot list"), "dot bot list is ignored");
+        Check(IsCommandIgnored("/wb"), "slash wb is ignored");
+        Check(IsCommandIgnored("/warband"), "slash warband is ignored");
+        Check(IsCommandIgnored("/ubc 15"), "slash ubc is ignored");
+        Check(IsCommandIgnored("?"), "question mark help command is ignored");
+        Check(IsCommandIgnored("~kite"), "tilde strategy toggle is ignored");
+        Check(IsCommandIgnored("!help"), "exclamation prefix is ignored");
+
+        // Single-letter commands
+        Check(IsCommandIgnored("c"), "single letter c (bags) is ignored");
+        Check(IsCommandIgnored("c 1"), "single letter c with argument is ignored");
+        Check(IsCommandIgnored("e [Item Link]"), "single letter e (equip) is ignored");
+        Check(IsCommandIgnored("u [Item Link]"), "single letter u (use) is ignored");
+        Check(IsCommandIgnored("s [Item Link]"), "single letter s (sell) is ignored");
+        Check(IsCommandIgnored("b [Item Link]"), "single letter b (buy) is ignored");
+        Check(IsCommandIgnored("d"), "single letter d is ignored");
+        Check(!IsCommandIgnored("can someone help me?"), "sentence starting with 'can' is NOT ignored");
+        Check(!IsCommandIgnored("do you have water?"), "sentence starting with 'do' is NOT ignored");
+        Check(!IsCommandIgnored("everyone ready?"), "sentence starting with 'everyone' is NOT ignored");
+        Check(!IsCommandIgnored("understand"), "word 'understand' is NOT ignored");
+        Check(!IsCommandIgnored("sure thing"), "word 'sure' is NOT ignored");
+        Check(!IsCommandIgnored("boss incoming"), "word 'boss' is NOT ignored");
+
+        // Two-letter and short commands
+        Check(IsCommandIgnored("ue head"), "ue (unequip) command is ignored");
+        Check(IsCommandIgnored("r ?"), "r ? (reset query) is ignored");
+        Check(IsCommandIgnored("ss ?"), "ss ? (soulstone query) is ignored");
+
+        // Strategy prefixes
+        Check(IsCommandIgnored("co ?"), "co ? is ignored");
+        Check(IsCommandIgnored("co +arms,+aoe,+threat"), "co +arms is ignored");
+        Check(IsCommandIgnored("co ~kite"), "co ~kite is ignored");
+        Check(IsCommandIgnored("nc +loot,+food,+gather"), "nc +loot is ignored");
+        Check(IsCommandIgnored("nc ?"), "nc ? is ignored");
+        Check(IsCommandIgnored("nc ~rpg"), "nc ~rpg is ignored");
+        Check(IsCommandIgnored("de +corpse run"), "de +corpse run is ignored");
+        Check(IsCommandIgnored("react ?"), "react ? is ignored");
+        Check(IsCommandIgnored("ll ?"), "ll ? is ignored");
+        Check(IsCommandIgnored("ll ~equip"), "ll ~equip is ignored");
+
+        // Action 'd' engine
+        Check(IsCommandIgnored("d attack my target"), "d attack my target is ignored");
+        Check(IsCommandIgnored("d pull my target"), "d pull my target is ignored");
+        Check(IsCommandIgnored("d buff"), "d buff is ignored");
+        Check(IsCommandIgnored("d food"), "d food is ignored");
+        Check(IsCommandIgnored("d drink"), "d drink is ignored");
+        Check(IsCommandIgnored("d add all loot"), "d add all loot is ignored");
+        Check(IsCommandIgnored("d equip upgrades"), "d equip upgrades is ignored");
+        Check(IsCommandIgnored("d repair"), "d repair is ignored");
+        Check(IsCommandIgnored("d sell"), "d sell is ignored");
+        Check(IsCommandIgnored("d revive targets"), "d revive targets is ignored");
+        Check(IsCommandIgnored("d give leader"), "d give leader is ignored");
+        Check(IsCommandIgnored("d stop follow"), "d stop follow is ignored");
+        Check(IsCommandIgnored("d use go"), "d use go is ignored");
+
+        // Movement, Stances, Formations, Combat
+        Check(IsCommandIgnored("follow"), "follow is ignored");
+        Check(IsCommandIgnored("follow me"), "follow me is ignored");
+        Check(!IsCommandIgnored("following you to the end"), "following is NOT ignored");
+        Check(IsCommandIgnored("stay"), "stay is ignored");
+        Check(IsCommandIgnored("attack"), "attack is ignored");
+        Check(IsCommandIgnored("attack rti"), "attack rti is ignored");
+        Check(IsCommandIgnored("flee"), "flee is ignored");
+        Check(IsCommandIgnored("ready"), "ready is ignored");
+        Check(IsCommandIgnored("grind"), "grind is ignored");
+        Check(IsCommandIgnored("guard"), "guard is ignored");
+        Check(IsCommandIgnored("free"), "free is ignored");
+        Check(IsCommandIgnored("position guard set"), "position guard set is ignored");
+        Check(IsCommandIgnored("stance tank"), "stance tank is ignored");
+        Check(IsCommandIgnored("stance near"), "stance near is ignored");
+        Check(IsCommandIgnored("formation arrow"), "formation arrow is ignored");
+        Check(IsCommandIgnored("formation line"), "formation line is ignored");
+        Check(IsCommandIgnored("formation near"), "formation near is ignored");
+        Check(IsCommandIgnored("rti skull"), "rti skull is ignored");
+        Check(IsCommandIgnored("rti cc moon"), "rti cc moon is ignored");
+        Check(IsCommandIgnored("combatstop"), "combatstop is ignored");
+        Check(IsCommandIgnored("stats"), "stats is ignored");
+        Check(IsCommandIgnored("quests"), "quests is ignored");
+        Check(IsCommandIgnored("talents"), "talents is ignored");
+        Check(IsCommandIgnored("trainer learn"), "trainer learn is ignored");
+        Check(IsCommandIgnored("summon"), "summon is ignored");
+        Check(IsCommandIgnored("release"), "release is ignored");
+        Check(IsCommandIgnored("reset ai"), "reset ai is ignored");
+        Check(IsCommandIgnored("reset strats"), "reset strats is ignored");
+        Check(IsCommandIgnored("save mana 1"), "save mana 1 is ignored");
+        Check(IsCommandIgnored("save mana ?"), "save mana ? is ignored");
+        Check(IsCommandIgnored("cheat +taxi"), "cheat +taxi is ignored");
+        Check(IsCommandIgnored("cheat ?"), "cheat ? is ignored");
+        Check(IsCommandIgnored("online"), "online is ignored");
+        Check(IsCommandIgnored("roles"), "roles is ignored");
+        Check(IsCommandIgnored("mail ?"), "mail ? is ignored");
+        Check(IsCommandIgnored("accept *"), "accept * is ignored");
+        Check(IsCommandIgnored("talk"), "talk is ignored");
+        Check(IsCommandIgnored("friends"), "friends is ignored");
+
+        // Role and Broadcast Prefixes
+        Check(IsCommandIgnored("all follow"), "all follow is ignored");
+        Check(IsCommandIgnored("all nc +loot"), "all nc +loot is ignored");
+        Check(IsCommandIgnored("@tank attack"), "@tank attack is ignored");
+        Check(IsCommandIgnored("@heal flee"), "@heal flee is ignored");
+        Check(IsCommandIgnored("@dps attack"), "@dps attack is ignored");
+        Check(IsCommandIgnored("@melee attack"), "@melee attack is ignored");
+        Check(IsCommandIgnored("@ranged attack"), "@ranged attack is ignored");
+        Check(!IsCommandIgnored("all of us should heal"), "all of us should heal is NOT ignored");
+
+        // Custom blacklist / ignore list
+        Check(IsCommandIgnored("customprefix 123", { "customprefix" }), "custom ignore token matches");
+        Check(!IsCommandIgnored("customprefix 123"), "without custom token, not ignored");
+    }
+
+    // --- Dedicated General/World chatter decisions and tracking --------------
+    {
+        // 1. SelectGeneralSubjectType
+        CheckEqual(SelectGeneralSubjectType(10, 10, 5), GeneralSubjectType::NpcGossip,
+            "roll <= npcGossipChance selects NpcGossip");
+        CheckEqual(SelectGeneralSubjectType(10, 10, 10), GeneralSubjectType::NpcGossip,
+            "roll == npcGossipChance selects NpcGossip");
+        CheckEqual(SelectGeneralSubjectType(10, 10, 11), GeneralSubjectType::BotGossip,
+            "roll <= npcGossipChance + botGossipChance selects BotGossip");
+        CheckEqual(SelectGeneralSubjectType(10, 10, 20), GeneralSubjectType::BotGossip,
+            "roll == npcGossipChance + botGossipChance selects BotGossip");
+        CheckEqual(SelectGeneralSubjectType(10, 10, 21), GeneralSubjectType::Plain,
+            "roll > sum selects Plain");
+        CheckEqual(SelectGeneralSubjectType(0, 0, 1), GeneralSubjectType::Plain,
+            "zero chances select Plain");
+
+        // 2. IsVanillaCapitalCityZone
+        Check(IsVanillaCapitalCityZone(1519), "Stormwind City is a capital");
+        Check(IsVanillaCapitalCityZone(1537), "Ironforge is a capital");
+        Check(IsVanillaCapitalCityZone(1657), "Darnassus is a capital");
+        Check(IsVanillaCapitalCityZone(1637), "Orgrimmar is a capital");
+        Check(IsVanillaCapitalCityZone(1638), "Thunder Bluff is a capital");
+        Check(IsVanillaCapitalCityZone(1497), "Undercity is a capital");
+        Check(IsVanillaCapitalCityZone(3524), "Alah'Thaliel is a Turtle WoW capital");
+        Check(IsVanillaCapitalCityZone(3525), "Gilneas City is a Turtle WoW capital");
+        Check(!IsVanillaCapitalCityZone(12), "Elwynn Forest is not a capital");
+        Check(!IsVanillaCapitalCityZone(14), "Durotar is not a capital");
+        Check(!IsVanillaCapitalCityZone(0), "Zone 0 is not a capital");
+
+        // 3. CalculateGeneralTriggerChance
+        CheckEqual(CalculateGeneralTriggerChance(15, 2, false), 15u,
+            "non-city keeps base chance");
+        CheckEqual(CalculateGeneralTriggerChance(15, 2, true), 30u,
+            "city applies multiplier");
+        CheckEqual(CalculateGeneralTriggerChance(60, 2, true), 100u,
+            "chance clamps to 100");
+        CheckEqual(CalculateGeneralTriggerChance(15, 1, true), 15u,
+            "multiplier <= 1 does not increase chance");
+        CheckEqual(CalculateGeneralTriggerChance(15, 0, true), 15u,
+            "multiplier 0 keeps base chance");
+
+        // 4. GeneralSpeakerTracker
+        GeneralSpeakerTracker speakerTracker;
+        CheckEqual(speakerTracker.Size(), size_t(0), "empty speaker tracker size is 0");
+        Check(!speakerTracker.IsOnCooldown(1001, 1000, 900), "guid not tracked is not on cooldown");
+
+        speakerTracker.RecordSpeech(1001, 1000);
+        CheckEqual(speakerTracker.Size(), size_t(1), "speaker tracker records speech");
+        Check(speakerTracker.IsOnCooldown(1001, 1000, 900), "guid is on cooldown immediately");
+        Check(speakerTracker.IsOnCooldown(1001, 1500, 900), "guid is on cooldown at t+500s");
+        Check(!speakerTracker.IsOnCooldown(1001, 1900, 900), "guid cooldown expires at t+900s");
+        Check(!speakerTracker.IsOnCooldown(1001, 2000, 900), "guid cooldown expired at t+1000s");
+        Check(!speakerTracker.IsOnCooldown(1001, 1500, 0), "cooldown 0 means never on cooldown");
+
+        speakerTracker.RecordSpeech(1002, 1200);
+        CheckEqual(speakerTracker.Size(), size_t(2), "two speakers tracked");
+        speakerTracker.Prune(2000, 900);
+        CheckEqual(speakerTracker.Size(), size_t(1), "prune removes expired speakers");
+        Check(!speakerTracker.IsOnCooldown(1001, 2000, 900), "pruned speaker is not on cooldown");
+        Check(speakerTracker.IsOnCooldown(1002, 2000, 900), "unexpired speaker remains on cooldown");
+
+        speakerTracker.Clear();
+        CheckEqual(speakerTracker.Size(), size_t(0), "clear resets speaker tracker");
+
+        // 5. GossipTargetTracker
+        GossipTargetTracker gossipTracker;
+        CheckEqual(gossipTracker.Size(), size_t(0), "empty gossip tracker size is 0");
+        Check(!gossipTracker.IsOnCooldown("npc:1519:Guard", 1000, 1800), "untracked target is not on cooldown");
+        Check(!gossipTracker.IsOnCooldown("", 1000, 1800), "empty key is never on cooldown");
+
+        gossipTracker.RecordTarget("npc:1519:Guard", 1000);
+        CheckEqual(gossipTracker.Size(), size_t(1), "gossip tracker records target");
+        Check(gossipTracker.IsOnCooldown("npc:1519:Guard", 1500, 1800), "target is on cooldown within window");
+        Check(!gossipTracker.IsOnCooldown("npc:1519:Guard", 2800, 1800), "target cooldown expires after window");
+        Check(!gossipTracker.IsOnCooldown("npc:1519:Other", 1500, 1800), "different target is not on cooldown");
+
+        gossipTracker.RecordTarget("bot:1519:Adventurer", 1200);
+        CheckEqual(gossipTracker.Size(), size_t(2), "two gossip targets tracked");
+        gossipTracker.Prune(2900, 1800);
+        CheckEqual(gossipTracker.Size(), size_t(1), "prune removes expired gossip targets");
+        Check(!gossipTracker.IsOnCooldown("npc:1519:Guard", 2900, 1800), "pruned gossip target not on cooldown");
+        Check(gossipTracker.IsOnCooldown("bot:1519:Adventurer", 2900, 1800), "unexpired gossip target remains on cooldown");
+
+        gossipTracker.Clear();
+        CheckEqual(gossipTracker.Size(), size_t(0), "clear resets gossip tracker");
+
+        // --- Targeted-NPC /say responder selection and observer tests (Tests A-H) ---
+        // Test A: Real player targets NPC + says something -> NPC is primary addressee, generic nearby bot direct-say responses suppressed
+        Check(DecideTargetedNpcSayAction(true, true, false, false, true, 0, 1, 50) == TargetedNpcSayAction::NpcOnly,
+            "Test A1: generic bot direct-say responses suppressed when roll fails");
+        Check(DecideTargetedNpcSayAction(true, true, false, false, false, 15, 1, 10) == TargetedNpcSayAction::NpcOnly,
+            "Test A2: generic bot direct-say responses suppressed when observer comments disabled");
+        Check(DecideTargetedNpcSayAction(true, true, false, false, true, 15, 1, 10) != TargetedNpcSayAction::NormalSay,
+            "Test A3: targeted NPC say never falls back to normal unconstrained say responder selection");
+
+        // Test B: Real player targets NPC + observer comments enabled + chance passes -> exactly one eligible nearby bot is selected as observer
+        Check(DecideTargetedNpcSayAction(true, true, false, false, true, 15, 1, 10) == TargetedNpcSayAction::NpcWithObserver,
+            "Test B1: observer comment triggers when chance roll succeeds");
+        std::vector<ObserverCandidate> eligibleBots = {
+            { 101, "Arthaslol", 15.0f },
+            { 102, "Legolas", 8.0f },
+            { 103, "Gimli", 20.0f }
+        };
+        std::vector<ObserverCandidate> chosenB = SelectObserverCandidates(eligibleBots, 1);
+        CheckEqual(chosenB.size(), size_t(1), "Test B2: exactly one observer candidate selected when max=1");
+        CheckEqual(chosenB.front().name, std::string("Legolas"), "Test B3: closest bot chosen as observer");
+
+        // Test C: Observer prompt contains correct context (player name, targeted NPC name/role, player message, observer instructions, direct-answer prohibition)
+        TargetedNpcObserverPromptInput promptInput;
+        promptInput.playerName = "Vaelastrasz";
+        promptInput.npcName = "Innkeeper Farley";
+        promptInput.npcRole = "Innkeeper";
+        promptInput.playerMessage = "Do you know where I can buy food?";
+        promptInput.zoneOrArea = "Goldshire";
+        promptInput.botName = "Arthaslol";
+        TargetedNpcObserverPrompt observerPrompt = BuildTargetedNpcObserverPrompt(promptInput);
+        Check(observerPrompt.systemPromptExtension.find("Vaelastrasz") != std::string::npos,
+            "Test C1: system prompt identifies real player");
+        Check(observerPrompt.systemPromptExtension.find("Innkeeper Farley") != std::string::npos,
+            "Test C2: system prompt identifies targeted NPC name");
+        Check(observerPrompt.systemPromptExtension.find("Innkeeper") != std::string::npos,
+            "Test C3: system prompt identifies targeted NPC role");
+        Check(observerPrompt.systemPromptExtension.find("Do not answer the player's question") != std::string::npos,
+            "Test C4: system prompt explicitly forbids answering player's question directly");
+        Check(observerPrompt.systemPromptExtension.find("Arthaslol") != std::string::npos,
+            "Test C5: system prompt identifies observer bot");
+        Check(observerPrompt.userPrompt.find("Do you know where I can buy food?") != std::string::npos,
+            "Test C6: user prompt includes player's exact message");
+        Check(observerPrompt.userPrompt.find("Do not answer") != std::string::npos,
+            "Test C7: user prompt reinforces observer instruction");
+
+        // Test D: Observer chance fails -> NPC responds, no bot observer comments
+        Check(DecideTargetedNpcSayAction(true, true, false, false, true, 15, 1, 50) == TargetedNpcSayAction::NpcOnly,
+            "Test D: observer chance roll failure results in NpcOnly");
+
+        // Test E: Real player says something with NO target -> normal say responder logic runs
+        Check(DecideTargetedNpcSayAction(true, false, false, false, true, 15, 1, 10) == TargetedNpcSayAction::NormalSay,
+            "Test E: no target produces NormalSay");
+
+        // Test F: Real player targets NPC but explicitly mentions nearby bot by name -> that bot may respond directly
+        Check(DecideTargetedNpcSayAction(true, true, false, true, true, 15, 1, 10) == TargetedNpcSayAction::ExplicitBotDirectReply,
+            "Test F: explicit bot name mention triggers direct reply overriding observer suppression");
+
+        // Test G: Real player targets a PlayerBot -> selected PlayerBot responds directly, not treated as targeted NPC
+        Check(DecideTargetedNpcSayAction(true, false, true, false, true, 15, 1, 10) == TargetedNpcSayAction::NormalSay,
+            "Test G: targeting a PlayerBot produces NormalSay for direct bot responder scoring");
+
+        // Test H: MaxBotComments respected (e.g. capped at 1)
+        CheckEqual(SelectObserverCandidates(eligibleBots, 0).size(), size_t(0),
+            "Test H1: maxBotComments 0 selects 0 observers");
+        CheckEqual(SelectObserverCandidates(eligibleBots, 1).size(), size_t(1),
+            "Test H2: maxBotComments 1 selects 1 observer");
+        CheckEqual(SelectObserverCandidates(eligibleBots, 2).size(), size_t(2),
+            "Test H3: maxBotComments 2 selects 2 observers");
+        CheckEqual(SelectObserverCandidates(eligibleBots, 10).size(), size_t(3),
+            "Test H4: maxBotComments capped at total eligible bots");
+
+        // --- Section 38: PartyGate Delivery Pacing Tests ---
+        // 1. PartyGatePolicyForTrigger
+        Check(PartyGatePolicyForTrigger("group:low_health") == PartyGatePolicy::Urgent, "Section 38: group:low_health is Urgent");
+        Check(PartyGatePolicyForTrigger("raid:wipe") == PartyGatePolicy::Urgent, "Section 38: raid:wipe is Urgent");
+        Check(PartyGatePolicyForTrigger("boss_pull") == PartyGatePolicy::Urgent, "Section 38: boss_pull is Urgent");
+        Check(PartyGatePolicyForTrigger("battle_cry") == PartyGatePolicy::Urgent, "Section 38: battle_cry is Urgent");
+        Check(PartyGatePolicyForTrigger("player_directed") == PartyGatePolicy::Responsive, "Section 38: player_directed is Responsive");
+        Check(PartyGatePolicyForTrigger("group:name-mention") == PartyGatePolicy::Responsive, "Section 38: group:name-mention is Responsive");
+        Check(PartyGatePolicyForTrigger("targeted-npc-observer") == PartyGatePolicy::Responsive, "Section 38: targeted-npc-observer is Responsive");
+        Check(PartyGatePolicyForTrigger("group:quest_complete") == PartyGatePolicy::Contextual, "Section 38: group:quest_complete is Contextual");
+        Check(PartyGatePolicyForTrigger("item_looted") == PartyGatePolicy::Contextual, "Section 38: item_looted is Contextual");
+        Check(PartyGatePolicyForTrigger("dungeon_entry") == PartyGatePolicy::Contextual, "Section 38: dungeon_entry is Contextual");
+        Check(PartyGatePolicyForTrigger("group:idle") == PartyGatePolicy::Filler, "Section 38: group:idle is Filler");
+        Check(PartyGatePolicyForTrigger("bot_question") == PartyGatePolicy::Filler, "Section 38: bot_question is Filler");
+        Check(PartyGatePolicyForTrigger("") == PartyGatePolicy::Bypass, "Section 38: empty trigger is Bypass");
+
+        // 2. PartyGateGapSeconds
+        Config testConfig;
+        testConfig.partyGateFillerMinGapSeconds = 12;
+        testConfig.partyGateContextualMinGapSeconds = 10;
+        testConfig.partyGateResponsiveMinGapSeconds = 4;
+        testConfig.partyGateUrgentMinGapSeconds = 0;
+        testConfig.partyGatePreLLMDeferThresholdSeconds = 4;
+        testConfig.partyGateMaxFillerDelaySeconds = 45;
+
+        CheckEqual(PartyGateGapSeconds(PartyGatePolicy::Filler, testConfig), uint32_t(12), "Section 38: Filler gap is 12s");
+        CheckEqual(PartyGateGapSeconds(PartyGatePolicy::Contextual, testConfig), uint32_t(10), "Section 38: Contextual gap is 10s");
+        CheckEqual(PartyGateGapSeconds(PartyGatePolicy::Responsive, testConfig), uint32_t(4), "Section 38: Responsive gap is 4s");
+        CheckEqual(PartyGateGapSeconds(PartyGatePolicy::Urgent, testConfig), uint32_t(0), "Section 38: Urgent gap is 0s");
+        CheckEqual(PartyGateGapSeconds(PartyGatePolicy::Bypass, testConfig), uint32_t(0), "Section 38: Bypass gap is 0s");
+
+        // 3. PartyPacingKey
+        CheckEqual(PartyPacingKey(101, -1), std::string("party:101"), "Section 38: Party pacing key without subgroup");
+        CheckEqual(PartyPacingKey(101, 2), std::string("party:101:subgroup:2"), "Section 38: Party pacing key with subgroup");
+        CheckEqual(PartyPacingKey(0, 0), std::string(""), "Section 38: Party pacing key with groupId 0 is empty");
+
+        // 4. ShouldDeferPartyFiller
+        DeliveryTimeline partyTimeline;
+        auto const testNow = std::chrono::steady_clock::now();
+        std::string const testPartyKey = "party:101";
+
+        // Empty timeline -> no deferral
+        uint32_t waitSec = 0;
+        Check(!ShouldDeferPartyFiller(partyTimeline, testPartyKey, PartyGatePolicy::Filler, 4, testNow, &waitSec),
+            "Section 38: empty timeline does not defer filler");
+
+        // Non-filler policy never defers
+        partyTimeline.Reserve(testPartyKey, testNow, 10000, 10000); // next eligible is +20s
+        Check(!ShouldDeferPartyFiller(partyTimeline, testPartyKey, PartyGatePolicy::Responsive, 4, testNow),
+            "Section 38: responsive policy never defers pre-LLM");
+        Check(!ShouldDeferPartyFiller(partyTimeline, testPartyKey, PartyGatePolicy::Urgent, 4, testNow),
+            "Section 38: urgent policy never defers pre-LLM");
+
+        // Filler with wait 20s > threshold 4s -> defers
+        Check(ShouldDeferPartyFiller(partyTimeline, testPartyKey, PartyGatePolicy::Filler, 4, testNow, &waitSec),
+            "Section 38: filler defers when wait exceeds threshold");
+        Check(waitSec >= 19 && waitSec <= 21, "Section 38: waitSec correctly reported");
+
+        // Filler with threshold 30s >= wait 20s -> does not defer
+        Check(!ShouldDeferPartyFiller(partyTimeline, testPartyKey, PartyGatePolicy::Filler, 30, testNow),
+            "Section 38: filler does not defer when threshold exceeds wait");
+
+        // 5. CalculatePartyScheduledTime
+        partyTimeline.Clear();
+        partyTimeline.Reserve(testPartyKey, testNow, 5000, 5000); // next eligible is testNow + 10s
+        auto const requestedTime = testNow + std::chrono::seconds(2);
+
+        // Urgent bypasses next-slot wait
+        auto urgentTime = CalculatePartyScheduledTime(partyTimeline, testPartyKey, PartyGatePolicy::Urgent, requestedTime, testNow, 45);
+        Check(urgentTime == requestedTime, "Section 38: Urgent message bypasses next eligible wait");
+
+        // Responsive waits for next eligible slot
+        auto responsiveTime = CalculatePartyScheduledTime(partyTimeline, testPartyKey, PartyGatePolicy::Responsive, requestedTime, testNow, 45);
+        Check(responsiveTime == testNow + std::chrono::seconds(10), "Section 38: Responsive message waits for next eligible slot");
+
+        // Filler respects max delay cap
+        partyTimeline.Clear();
+        partyTimeline.Reserve(testPartyKey, testNow, 100000, 0); // next eligible is testNow + 100s
+        auto fillerTime = CalculatePartyScheduledTime(partyTimeline, testPartyKey, PartyGatePolicy::Filler, requestedTime, testNow, 45);
+        Check(fillerTime == testNow + std::chrono::seconds(45), "Section 38: Filler message is capped at maxFillerDelaySeconds");
+
+        // --- Section 39: Advanced Guild Player-Reply Controls Tests ---
+        // 1. CalculateGuildBotWeight
+        CheckEqual(CalculateGuildBotWeight(true, false, 60), uint32_t(200), "Section 39: Explicitly named bot has weight 200");
+        CheckEqual(CalculateGuildBotWeight(true, true, 60), uint32_t(200), "Section 39: Explicitly named bot bypasses recent speaker penalty");
+        CheckEqual(CalculateGuildBotWeight(false, true, 60), uint32_t(40), "Section 39: Recent speaker receives soft penalty (100 - 60 = 40)");
+        CheckEqual(CalculateGuildBotWeight(false, false, 60), uint32_t(100), "Section 39: Normal bot has default weight 100");
+
+        // 2. SelectWeightedGuildCandidates
+        std::vector<GuildReplyCandidate> guildCands = {
+            { 201, "BotRecent", false, true, 40 },
+            { 202, "BotNormal", false, false, 100 },
+            { 203, "BotNamed", true, true, 200 },
+            { 204, "BotOther", false, false, 100 }
+        };
+        auto selectedCands = SelectWeightedGuildCandidates(guildCands, 2);
+        CheckEqual(selectedCands.size(), size_t(2), "Section 39: SelectWeightedGuildCandidates respects maxCandidates");
+        CheckEqual(selectedCands[0].name, std::string("BotNamed"), "Section 39: Explicitly named candidate ranked first");
+        Check(selectedCands[1].weight >= 100, "Section 39: Higher weight candidate ranked second over recent speaker");
+
+        // 3. DecideGuildReplyMode
+        // When < 2 eligible bots -> always Single
+        Check(DecideGuildReplyMode(1, true, 100, 100, 0, false, 1, 1) == GuildReplyMode::Single,
+            "Section 39: <2 bots always yields Single mode");
+        // Conversation evaluated before MultiReply
+        Check(DecideGuildReplyMode(3, true, 50, 80, 0, false, 25, 10) == GuildReplyMode::Conversation,
+            "Section 39: Conversation evaluated before MultiReply");
+        // Conversation fails, MultiReply succeeds -> MultiReply
+        Check(DecideGuildReplyMode(3, true, 50, 80, 0, false, 75, 50) == GuildReplyMode::MultiReply,
+            "Section 39: MultiReply selected when conversation roll fails");
+        // Both fail -> Single
+        Check(DecideGuildReplyMode(3, true, 50, 30, 0, false, 75, 50) == GuildReplyMode::Single,
+            "Section 39: Single mode when both rolls fail");
+        // MultiAddressedBonus adds to MultiReplyChance
+        Check(DecideGuildReplyMode(3, true, 0, 30, 50, true, 100, 70) == GuildReplyMode::MultiReply,
+            "Section 39: MultiAddressedBonus allows multi-reply at roll 70 with base 30 + bonus 50 = 80");
+
+        // 4. GuildSessionHistoryRing
+        GuildSessionHistoryRing historyRing;
+        CheckEqual(historyRing.Size(), size_t(0), "Section 39: Empty history ring");
+        historyRing.AddTurn("Where is the bank?", "It is near the cathedral.", 1000);
+        historyRing.AddTurn("Thanks a lot!", "You're welcome!", 1010);
+        CheckEqual(historyRing.Size(), size_t(2), "Section 39: Two turns recorded");
+
+        // FindRelevantCallback: finds previous meaningful turn
+        std::string callback = historyRing.FindRelevantCallback("How about the auction house?");
+        CheckEqual(callback, std::string("Thanks a lot!"), "Section 39: Finds most recent meaningful turn");
+        // Skips current message if identical
+        std::string callback2 = historyRing.FindRelevantCallback("Thanks a lot!");
+        CheckEqual(callback2, std::string("Where is the bank?"), "Section 39: Skips turn identical to current message");
+
+        // Capacity bound test
+        for (int i = 0; i < 20; ++i)
+            historyRing.AddTurn("Message " + std::to_string(i), "Reply " + std::to_string(i), 2000 + i);
+        CheckEqual(historyRing.Size(), GuildSessionHistoryRing::MaxTurns, "Section 39: Ring buffer bounded by MaxTurns (12)");
+
+        // --- Section 40: Guild Login Greeting Extensions Tests ---
+        // 1. SelectLoginGreetingBand
+        Check(SelectLoginGreetingBand(20, 25, 10) == LoginGreetingBand::Quick, "Section 40: Roll 10 is Quick band (<= 20)");
+        Check(SelectLoginGreetingBand(20, 25, 30) == LoginGreetingBand::Busy, "Section 40: Roll 30 is Busy band (21..45)");
+        Check(SelectLoginGreetingBand(20, 25, 60) == LoginGreetingBand::Normal, "Section 40: Roll 60 is Normal band (> 45)");
+
+        // 2. PickLoginGreetingDelaySeconds
+        uint32_t quickDelay = PickLoginGreetingDelaySeconds(LoginGreetingBand::Quick, 0);
+        Check(quickDelay >= 2 && quickDelay <= 5, "Section 40: Quick delay in range [2, 5]");
+        uint32_t normalDelay = PickLoginGreetingDelaySeconds(LoginGreetingBand::Normal, 5);
+        Check(normalDelay >= 8 && normalDelay <= 20, "Section 40: Normal delay in range [8, 20]");
+        uint32_t busyDelay = PickLoginGreetingDelaySeconds(LoginGreetingBand::Busy, 10);
+        Check(busyDelay >= 25 && busyDelay <= 45, "Section 40: Busy delay in range [25, 45]");
+
+        // 3. PendingGuildGreeting scheduling and deadlines
+        PendingGuildGreeting pendingGreet;
+        pendingGreet.playerGuid = 12345;
+        pendingGreet.guildId = 1;
+        pendingGreet.playerName = "Arthas";
+        pendingGreet.delaySeconds = quickDelay;
+        pendingGreet.scheduledAt = testNow + std::chrono::seconds(quickDelay);
+        pendingGreet.nextRetry = pendingGreet.scheduledAt;
+        pendingGreet.deadline = testNow + std::chrono::seconds(90);
+
+        CheckEqual(pendingGreet.playerGuid, uint64_t(12345), "Section 40: Pending greeting stores playerGuid");
+        Check(pendingGreet.scheduledAt >= testNow + std::chrono::seconds(2), "Section 40: ScheduledAt respects quick delay");
+        Check(pendingGreet.deadline == testNow + std::chrono::seconds(90), "Section 40: Deadline set to 90s timeout");
     }
 
     std::cout << (g_failures ? "FAILED" : "OK") << ": " << g_checks << " checks, "

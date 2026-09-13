@@ -224,8 +224,19 @@ namespace AzerothVoices
         bool groupConversation = false;
         uint64_t groupConversationId = 0;
         uint32_t groupId = 0;
+        uint32_t groupSubgroup = 0;
         std::string memoryBlock;
         std::string memoryTargetName;
+        // Targeted NPC conversation observer.
+        bool targetedNpcObserver = false;
+        ActorSnapshot targetedNpc;
+        // Guild player-reply controls
+        bool guildPlayerReply = false;
+        bool guildAddressByName = false;
+        bool guildFollowupQuestion = false;
+        std::string guildPlayerName;
+        std::string guildCallbackTopic;
+        uint32_t guildInitialDelaySeconds = 0;
         // Addon-driven personality work.
         bool addonRequest = false;
         PersonalityGenerationMode personalityMode = PersonalityGenerationMode::Full;

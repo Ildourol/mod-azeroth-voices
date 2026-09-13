@@ -3,6 +3,7 @@
 #include "AzerothVoicesSentiment.h"
 
 #include "Chat.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "ScriptObjects.h"
 #include "WorldSession.h"
@@ -424,6 +425,11 @@ namespace AzerothVoices
                          << ", group-conversations=" << status.groupConversations
                          << ", tracked-groups=" << status.trackedGroups
                          << ", guild-chatter=" << (status.guildChatterEnabled ? "enabled" : "disabled")
+                         << ", general-chatter=" << (status.generalChatterEnabled ? "enabled" : "disabled")
+                         << ", general-speakers-cd=" << status.generalSpeakersOnCooldown
+                         << ", gossip-targets-cd=" << status.gossipTargetsOnCooldown
+                         << ", npc-observer=" << (status.targetedNpcBotCommentsEnabled ? "enabled" : "disabled")
+                         << ", npc-observer-chance=" << status.targetedNpcBotCommentChance
                          << ", memory=" << (status.memoryEnabled ? "enabled" : "disabled")
                          << ", memory-db=" << (status.memoryDatabaseAvailable ? "available" : "unavailable")
                          << ", memory-pairs=" << status.memoryPairs
@@ -436,6 +442,9 @@ namespace AzerothVoices
                          << ", thinking-fallbacks=" << status.thinkingFallbacks
                          << ", instance-lore=" << status.instanceLoreEntries
                          << ", pacing-windows=" << status.generalPacingWindows
+                         << ", party-pacing=" << status.partyPacingWindows
+                         << ", pending-greetings=" << status.pendingGuildGreetings
+                         << ", guild-histories=" << status.guildSessionHistories
                          << ", rag=" << (status.ragEnabled ? "enabled" : "disabled")
                          << ", rag-entries=" << status.ragEntries
                          << ", model=" << status.model
@@ -468,6 +477,45 @@ namespace AzerothVoices
                     handler->SendSysMessage("Azeroth Voices workers restarted. Use the core config reload command first if the file changed.");
                     return false;
                 }
+                if (subcommand == "event")
+                {
+                    std::string eventName = TakeWord(rest);
+                    if (eventName.empty())
+                    {
+                        handler->SendSysMessage("Usage: .av event <event_name> [target_player] [detail]");
+                        return false;
+                    }
+                    std::string targetName = TakeWord(rest);
+                    Player* targetPlayer = nullptr;
+                    std::string detail = rest;
+                    if (!targetName.empty())
+                    {
+                        targetPlayer = ObjectAccessor::FindPlayerByName(targetName.c_str());
+                        if (!targetPlayer)
+                        {
+                            if (!detail.empty())
+                                detail = targetName + " " + detail;
+                            else
+                                detail = targetName;
+                        }
+                    }
+
+                    if (!targetPlayer && !console)
+                        targetPlayer = handler->GetSession()->GetPlayer();
+
+                    if (!targetPlayer)
+                    {
+                        handler->SendSysMessage("No target player available for event. Specify an online player name when running from console.");
+                        return false;
+                    }
+
+                    Manager::Instance().HandleEvent(targetPlayer, eventName, detail);
+                    std::string msg = "Event '" + eventName + "' triggered on " + targetPlayer->GetName();
+                    if (!detail.empty())
+                        msg += " (detail: " + detail + ")";
+                    handler->SendSysMessage(msg.c_str());
+                    return false;
+                }
 
                 Player* issuer = console ? nullptr : handler->GetSession()->GetPlayer();
                 if (!issuer)
@@ -492,7 +540,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all | sentiment inspect/set/reset <bot> <player> [score] | sentiment reset all | memory inspect/forget <bot> <player> | memory forget all");
+                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | event <name> [target] [detail] | personality show/status/regenerate/delete <bot> | personality delete all | sentiment inspect/set/reset <bot> <player> [score] | sentiment reset all | memory inspect/forget <bot> <player> | memory forget all");
                 return false;
             }
         };

@@ -19,7 +19,6 @@ namespace AzerothVoices
         BossKill,
         PvpKill,
         Wipe,
-        Achievement,
         Count
     };
 
@@ -47,7 +46,6 @@ namespace AzerothVoices
         std::string quest;
         std::string boss;
         std::string victim;
-        std::string achievement;
         uint32_t level = 0;
     };
 
