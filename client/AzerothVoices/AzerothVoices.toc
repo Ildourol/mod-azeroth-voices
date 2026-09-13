@@ -1,0 +1,10 @@
+## Interface: 11200
+## Title: Azeroth Voices
+## Notes: Companion UI for Turtle WoW Azeroth Voices bot traits, tone, and backstory
+## Author: Azeroth Voices Team
+## Version: 2.0.0
+## SavedVariablesPerCharacter: AzerothVoicesDB
+
+AzerothVoices.lua
+AzerothVoicesRoster.lua
+AzerothVoicesUI.lua

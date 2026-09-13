@@ -47,6 +47,18 @@ namespace AzerothVoices
         PersonalityGeneration
     };
 
+    // Full: generate traits, tone, and background from scratch.
+    // ReplaceTraits: three player-supplied traits are fixed and only tone and
+    //                background are generated (the stock Chatter addon save).
+    // BackgroundOnly: traits and tone are kept and only the background story is
+    //                 regenerated.
+    enum class PersonalityGenerationMode : uint8_t
+    {
+        Full,
+        ReplaceTraits,
+        BackgroundOnly
+    };
+
     struct BotPersonality
     {
         uint64_t characterGuid = 0;
@@ -109,6 +121,16 @@ namespace AzerothVoices
         uint32_t mapId = 0;
         uint32_t areaId = 0;
         uint32_t zoneId = 0;
+        // Creature-only snapshot metadata used by proximity and boss policy.
+        uint32_t creatureEntry = 0;
+        uint32_t creatureType = 0;
+        uint32_t creatureRank = 0;
+        uint32_t instanceId = 0;
+        std::string role;
+        std::string qualification;
+        bool boss = false;
+        bool staticSpawn = false;
+        bool instance = false;
         bool inCombat = false;
     };
 
@@ -183,10 +205,49 @@ namespace AzerothVoices
         std::string sentimentTargetName;
         std::string historyKey;
         std::string scopeKey;
+        std::string pacingKey;
+        // Progressive subsystem ownership: proximity scenes and boss dialogue
+        // keep their own state instead of reusing generic ambient follow-ups.
+        uint64_t sceneId = 0;
+        uint32_t sceneLineIndex = 0;
+        bool proximityScene = false;
+        bool proximityConversation = false;
+        bool bossLine = false;
+        bool bossAutomatic = false;
+        bool bossDirected = false;
+        std::string bossKey;
+        std::string bossName;
+        std::string bossSubName;
+        std::string bossLoreContext;
+        // Group/raid chatter and the deterministic memory block.
+        bool groupChatter = false;
+        bool groupConversation = false;
+        uint64_t groupConversationId = 0;
+        uint32_t groupId = 0;
+        uint32_t groupSubgroup = 0;
+        std::string memoryBlock;
+        std::string memoryTargetName;
+        // Targeted NPC conversation observer.
+        bool targetedNpcObserver = false;
+        ActorSnapshot targetedNpc;
+        // Guild player-reply controls
+        bool guildPlayerReply = false;
+        bool guildAddressByName = false;
+        bool guildFollowupQuestion = false;
+        std::string guildPlayerName;
+        std::string guildCallbackTopic;
+        uint32_t guildInitialDelaySeconds = 0;
+        // Addon-driven personality work.
+        bool addonRequest = false;
+        PersonalityGenerationMode personalityMode = PersonalityGenerationMode::Full;
+        BotPersonality personalityFixed;
         uint32_t maxTokensOverride = 0;
         uint32_t sentimentDeltaLimit = 0;
         int32_t sentimentDelta = 0;
         bool personalityGenerationNeeded = false;
+        // Set only for the single retry after an official provider rejects the
+        // thinking control itself.
+        bool suppressReasoning = false;
         bool sentimentTracked = false;
         bool sentimentDeltaAvailable = false;
         bool ambient = false;

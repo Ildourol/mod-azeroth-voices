@@ -1,0 +1,23 @@
+# ==============================================================================
+# Azeroth Voices / PlayerBot LLM Character Card Template
+# ==============================================================================
+# The file llm_character_card.txt allows you to define custom speaking styles,
+# personalities, and backstories for individual PlayerBots.
+#
+# Each non-empty, non-comment line adds a custom character prompt to the specified
+# bot in the characters database.
+#
+# Format:
+# CharacterName::Character Prompt Description
+#
+# Examples:
+# Celguar::I am the Keeper of the Source. I speak with ancient wisdom and reverence for nature.
+# Mostlikely::I like to travel a lot. I am cheerful, energetic, and curious about every new place.
+# Flekz::I hold the power of ancient wizardry. I speak with calculated arcane intellect and dry humor.
+#
+# Note:
+# - Character names must match an existing character in the characters database.
+# - Lines starting with '#' are ignored as comments.
+# - If no custom card override is specified for a bot, Azeroth Voices automatically
+#   falls back to its compiled C++ identity templates and instance_lore.json.
+# ==============================================================================

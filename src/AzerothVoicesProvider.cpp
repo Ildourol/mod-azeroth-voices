@@ -1,5 +1,7 @@
 #include "AzerothVoicesProvider.h"
 
+#include "AzerothVoicesReasoning.h"
+
 #include "AzerothVoicesPersonality.h"
 #include "AzerothVoicesSentiment.h"
 
@@ -91,51 +93,71 @@ namespace AzerothVoices
             return model == base || StartsWith(model, base + "-20");
         }
 
-        bool IsOriginalGpt5ReasoningModel(Config const& config)
+        // V0.7 Thinking: policy and detection live in AzerothVoicesReasoning so
+        // they stay testable. This only wires the decision into the request.
+        struct ThinkingApplication
         {
-            std::string const model = ModelLeaf(config.model);
-            return IsModelOrDatedSnapshot(model, "gpt-5") ||
-                   IsModelOrDatedSnapshot(model, "gpt-5-mini") ||
-                   IsModelOrDatedSnapshot(model, "gpt-5-nano");
+            bool applied = false;
+            std::string effort;
+            Reasoning::Provider provider = Reasoning::Provider::None;
+            Reasoning::Capability capability = Reasoning::Capability::Unknown;
+            Reasoning::Decision decision;
+        };
+
+        ThinkingApplication ApplyThinking(Json& body, Config const& config,
+                                          ChatRequest const& request, bool responsesMode,
+                                          bool customTemplate)
+        {
+            using namespace Reasoning;
+            ThinkingApplication result;
+            result.provider = DetectProvider(config.endpoint);
+            result.capability = DetectCapability(result.provider, config.model);
+
+            // A custom AiPlayerbot.LLMApiJson template that already carries its
+            // own reasoning field keeps it: nothing is duplicated or overridden.
+            if (customTemplate && HasExplicitReasoningField(body))
+            {
+                result.decision.reason = "custom-template-field";
+                return result;
+            }
+            if (request.suppressReasoning)
+            {
+                result.decision.reason = "retry-without-thinking";
+                return result;
+            }
+            if (IsMarkedUnsupported(config.endpoint, config.model))
+            {
+                result.decision.reason = "marked-unsupported";
+                return result;
+            }
+
+            Purpose const purpose = ClassifyPurpose(request.kind, request.trigger);
+            result.decision = Decide(ParseMode(config.thinkingMode), config.thinkingAutoDetect,
+                result.provider, result.capability, purpose,
+                AutoKindEnabled(config.thinkingAutoKinds, purpose), config.thinkingEffort,
+                responsesMode);
+            if (!result.decision.apply)
+                return result;
+
+            std::string error;
+            if (!ApplyToRequestJson(body, result.provider, responsesMode, result.decision.effort,
+                    error))
+                return result;
+            result.applied = true;
+            result.effort = result.decision.effort;
+            return result;
         }
 
-        bool SupportsReasoningEffort(Config const& config)
+        void ApplyTokenReserve(Json& body, uint32_t reserve)
         {
-            std::string const model = ModelLeaf(config.model);
-            if (IsOriginalGpt5ReasoningModel(config))
-                return true;
-            if (!StartsWith(model, "gpt-5."))
-                return false;
-            return model.find("-chat") == std::string::npos;
-        }
-
-        std::string EffectiveReasoningEffort(Config const& config)
-        {
-            if (!SupportsReasoningEffort(config))
-                return "";
-
-            bool const originalGpt5 = IsOriginalGpt5ReasoningModel(config);
-            if (config.reasoningEffort.empty() || config.reasoningEffort == "auto")
-                return originalGpt5 ? "minimal" : "none";
-
-            // Original GPT-5 supports minimal/low/medium/high. Later GPT-5
-            // generations use none instead of minimal, so keep the config
-            // portable by translating only that one legacy level.
-            if (!originalGpt5 && config.reasoningEffort == "minimal")
-                return "none";
-            return config.reasoningEffort;
-        }
-
-        void ApplyReasoningEffort(Json& body, Config const& config)
-        {
-            std::string const effort = EffectiveReasoningEffort(config);
-            if (effort.empty())
+            if (!reserve || !body.is_object())
                 return;
-
-            if (Lower(config.providerMode) == "responses")
-                body["reasoning"] = { { "effort", effort } };
-            else
-                body["reasoning_effort"] = effort;
+            for (char const* field : { "max_tokens", "max_completion_tokens", "max_output_tokens" })
+            {
+                if (body.count(field) && body[field].is_number_integer())
+                    body[field] = Reasoning::ReservedOutputTokens(
+                        static_cast<uint32_t>(body[field].get<int64_t>()), reserve, true);
+            }
         }
 
         void ReplaceAll(std::string& value, std::string const& from, std::string const& to)
@@ -580,27 +602,37 @@ namespace AzerothVoices
                 body = Json::parse(config.apiJsonTemplate);
                 ApplyPlaceholders(body, prepared);
                 ApplyTokenOverride(body, config, prepared);
+                ThinkingApplication const thinking =
+                    ApplyThinking(body, config, prepared, false, true);
+                if (thinking.applied)
+                    ApplyTokenReserve(body, config.thinkingTokenReserve);
             }
             else if (Lower(config.providerMode) == "responses")
             {
+                uint32_t const baseTokens = prepared.maxTokensOverride
+                    ? prepared.maxTokensOverride : config.maxTokens;
                 body["model"] = config.model;
                 body["instructions"] = prepared.systemPrompt;
                 body["input"] = prepared.context.empty() ? prepared.userPrompt : prepared.context + "\n\n" + prepared.userPrompt;
-                body["max_output_tokens"] = prepared.maxTokensOverride
-                    ? prepared.maxTokensOverride : config.maxTokens;
-                ApplyReasoningEffort(body, config);
+                ThinkingApplication const thinking =
+                    ApplyThinking(body, config, prepared, true, false);
+                body["max_output_tokens"] = Reasoning::ReservedOutputTokens(baseTokens,
+                    config.thinkingTokenReserve, thinking.applied);
             }
             else
             {
+                uint32_t const baseTokens = prepared.maxTokensOverride
+                    ? prepared.maxTokensOverride : config.maxTokens;
                 body["model"] = config.model;
                 body["messages"] = Json::array();
                 body["messages"].push_back({ { "role", "system" }, { "content", prepared.systemPrompt } });
                 if (!prepared.context.empty())
                     body["messages"].push_back({ { "role", "system" }, { "content", prepared.context } });
                 body["messages"].push_back({ { "role", "user" }, { "content", prepared.userPrompt } });
-                body[TokenLimitField(config)] = prepared.maxTokensOverride
-                    ? prepared.maxTokensOverride : config.maxTokens;
-                ApplyReasoningEffort(body, config);
+                ThinkingApplication const thinking =
+                    ApplyThinking(body, config, prepared, false, false);
+                body[TokenLimitField(config)] = Reasoning::ReservedOutputTokens(baseTokens,
+                    config.thinkingTokenReserve, thinking.applied);
                 if (SupportsLegacySamplingControls(config))
                 {
                     body["temperature"] = config.temperature;

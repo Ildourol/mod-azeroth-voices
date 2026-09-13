@@ -3,6 +3,7 @@
 #include "AzerothVoicesSentiment.h"
 
 #include "Chat.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "ScriptObjects.h"
 #include "WorldSession.h"
@@ -10,9 +11,26 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace AzerothVoices
 {
+    void SendAddonResponses(Player* player, std::vector<std::string> const& responses)
+    {
+        if (!player || !player->GetSession())
+            return;
+        ChatHandler handler(player->GetSession());
+        for (std::string const& line : responses)
+            handler.SendSysMessage(line.c_str());
+    }
+
+    void HandleAddonCommandFromPlayer(Player* player, std::string const& arguments)
+    {
+        std::vector<std::string> responses;
+        Manager::Instance().HandleAddonCommand(player, arguments, responses);
+        SendAddonResponses(player, responses);
+    }
+
     namespace
     {
         std::string TakeWord(std::string& input)
@@ -146,6 +164,20 @@ namespace AzerothVoices
                     errors = true;
             }
             send(std::string("Chat system: ") + (status.enabled ? "OK" : "Not active"));
+            send("Thinking: mode=" + (status.thinkingMode.empty() ? std::string("Auto") : status.thinkingMode) +
+                ", provider=" + (status.thinkingProvider.empty() ? std::string("none") : status.thinkingProvider) +
+                ", capability=" + (status.thinkingCapability.empty() ? std::string("unknown") : status.thinkingCapability) +
+                ", effort=" + status.thinkingEffort +
+                ", kinds=" + (status.thinkingAutoKinds.empty() ? std::string("(none)") : status.thinkingAutoKinds) +
+                ", fallbacks=" + std::to_string(status.thinkingFallbacks));
+            if (status.playerbotsLlmEnabled)
+            {
+                handler->SendSysMessage("Compatibility: WARNING - AiPlayerbot.LLMEnabled is enabled! Disable it to avoid duplicate generation.");
+                errors = true;
+            }
+            else
+                send("Compatibility: OK - PlayerBots native LLM is disabled");
+
             if (status.workers)
                 send("Workers: OK - " + std::to_string(status.workers) + " active");
             else if (status.enabled)
@@ -266,6 +298,26 @@ namespace AzerothVoices
             handler->SendSysMessage(message.c_str());
         }
 
+        void HandleMemoryCommand(ChatHandler* handler, std::string rest)
+        {
+            std::string const action = TakeWord(rest);
+            std::string const actor = TakeWord(rest);
+            std::string const target = TakeWord(rest);
+            std::string const extra = TakeWord(rest);
+            std::string message;
+
+            if (action == "inspect" && !actor.empty() && !target.empty() && extra.empty())
+                Manager::Instance().InspectMemories(actor, target, message);
+            else if (action == "forget" && actor == "all" && target.empty() && extra.empty())
+                Manager::Instance().ForgetAllMemories(message);
+            else if (action == "forget" && !actor.empty() && !target.empty() && extra.empty())
+                Manager::Instance().ForgetMemories(actor, target, message);
+            else
+                message = "Usage: .av memory inspect <online-bot> <online-player> | forget <online-bot> <online-player> | forget all";
+
+            handler->SendSysMessage(message.c_str());
+        }
+
         class AzerothVoicesCommandScript final : public AllCommandScript
         {
         public:
@@ -273,8 +325,24 @@ namespace AzerothVoices
 
             bool CanExecuteCommand(ChatHandler* handler, char const* command, char const* arguments) override
             {
-                bool const shortCommand = command && std::strcmp(command, "av") == 0;
-                if (!shortCommand)
+                if (!command)
+                    return true;
+
+                // Stock Chatter Companion support. `.llmc` is a user-level
+                // command: it needs an in-game player but no GM security. The
+                // handler consumes the line so the core never reports it as an
+                // unknown command and the message is never spoken in Say.
+                if (std::strcmp(command, "llmc") == 0)
+                {
+                    Player* addonPlayer = handler && handler->GetSession()
+                        ? handler->GetSession()->GetPlayer() : nullptr;
+                    if (!addonPlayer)
+                        return true;
+                    HandleAddonCommandFromPlayer(addonPlayer, arguments ? arguments : "");
+                    return false;
+                }
+
+                if (std::strcmp(command, "av") != 0)
                     return true;
 
                 bool const console = !handler->GetSession();
@@ -308,12 +376,19 @@ namespace AzerothVoices
                     return false;
                 }
 
+                if (subcommand == "memory")
+                {
+                    HandleMemoryCommand(handler, rest);
+                    return false;
+                }
+
                 if (subcommand.empty() || subcommand == "status")
                 {
                     StatusSnapshot status = Manager::Instance().GetStatus();
                     std::ostringstream text;
                     text << "Azeroth Voices: " << (status.enabled ? "enabled" : "disabled")
                          << (status.paused ? " (paused)" : "")
+                         << ", playerbots-llm=" << (status.playerbotsLlmEnabled ? "CONFLICT-ENABLED" : "disabled")
                          << ", workers=" << status.workers
                          << ", queued=" << status.queued
                          << ", in-flight=" << status.inFlight
@@ -338,6 +413,38 @@ namespace AzerothVoices
                          << ", sentiment-db=" << (status.sentimentDatabaseAvailable ? "available" : "unavailable")
                          << ", sentiments=" << status.sentiments
                          << ", sentiment-pending=" << status.sentimentWritesPending
+                         << ", addon=" << (status.addonEnabled ? "enabled" : "disabled")
+                         << ", addon-db=" << (status.addonDatabaseAvailable ? "available" : "unavailable")
+                         << ", proximity=" << (status.proximityEnabled ? "enabled" : "disabled")
+                         << ", proximity-scenes=" << status.proximityScenes
+                         << ", proximity-zones=" << status.proximityZoneCounters
+                         << ", boss-dialogue=" << (status.bossDialogueEnabled ? "enabled" : "disabled")
+                         << ", boss-presences=" << status.bossPresences
+                         << ", group-chatter=" << (status.groupChatterEnabled ? "enabled" : "disabled")
+                         << ", raid-chatter=" << (status.raidChatterEnabled ? "enabled" : "disabled")
+                         << ", group-conversations=" << status.groupConversations
+                         << ", tracked-groups=" << status.trackedGroups
+                         << ", guild-chatter=" << (status.guildChatterEnabled ? "enabled" : "disabled")
+                         << ", general-chatter=" << (status.generalChatterEnabled ? "enabled" : "disabled")
+                         << ", general-speakers-cd=" << status.generalSpeakersOnCooldown
+                         << ", gossip-targets-cd=" << status.gossipTargetsOnCooldown
+                         << ", npc-observer=" << (status.targetedNpcBotCommentsEnabled ? "enabled" : "disabled")
+                         << ", npc-observer-chance=" << status.targetedNpcBotCommentChance
+                         << ", memory=" << (status.memoryEnabled ? "enabled" : "disabled")
+                         << ", memory-db=" << (status.memoryDatabaseAvailable ? "available" : "unavailable")
+                         << ", memory-pairs=" << status.memoryPairs
+                         << ", memory-pending=" << status.memoryWritesPending
+                         << ", thinking=" << status.thinkingMode
+                         << ", thinking-provider=" << status.thinkingProvider
+                         << ", thinking-capability=" << status.thinkingCapability
+                         << ", thinking-effort=" << status.thinkingEffort
+                         << ", thinking-kinds=" << status.thinkingAutoKinds
+                         << ", thinking-fallbacks=" << status.thinkingFallbacks
+                         << ", instance-lore=" << status.instanceLoreEntries
+                         << ", pacing-windows=" << status.generalPacingWindows
+                         << ", party-pacing=" << status.partyPacingWindows
+                         << ", pending-greetings=" << status.pendingGuildGreetings
+                         << ", guild-histories=" << status.guildSessionHistories
                          << ", rag=" << (status.ragEnabled ? "enabled" : "disabled")
                          << ", rag-entries=" << status.ragEntries
                          << ", model=" << status.model
@@ -370,6 +477,45 @@ namespace AzerothVoices
                     handler->SendSysMessage("Azeroth Voices workers restarted. Use the core config reload command first if the file changed.");
                     return false;
                 }
+                if (subcommand == "event")
+                {
+                    std::string eventName = TakeWord(rest);
+                    if (eventName.empty())
+                    {
+                        handler->SendSysMessage("Usage: .av event <event_name> [target_player] [detail]");
+                        return false;
+                    }
+                    std::string targetName = TakeWord(rest);
+                    Player* targetPlayer = nullptr;
+                    std::string detail = rest;
+                    if (!targetName.empty())
+                    {
+                        targetPlayer = ObjectAccessor::FindPlayerByName(targetName.c_str());
+                        if (!targetPlayer)
+                        {
+                            if (!detail.empty())
+                                detail = targetName + " " + detail;
+                            else
+                                detail = targetName;
+                        }
+                    }
+
+                    if (!targetPlayer && !console)
+                        targetPlayer = handler->GetSession()->GetPlayer();
+
+                    if (!targetPlayer)
+                    {
+                        handler->SendSysMessage("No target player available for event. Specify an online player name when running from console.");
+                        return false;
+                    }
+
+                    Manager::Instance().HandleEvent(targetPlayer, eventName, detail);
+                    std::string msg = "Event '" + eventName + "' triggered on " + targetPlayer->GetName();
+                    if (!detail.empty())
+                        msg += " (detail: " + detail + ")";
+                    handler->SendSysMessage(msg.c_str());
+                    return false;
+                }
 
                 Player* issuer = console ? nullptr : handler->GetSession()->GetPlayer();
                 if (!issuer)
@@ -394,7 +540,7 @@ namespace AzerothVoices
                     return false;
                 }
 
-                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | personality show/status/regenerate/delete <bot> | personality delete all | sentiment inspect/set/reset <bot> <player> [score] | sentiment reset all");
+                handler->SendSysMessage("av: test | status | pause | resume | restart | clearhistory | chatter [topic] | live <bot-or-> [prompt] | event <name> [target] [detail] | personality show/status/regenerate/delete <bot> | personality delete all | sentiment inspect/set/reset <bot> <player> [score] | sentiment reset all | memory inspect/forget <bot> <player> | memory forget all");
                 return false;
             }
         };

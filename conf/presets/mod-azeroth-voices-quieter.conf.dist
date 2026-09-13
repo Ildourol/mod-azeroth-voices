@@ -1,0 +1,67 @@
+###################################################################################################
+# Azeroth Voices - quieter preset (NOT auto-loaded)
+###################################################################################################
+#
+# This file is intentionally stored under conf/presets/ and is never copied or loaded by the core.
+# To use it, copy the settings you want into the live mod-azeroth-voices.conf (or append this file's
+# contents to it) and reload the configuration. It only lowers chatter volume; it changes no
+# provider, storage, personality, sentiment, or addon setting.
+#
+# What it does:
+#   * outdoor proximity chatter: once per 60 seconds at 5 percent
+#   * dungeon/raid proximity chatter: unchanged cadence, 100 percent per 30 seconds
+#   * fewer multi-speaker conversations (30 percent) with at most three lines
+#   * group/raid chatter reduced to big moments only (boss pull/kill, wipe, dungeon entry)
+#   * a 30-second minimum gap between automated World/custom-channel exchanges
+#   * guild ambient chatter halved with a longer cooldown
+#   * one memory per prompt instead of three
+#   * random/ambient chatter every 180-360 seconds instead of 90-240
+#
+# Zones keep the shared proximity fatigue settings from the main configuration.
+
+[worldserver]
+
+AzerothVoices.Proximity.OutdoorChance = 5
+AzerothVoices.Proximity.ScanSecondsOutdoor = 60
+
+AzerothVoices.Proximity.InstanceChance = 100
+AzerothVoices.Proximity.ScanSecondsInstance = 30
+
+AzerothVoices.Proximity.ConversationChance = 30
+AzerothVoices.Proximity.MaximumLines = 3
+
+AzerothVoices.GeneralChat.Pacing.Enable = 1
+AzerothVoices.GeneralChat.MinimumGapSeconds = 30
+
+# Group and raid chatter: keep the memorable moments, drop the chatter.
+AzerothVoices.GroupChatter.IdleChance = 2
+AzerothVoices.GroupChatter.KillChance = 3
+AzerothVoices.GroupChatter.LootChanceGreen = 0
+AzerothVoices.GroupChatter.LootChanceBlue = 15
+AzerothVoices.GroupChatter.LootChancePurple = 40
+AzerothVoices.GroupChatter.LootChanceOrange = 100
+AzerothVoices.GroupChatter.QuestAcceptChance = 10
+AzerothVoices.GroupChatter.QuestObjectiveChance = 5
+AzerothVoices.GroupChatter.QuestCompleteChance = 15
+AzerothVoices.GroupChatter.SpellCastChance = 2
+AzerothVoices.GroupChatter.LowHealthChance = 20
+AzerothVoices.GroupChatter.LowManaChance = 15
+AzerothVoices.GroupChatter.NearbyObjectChance = 3
+AzerothVoices.GroupChatter.BotQuestionChance = 1
+AzerothVoices.GroupChatter.ConversationChance = 15
+AzerothVoices.RaidChatter.MoraleChance = 8
+AzerothVoices.RaidChatter.IdleChance = 4
+
+# Guild chatter: quieter ambient lines, greetings untouched.
+AzerothVoices.GuildChatter.AmbientChance = 4
+AzerothVoices.GuildChatter.AmbientCooldownSeconds = 1200
+AzerothVoices.GuildChatter.ConversationChance = 20
+
+# Memory: keep the ledger but inject less of it.
+AzerothVoices.Memory.MaximumPromptItems = 1
+AzerothVoices.Memory.MaximumPromptCharacters = 300
+AzerothVoices.Memory.RecallChance = 8
+
+AzerothVoices.Random.Enable = 1
+AzerothVoices.Random.MinimumIntervalSeconds = 180
+AzerothVoices.Random.MaximumIntervalSeconds = 360

@@ -1,0 +1,122 @@
+{
+  "33": {
+    "name": "Shadowfang Keep",
+    "lore": "Archmage Arugal's keep above Pyrewood Village in Silverpine Forest. Arugal summoned the worgen to fight the Scourge for Gilneas and lost control of them; the keep is now theirs, and his ghost still walks its halls."
+  },
+  "34": {
+    "name": "The Stockade",
+    "lore": "Stormwind's prison beneath the city streets. The Defias Brotherhood has rioted inside it, and Bazil Thredd holds the deepest cell block."
+  },
+  "35": {
+    "name": "Stormwind Vault",
+    "lore": "A sealed vault deep beneath Stormwind City, walled off from the Stockade and kept closed against intruders."
+  },
+  "36": {
+    "name": "The Deadmines",
+    "lore": "The Defias Brotherhood's hidden base in a flooded Westfall mine. Edwin VanCleef's ship, the Defias destroyer, was built in its caverns."
+  },
+  "43": {
+    "name": "Wailing Caverns",
+    "lore": "Naralex's dream-caverns beneath the Barrens. His sleep to restore the Barrens went wrong, and the Druids of the Fang now serve the nightmare inside."
+  },
+  "47": {
+    "name": "Razorfen Kraul",
+    "lore": "Quilboar warrens in the southern Barrens ruled by Charlga Razorflank, who bargained with the Scourge for power over her own people."
+  },
+  "48": {
+    "name": "Blackfathom Deeps",
+    "lore": "Ancient ruins of Elune on the Darkshore coast, flooded and sunken. Twilight's Hammer and naga occupy the old temple above the buried horror Aku'mai."
+  },
+  "70": {
+    "name": "Uldaman",
+    "lore": "A titan-forged vault beneath the Badlands, contested by troggs and the Earthen. The Discs of Norgannon rest in its deepest chamber."
+  },
+  "90": {
+    "name": "Gnomeregan",
+    "lore": "The irradiated gnome capital beneath Dun Morogh, lost to Sicco Thermaplugg's betrayal and the trogg invasion."
+  },
+  "109": {
+    "name": "Sunken Temple",
+    "lore": "The Temple of Atal'Hakkar in the Swamp of Sorrows, dragged beneath the marsh with the green dragon Eranikus and the avatar of Hakkar inside."
+  },
+  "129": {
+    "name": "Razorfen Downs",
+    "lore": "The deeper quilboar barrow beneath Razorfen, given over to the Cult of the Damned and Amnennar the Coldbringer."
+  },
+  "189": {
+    "name": "Scarlet Monastery",
+    "lore": "The Scarlet Crusade's walled abbey in Tirisfal Glades, with its graveyard, library, armoury and cathedral wings."
+  },
+  "209": {
+    "name": "Zul'Farrak",
+    "lore": "A sandfury troll city in the dunes of Tanaris, where Chief Ukorz Sandscalp guards the ancient god Gahz'rilla."
+  },
+  "229": {
+    "name": "Blackrock Spire",
+    "lore": "The orcish fortress-spire above Blackrock Depths. Rend Blackhand holds the upper halls while Nefarian's servants rule the peak."
+  },
+  "230": {
+    "name": "Blackrock Depths",
+    "lore": "A Dark Iron city inside Blackrock Mountain, ruled by Emperor Dagran Thaurissan. The Molten Core burns beneath it."
+  },
+  "249": {
+    "name": "Onyxia's Lair",
+    "lore": "The black dragon Onyxia's lair in the Wyrmbog of Dustwallow Marsh, where she brooded after years spent ruling Stormwind in human guise."
+  },
+  "269": {
+    "name": "The Black Morass",
+    "lore": "The Caverns of Time's window onto the Black Morass, where the Dark Portal's opening is watched over by the bronze flight and their keepers."
+  },
+  "289": {
+    "name": "Scholomance",
+    "lore": "The School of Necromancy beneath Caer Darrow in the Western Plaguelands, where the Cult of the Damned trains its necromancers and keeps Kel'Thuzad's relics."
+  },
+  "309": {
+    "name": "Zul'Gurub",
+    "lore": "The jungle troll city of the Gurubashi in Stranglethorn Vale, where the priests summoned Hakkar the Soulflayer into the world."
+  },
+  "329": {
+    "name": "Stratholme",
+    "lore": "The Scourge-ruined city in the Eastern Plaguelands. The living Scarlet Crusade holds the bastion while Baron Rivendare commands the dead side."
+  },
+  "349": {
+    "name": "Maraudon",
+    "lore": "The caverns of the centaur princess Theradras in Desolace, grown over the tomb of Zaetar and the corrupted grove around it."
+  },
+  "389": {
+    "name": "Ragefire Chasm",
+    "lore": "Volcanic caverns beneath Orgrimmar, used as a haven by the Searing Blade cult and the burning legion's agents."
+  },
+  "409": {
+    "name": "Molten Core",
+    "lore": "The fire-lord Ragnaros's domain deep inside Blackrock Mountain, reached through the Blackrock Depths."
+  },
+  "429": {
+    "name": "Dire Maul",
+    "lore": "The ruined highborne city of Eldre'Thalas in Feralas, split between its east, west and north wings and the ghosts of its old aristocracy."
+  },
+  "469": {
+    "name": "Blackwing Lair",
+    "lore": "Nefarian's laboratory at the peak of Blackrock Spire, where he experiments on the dragonflights' eggs."
+  },
+  "509": {
+    "name": "Ruins of Ahn'Qiraj",
+    "lore": "The outer silithid ruins in Silithus, guarded by the anubisath and the qiraji general Ossirian."
+  },
+  "531": {
+    "name": "Ahn'Qiraj Temple",
+    "lore": "The qiraji temple-city of C'Thun, opened once the Gates of Ahn'Qiraj were unsealed."
+  },
+  "532": {
+    "name": "Lower Karazhan Halls",
+    "lore": "The lower halls of Medivh's tower in Deadwind Pass, opened on Turtle WoW as a raid through the tower's haunted foundations."
+  },
+  "533": {
+    "name": "Naxxramas",
+    "lore": "Kel'Thuzad's necropolis, hovering above the Plaguelands and packed with the Scourge's military elite."
+  },
+  "800": {
+    "name": "Karazhan Crypt",
+    "lore": "The flooded crypt beneath Karazhan, filling the halls of the tower's dead that were never finished in the original game."
+  }
+}
