@@ -146,7 +146,7 @@ namespace AzerothVoices
                 return Purpose::PersonalityGeneration;
             if (trigger == "direct-chat")
                 return Purpose::DirectChat;
-            if (trigger.compare(0, 13, "targeted-npc-") == 0)
+            if (trigger.compare(0, 13, "targeted-npc-") == 0 || trigger == "npc-reply-observer")
                 return Purpose::TargetedNpc;
             if (trigger.compare(0, 6, "event:") == 0)
                 return Purpose::EventChat;

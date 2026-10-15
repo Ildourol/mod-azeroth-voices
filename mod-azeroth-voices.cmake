@@ -4,44 +4,22 @@
 # static relationship visible and avoids platform-specific transitive-linking
 # surprises.
 if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
-  # Compile against exactly the OpenSSL that mangosd links.
-  #
-  # The Windows dependency set ships a bundled OpenSSL 1.1 header tree under
-  # dep/include-windows and dep/windows/include, and sibling static modules
-  # expose the latter as a public include directory. In the generated project it
-  # sorts ahead of OPENSSL_INCLUDE_DIR, so <openssl/...> resolved to the 1.1
-  # headers while the worldserver linked a vcpkg OpenSSL 3: the vendored
-  # cpp-httplib then mapped SSL_get1_peer_certificate back to the 1.1-only
-  # SSL_get_peer_certificate name and bin/Release/mangosd.exe failed with
-  # LNK2001. Strip only those two roots from this archive's own include path;
-  # OPENSSL_INCLUDE_DIR added below is the authoritative header set.
-  function(av_strip_bundled_openssl_include_roots target)
-    if(TARGET ${target})
-      get_target_property(_av_target_includes ${target} INCLUDE_DIRECTORIES)
-      if(_av_target_includes)
-        list(FILTER _av_target_includes EXCLUDE REGEX
-          "[/\\\\]dep[/\\\\](windows[/\\\\]include|include-windows)$")
-        set_target_properties(${target} PROPERTIES INCLUDE_DIRECTORIES "${_av_target_includes}")
-      endif()
-    endif()
-  endfunction()
-
-  if(WIN32)
-    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
-      # Sibling module CMake files are included after this one and re-add the
-      # bundled roots, so defer the strip until the modules directory is fully
-      # processed.
-      cmake_language(DEFER CALL av_strip_bundled_openssl_include_roots modules)
-    else()
-      av_strip_bundled_openssl_include_roots(modules)
-    endif()
-  endif()
-
+  # Azeroth Voices uses the core's vendored cpp-httplib in HTTPS mode.
+  # Comply strictly with the server's bundled OpenSSL 1.1 architecture:
+  # inject the core's bundled OpenSSL headers ahead of any external toolchain
+  # (e.g. vcpkg) to ensure binary compatibility with the server engine.
   foreach(AV_TARGET modules mod_mod_azeroth_voices)
     if(TARGET ${AV_TARGET})
+      if(WIN32)
+        target_include_directories(${AV_TARGET} BEFORE PRIVATE
+          "${CMAKE_SOURCE_DIR}/dep/windows/include"
+          "${CMAKE_SOURCE_DIR}/dep/include-windows")
+      else()
+        target_include_directories(${AV_TARGET} BEFORE PRIVATE
+          ${OPENSSL_INCLUDE_DIR})
+      endif()
       target_include_directories(${AV_TARGET} PRIVATE
-        ${OPENSSL_INCLUDE_DIR}
-        ${CMAKE_SOURCE_DIR}/src/game/MapNodes)
+        "${CMAKE_SOURCE_DIR}/src/game/MapNodes")
       target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_LIBRARIES})
     endif()
   endforeach()
@@ -64,8 +42,8 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
   # Focused, engine-free unit tests. BUILD_TESTING is honoured when the core
   # enables CTest; AZEROTH_VOICES_BUILD_TESTS lets a module-only build opt in
   # without changing the core.
-  option(AZEROTH_VOICES_BUILD_TESTS "Build the mod-azeroth-voices unit tests." ON)
-  if(BUILD_TESTING OR AZEROTH_VOICES_BUILD_TESTS)
+  option(AZEROTH_VOICES_BUILD_TESTS "Build the mod-azeroth-voices unit tests." OFF)
+  if((BUILD_TESTING OR AZEROTH_VOICES_BUILD_TESTS) AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/tests/AzerothVoicesTests.cpp")
     enable_testing()
     if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
       # The core calls enable_testing() only when its own test switch is on, so

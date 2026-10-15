@@ -136,43 +136,34 @@ namespace AzerothVoices
                     PLAYERHOOK_ON_UPDATE_ZONE,
                     PLAYERHOOK_ON_MAP_CHANGED,
                     PLAYERHOOK_ON_LOOT_ITEM,
-                    PLAYERHOOK_ON_CHAT_COMMAND,
-                    PLAYERHOOK_CAN_USE_GROUP_CHAT })
+                    PLAYERHOOK_ON_BEFORE_SEND_CHAT_MESSAGE })
             {
             }
 
-            void OnChatCommand(Player* player, uint32 type, std::string const& message,
-                               uint32 language, std::string const& target) override
+            void OnBeforeSendChatMessage(Player* player, uint32& type, uint32& language, std::string& message) override
             {
-                if (!player || language == LANG_ADDON || type == CHAT_MSG_CHANNEL)
+                if (!player || language == LANG_ADDON || type == CHAT_MSG_CHANNEL || type == CHAT_MSG_WHISPER)
                     return;
+
                 if (type == CHAT_MSG_SAY)
                 {
                     if (IsAvaddonCommand(message))
                     {
                         Manager::Instance().HandleAvaddonSay(player, message);
+                        message.clear();
                         return;
                     }
                     if (IsAddonCommand(message))
                     {
                         HandleAddonCommandFromPlayer(player, message.substr(5));
+                        message.clear();
                         return;
                     }
                 }
+
                 ChatScope scope;
                 if (ToScope(type, scope))
-                    Manager::Instance().HandleChat(player, scope, message, target);
-            }
-
-            bool CanUseGroupChat(Player* /*player*/, uint32 type, uint32 language,
-                                 std::string& message) override
-            {
-                // Addon control frames are acted on in OnChatCommand; they must
-                // never be broadcast as spoken Say chat.
-                if (type == CHAT_MSG_SAY && language != LANG_ADDON &&
-                    (IsAddonCommand(message) || IsAvaddonCommand(message)))
-                    return false;
-                return true;
+                    Manager::Instance().HandleChat(player, scope, message, "");
             }
 
             void OnPlayerJustDied(Player* player) override
@@ -220,7 +211,7 @@ namespace AzerothVoices
 
             void OnLogout(Player* player) override
             {
-                Manager::Instance().OnPlayerLogout(player);
+                Manager::Instance().HandlePlayerLogout(player);
                 Manager::Instance().HandleEvent(player, "player_logout");
             }
 
@@ -278,14 +269,14 @@ namespace AzerothVoices
         {
         public:
             AzerothVoicesServerScript()
-                : ServerScript("AzerothVoicesServerScript", { SERVERHOOK_ON_PACKET_HANDLED })
+                : ServerScript("AzerothVoicesServerScript", { SERVERHOOK_CAN_PACKET_RECEIVE })
             {
             }
 
-            void OnPacketHandled(WorldSession* session, WorldPacket const& original) override
+            bool CanPacketReceive(WorldSession* session, WorldPacket const& original) override
             {
                 if (!session || !session->GetPlayer())
-                    return;
+                    return true;
 
                 if (original.GetOpcode() == CMSG_MESSAGECHAT)
                 {
@@ -296,23 +287,37 @@ namespace AzerothVoices
                         uint32 type = 0;
                         uint32 language = 0;
                         packet >> type >> language;
-                        if (type != CHAT_MSG_CHANNEL || language == LANG_ADDON)
-                            return;
-                        std::string channel;
-                        std::string message;
-                        packet >> channel >> message;
-                        if (message.empty())
-                            return;
+                        if (language == LANG_ADDON)
+                            return true;
 
-                        ChatScope scope = Manager::Instance().IsWorldChannel(channel)
-                            ? ChatScope::World : ChatScope::Channel;
-                        Manager::Instance().HandleChat(session->GetPlayer(), scope, message, "", channel);
+                        if (type == CHAT_MSG_CHANNEL)
+                        {
+                            std::string channel;
+                            std::string message;
+                            packet >> channel >> message;
+                            if (message.empty())
+                                return true;
+
+                            ChatScope scope = Manager::Instance().IsWorldChannel(channel)
+                                ? ChatScope::World : ChatScope::Channel;
+                            Manager::Instance().HandleChat(session->GetPlayer(), scope, message, "", channel);
+                        }
+                        else if (type == CHAT_MSG_WHISPER)
+                        {
+                            std::string to;
+                            std::string message;
+                            packet >> to >> message;
+                            if (to.empty() || message.empty())
+                                return true;
+
+                            Manager::Instance().HandleChat(session->GetPlayer(), ChatScope::Whisper, message, to);
+                        }
                     }
                     catch (ByteBufferException const&)
                     {
                         // Malformed chat was already rejected by the core handler.
                     }
-                    return;
+                    return true;
                 }
 
                 if (original.GetOpcode() == CMSG_GAMEOBJ_USE)
@@ -337,7 +342,7 @@ namespace AzerothVoices
                     catch (ByteBufferException const&)
                     {
                     }
-                    return;
+                    return true;
                 }
 
                 if (original.GetOpcode() == CMSG_GUILD_PROMOTE || original.GetOpcode() == CMSG_GUILD_DEMOTE)
@@ -367,8 +372,10 @@ namespace AzerothVoices
                     catch (ByteBufferException const&)
                     {
                     }
-                    return;
+                    return true;
                 }
+
+                return true;
             }
         };
 

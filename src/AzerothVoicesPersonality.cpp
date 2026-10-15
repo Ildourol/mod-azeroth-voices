@@ -135,12 +135,20 @@ namespace AzerothVoices
                 prompt << "Write a new background story for one existing persistent fictional World of Warcraft "
                           "PlayerBot identity whose traits and speaking tone are already fixed. ";
                 break;
+            case PersonalityGenerationMode::ToneOnly:
+                prompt << "Generate a speaking style and tone description for one existing persistent fictional World of Warcraft "
+                          "PlayerBot identity whose personality traits are already fixed. ";
+                break;
         }
         prompt << "Return exactly one JSON object and no markdown or explanation.";
 
         if (mode == PersonalityGenerationMode::BackgroundOnly)
         {
             prompt << " The object must contain only background. ";
+        }
+        else if (mode == PersonalityGenerationMode::ToneOnly)
+        {
+            prompt << " The object must contain only tone. Do not return or rewrite traits or background. ";
         }
         else if (mode == PersonalityGenerationMode::ReplaceTraits)
         {
@@ -163,27 +171,30 @@ namespace AzerothVoices
                 prompt << "tone must be an empty string. ";
         }
 
-        if (!config.personalityGenerateBackground)
-            prompt << "background must be an empty string. ";
-        else if (config.personalityBackgroundMode == 0)
-            prompt << "background must be a short, freely imagined backstory for an actual character living in "
-                      "Vanilla/Turtle WoW-era Azeroth. Invent it without a fixed biography template or supplied story "
-                      "ingredients. Keep it plausible for the supplied race, class, faction, and gender, avoid "
-                      "later-expansion assumptions, and favor a distinctive believable premise over a generic WoW "
-                      "archetype. ";
-        else
-            prompt << "background must be a short, freely imagined fictional real-world backstory for a person who "
-                      "plays World of Warcraft. Invent the player's life and relationship with WoW without a fixed "
-                      "biography template or supplied life ingredients. Choose one specific adult real-life age at "
-                      "random from 18 through 60 and state that age naturally in the background story. Treat the "
-                      "supplied race, class, faction, and gender as properties of the in-game avatar only and do not "
-                      "infer the real person's identity from them. Do not impersonate a real person, favor a distinctive "
-                      "believable persona over a generic gamer stereotype, and avoid gratuitous modern-platform "
-                      "references. ";
+        if (mode != PersonalityGenerationMode::ToneOnly)
+        {
+            if (!config.personalityGenerateBackground)
+                prompt << "background must be an empty string. ";
+            else if (config.personalityBackgroundMode == 0)
+                prompt << "background must be a short, freely imagined backstory for an actual character living in "
+                          "Vanilla/Turtle WoW-era Azeroth. Invent it without a fixed biography template or supplied story "
+                          "ingredients. Keep it plausible for the supplied race, class, faction, and gender, avoid "
+                          "later-expansion assumptions, and favor a distinctive believable premise over a generic WoW "
+                          "archetype. ";
+            else
+                prompt << "background must be a short, freely imagined fictional real-world backstory for a person who "
+                          "plays World of Warcraft. Invent the player's life and relationship with WoW without a fixed "
+                          "biography template or supplied life ingredients. Choose one specific adult real-life age at "
+                          "random from 18 through 60 and state that age naturally in the background story. Treat the "
+                          "supplied race, class, faction, and gender as properties of the in-game avatar only and do not "
+                          "infer the real person's identity from them. Do not impersonate a real person, favor a distinctive "
+                          "believable persona over a generic gamer stereotype, and avoid gratuitous modern-platform "
+                          "references. ";
 
-        prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
-                  "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. "
-               << "Keep background at or below " << config.personalityMaxBackgroundCharacters << " characters. ";
+            prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
+                      "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. "
+                   << "Keep background at or below " << config.personalityMaxBackgroundCharacters << " characters. ";
+        }
         switch (mode)
         {
             case PersonalityGenerationMode::Full:
@@ -194,6 +205,9 @@ namespace AzerothVoices
                 break;
             case PersonalityGenerationMode::BackgroundOnly:
                 prompt << "JSON shape: {\"background\":\"...\"}.";
+                break;
+            case PersonalityGenerationMode::ToneOnly:
+                prompt << "JSON shape: {\"tone\":\"...\"}.";
                 break;
         }
         return prompt.str();
@@ -218,14 +232,18 @@ namespace AzerothVoices
                 prompt << "\nFixed speaking tone: " << fixed.tone;
             if (mode == PersonalityGenerationMode::BackgroundOnly && !fixed.background.empty())
                 prompt << "\nDo not reuse this previous background story: " << fixed.background;
+            if (mode == PersonalityGenerationMode::ToneOnly && !fixed.tone.empty())
+                prompt << "\nDo not reuse this previous speaking tone: " << fixed.tone;
+            if (mode == PersonalityGenerationMode::ToneOnly && !fixed.background.empty())
+                prompt << "\nCharacter background: " << fixed.background;
         }
         return prompt.str();
     }
 
     uint32_t PersonalityGenerationTokenBudget(Config const& config, PersonalityGenerationMode mode)
     {
-        bool const writesBackground = config.personalityGenerateBackground ||
-            mode == PersonalityGenerationMode::BackgroundOnly;
+        bool const writesBackground = mode != PersonalityGenerationMode::ToneOnly &&
+            (config.personalityGenerateBackground || mode == PersonalityGenerationMode::BackgroundOnly);
         uint32_t estimate = writesBackground
             ? config.personalityMaxBackgroundCharacters / 3 + 128 : 128;
         return std::min<uint32_t>(1024, std::max<uint32_t>(128, estimate));
@@ -300,6 +318,14 @@ namespace AzerothVoices
                     return false;
                 }
             }
+            else if (mode == PersonalityGenerationMode::ToneOnly)
+            {
+                if (!root.count("tone"))
+                {
+                    error = "personality response is missing tone field";
+                    return false;
+                }
+            }
             else if (!root.count("background") ||
                      (mode == PersonalityGenerationMode::ReplaceTraits &&
                       config.personalityGenerateTone && !root.count("tone")))
@@ -357,8 +383,8 @@ namespace AzerothVoices
             if (mode != PersonalityGenerationMode::BackgroundOnly && !config.personalityGenerateTone)
                 tone.clear();
 
-            std::string background;
-            if (root.count("background"))
+            std::string background = mode == PersonalityGenerationMode::ToneOnly ? fixed.background : std::string();
+            if (mode != PersonalityGenerationMode::ToneOnly && root.count("background"))
             {
                 if (!root["background"].is_string())
                 {
@@ -367,17 +393,14 @@ namespace AzerothVoices
                 }
                 background = CleanGeneratedText(root["background"].get<std::string>());
             }
-            bool const expectBackground = config.personalityGenerateBackground ||
-                mode == PersonalityGenerationMode::BackgroundOnly;
+            bool const expectBackground = mode != PersonalityGenerationMode::ToneOnly &&
+                (config.personalityGenerateBackground || mode == PersonalityGenerationMode::BackgroundOnly);
             if (expectBackground &&
                 (background.empty() || background.size() > config.personalityMaxBackgroundCharacters))
             {
                 error = "personality background is empty or exceeds MaxBackgroundChars";
                 return false;
             }
-            if (!expectBackground)
-                background.clear();
-
             personality = BotPersonality();
             personality.characterGuid = actor.guid;
             personality.botName = actor.name;

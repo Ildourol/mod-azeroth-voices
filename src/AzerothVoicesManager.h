@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AzerothVoicesAddon.h"
+#include "AzerothVoicesBotSeam.h"
 #include "AzerothVoicesConfig.h"
 #include "AzerothVoicesInstanceLore.h"
 #include "AzerothVoicesMemory.h"
@@ -157,7 +158,7 @@ namespace AzerothVoices
         // caller sends back to the requesting player as system messages.
         bool HandleAddonCommand(Player* player, std::string const& arguments,
                                 std::vector<std::string>& responses);
-        void OnPlayerLogout(Player* player);
+        void HandlePlayerLogout(Player* player);
         void ClearHistory();
         void SetPaused(bool paused);
         bool IsPaused() const;
@@ -309,6 +310,23 @@ namespace AzerothVoices
             uint32_t bossesKilledInInstance = 0;
         };
 
+        // Active multi-turn proximity conversation sequence (/say) between a player
+        // and an NPC or nearby PlayerBot.
+        struct ActiveSayConversation
+        {
+            uint64_t playerGuid = 0;
+            uint64_t partnerGuid = 0;
+            std::string partnerName;
+            bool isNpc = true;
+            uint32_t mapId = 0;
+            uint32_t instanceId = 0;
+            uint32_t turnCount = 0;
+            std::string lastPlayerMessage;
+            std::string lastReply;
+            std::chrono::steady_clock::time_point lastActivity;
+            std::chrono::steady_clock::time_point expires;
+        };
+
         enum class PreflightReason : uint8_t
         {
             NoHumanNearby,
@@ -340,7 +358,8 @@ namespace AzerothVoices
         void ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                          std::string const& targetName, std::string const& channelName);
         bool ProcessPlayerSay(Player* speaker, std::string const& message,
-                              std::string const& targetName, std::string const& channelName);
+                              std::string const& targetName, std::string const& channelName,
+                              Creature** outHandledNpc = nullptr);
         void ProcessEvent(Player* subject, std::string const& eventName, std::string const& detail,
                           uint32_t guildId, uint32_t creatureEntry, uint32_t creatureRank,
                           uint32_t itemQuality);
@@ -353,10 +372,16 @@ namespace AzerothVoices
                            BossPresence const* boss = nullptr,
                            bool bossDirected = false,
                            GroupConversation const* groupScene = nullptr,
-                           ActorSnapshot const* targetedNpc = nullptr);
+                           ActorSnapshot const* targetedNpc = nullptr,
+                           std::string const& customContext = "");
         void MaybeQueueTargetedNpcObserverComment(Player* speaker, Creature* targetedNpc,
                                                   std::string const& message,
                                                   std::string const& channelName);
+        void MaybeQueueNpcReplyObserverComment(Player* originalPlayer,
+                                              ActorSnapshot const& npcActor,
+                                              std::string const& playerMessage,
+                                              std::string const& npcReply);
+        Creature* FindMentionedNpc(Player* speaker, std::string const& message);
         bool PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
                                ChatScope scope, std::string const& channelName,
                                std::string const& trigger, RequestPriority priority,
@@ -376,6 +401,12 @@ namespace AzerothVoices
         bool QueueProximityScene(Player* anchor, bool forced);
         void MaybeQueueProximityTurn(ChatRequest const& request, std::string const& reply);
         void PruneProximityScenes();
+        void RecordSayConversationTurn(uint64_t playerGuid, uint64_t partnerGuid,
+                                       std::string const& partnerName, bool isNpc,
+                                       uint32_t mapId, uint32_t instanceId,
+                                       std::string const& playerMessage,
+                                       std::string const& reply);
+        ActiveSayConversation* FindActiveSayConversation(Player* player);
         void RunBossDialogue();
         void PruneBossPresences();
         bool QueueBossDirectedReply(Player* speaker, std::string const& message);
@@ -436,7 +467,8 @@ namespace AzerothVoices
                                  BossPresence const* boss = nullptr,
                                  bool bossDirected = false,
                                  GroupConversation const* groupScene = nullptr,
-                                 ActorSnapshot const* targetedNpc = nullptr);
+                                 ActorSnapshot const* targetedNpc = nullptr,
+                                 std::string const& customContext = "");
         std::vector<Candidate> CollectCandidates(Player* speaker, ChatScope scope,
                                                   std::string const& targetName,
                                                   std::string const& message,
@@ -525,6 +557,10 @@ namespace AzerothVoices
         std::map<uint32_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> m_guildLastSpeaker;
         std::map<uint32_t, std::chrono::steady_clock::time_point> m_guildPlayerConversationUntil;
         std::map<uint32_t, std::deque<uint64_t>> m_guildRecentSpeakers;
+        std::map<uint32_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> m_partyLastSpeaker;
+        std::map<uint64_t, ActiveSayConversation> m_activeSayConversations;
+        std::map<uint64_t, std::chrono::steady_clock::time_point> m_npcReplyObserverCooldowns;
+        std::map<uint64_t, std::chrono::steady_clock::time_point> m_npcLastInteractionCommentTime;
         std::map<GuildSessionKey, GuildSessionHistoryRing> m_guildSessionHistory;
         std::map<uint64_t, PendingGuildGreeting> m_pendingGuildGreetings;
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;

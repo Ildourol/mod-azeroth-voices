@@ -449,7 +449,7 @@ namespace AzerothVoices
                          << ", rag-entries=" << status.ragEntries
                          << ", model=" << status.model
                          << ", endpoint=" << status.endpoint;
-                    handler->SendSysMessage(text.str());
+                    handler->SendSysMessage(text.str().c_str());
                     return false;
                 }
 

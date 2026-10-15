@@ -38,6 +38,7 @@ namespace AzerothVoices
             Get,
             Set,
             RegenBackstory,
+            RegenTone,
             Forget
         };
 
@@ -75,6 +76,7 @@ namespace AzerothVoices
         std::string LogicalBackstory(uint64_t guid, std::string const& background);
         std::string LogicalUpdated(uint64_t guid, std::string const& name, bool changed);
         std::string LogicalBackstoryRegen(uint64_t guid, std::string const& name);
+        std::string LogicalToneRegen(uint64_t guid, std::string const& name);
         std::string LogicalForgotten(uint64_t guid, std::string const& name);
         std::string LogicalError(std::string const& channel, std::string const& message);
 
@@ -88,6 +90,7 @@ namespace AzerothVoices
         std::string Backstory(uint64_t guid, std::string const& background);
         std::string Updated(uint64_t guid, std::string const& name, bool changed);
         std::string BackstoryRegen(uint64_t guid, std::string const& name);
+        std::string ToneRegen(uint64_t guid, std::string const& name);
         std::string Forgotten(uint64_t guid, std::string const& name);
         std::string Error(std::string const& message);
 

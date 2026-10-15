@@ -257,19 +257,36 @@ function AzerothVoices:BuildEditor(panel)
     local contentX = 216
     local contentWidth = 440
 
+    -- Personality Traits Section
+    createLabel(panel, "Personality Traits", contentX, -46)
+
+    local regenTraitsBtn = button(panel, "Generate Traits", 115, function()
+        AzerothVoices:RegenTraits()
+    end, 20)
+    regenTraitsBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -124, -44)
+    regenTraitsBtn:Disable()
+    panel.regenTraitsBtn = regenTraitsBtn
+
+    local saveBtn = button(panel, "Save Traits", 100, function()
+        AzerothVoices:SaveProfile()
+    end, 20)
+    saveBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -44)
+    saveBtn:Disable()
+    panel.saveBtn = saveBtn
+
     -- Trait 1
-    createLabel(panel, "Trait 1", contentX, -50)
-    local t1 = createTraitBox(panel, "AzerothVoicesTrait1", contentX + 6, -66, contentWidth - 12)
+    createLabel(panel, "Trait 1", contentX, -68)
+    local t1 = createTraitBox(panel, "AzerothVoicesTrait1", contentX + 6, -82, contentWidth - 12)
     panel.trait1 = t1
 
     -- Trait 2
-    createLabel(panel, "Trait 2", contentX, -92)
-    local t2 = createTraitBox(panel, "AzerothVoicesTrait2", contentX + 6, -108, contentWidth - 12)
+    createLabel(panel, "Trait 2", contentX, -106)
+    local t2 = createTraitBox(panel, "AzerothVoicesTrait2", contentX + 6, -120, contentWidth - 12)
     panel.trait2 = t2
 
     -- Trait 3
-    createLabel(panel, "Trait 3", contentX, -134)
-    local t3 = createTraitBox(panel, "AzerothVoicesTrait3", contentX + 6, -150, contentWidth - 12)
+    createLabel(panel, "Trait 3", contentX, -144)
+    local t3 = createTraitBox(panel, "AzerothVoicesTrait3", contentX + 6, -158, contentWidth - 12)
     panel.trait3 = t3
 
     local traitBoxes = { t1, t2, t3 }
@@ -286,28 +303,29 @@ function AzerothVoices:BuildEditor(panel)
         end)
     end
 
-    -- Tone
-    createLabel(panel, "Tone (generated)", contentX, -178)
-    panel.tone = createToneBox(panel, contentX, -194, contentWidth, 42)
+    -- Tone Section
+    createLabel(panel, "Tone (generated)", contentX, -184)
 
-    -- Background Story
-    createLabel(panel, "Background Story", contentX, -242)
-    panel.backstory = createBackstoryBox(panel, contentX, -258, contentWidth, 148)
+    local regenToneBtn = button(panel, "Generate Tone", 115, function()
+        AzerothVoices:RegenTone()
+    end, 20)
+    regenToneBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -182)
+    regenToneBtn:Disable()
+    panel.regenToneBtn = regenToneBtn
 
-    -- Action buttons
-    local regenStoryBtn = button(panel, "Regenerate Story", 150, function()
+    panel.tone = createToneBox(panel, contentX, -202, contentWidth, 42)
+
+    -- Background Story Section
+    createLabel(panel, "Background Story", contentX, -250)
+
+    local regenStoryBtn = button(panel, "Generate Story", 115, function()
         AzerothVoices:RegenBackstory()
-    end, 24)
-    regenStoryBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", contentX, -414)
+    end, 20)
+    regenStoryBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -248)
     regenStoryBtn:Disable()
     panel.regenStoryBtn = regenStoryBtn
 
-    local saveBtn = button(panel, "Save Traits", 130, function()
-        AzerothVoices:SaveProfile()
-    end, 24)
-    saveBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -414)
-    saveBtn:Disable()
-    panel.saveBtn = saveBtn
+    panel.backstory = createBackstoryBox(panel, contentX, -268, contentWidth, 160)
 
     -- Status label at bottom
     local status = createLabel(panel, "", 16, -460)

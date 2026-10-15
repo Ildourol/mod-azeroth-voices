@@ -133,9 +133,8 @@ namespace AzerothVoices
                 c.thinkingMode.c_str());
             c.thinkingMode = "auto";
         }
-        c.thinkingAutoDetect = sConfig.GetBoolDefault("AzerothVoices.Thinking.AutoDetect", true);
-        c.thinkingEffort = Trim(sConfig.GetStringDefault("AzerothVoices.Thinking.Effort",
-            sConfig.GetStringDefault("AzerothVoices.ReasoningEffort", "Low")));
+        std::string defaultEffort = sConfig.GetStringDefault("AzerothVoices.ReasoningEffort", "Low");
+        c.thinkingEffort = Trim(sConfig.GetStringDefault("AzerothVoices.Thinking.Effort", defaultEffort.c_str()));
         std::transform(c.thinkingEffort.begin(), c.thinkingEffort.end(), c.thinkingEffort.begin(), [](unsigned char value) {
             return static_cast<char>(std::tolower(value));
         });
@@ -305,17 +304,33 @@ namespace AzerothVoices
             "AzerothVoices.NPC.TargetedConversation.BotCommentChance", 15);
         c.targetedNpcMaxBotComments = Bounded(
             "AzerothVoices.NPC.TargetedConversation.MaxBotComments", 1, 0, 10);
+        c.npcMentionSuppressesDirectBotReply = sConfig.GetBoolDefault(
+            "AzerothVoices.NPC.MentionSuppressesDirectBotReply", true);
+        c.npcMentionBotDirectReplyChance = Percent(
+            "AzerothVoices.NPC.MentionBotDirectReplyChance", 0);
+        c.npcReplyObserverEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.NPC.ReplyObserver.Enable", true);
+        c.npcReplyObserverChance = Percent(
+            "AzerothVoices.NPC.ReplyObserver.Chance", 25);
+        c.npcReplyObserverCooldownSeconds = Positive(
+            "AzerothVoices.NPC.ReplyObserver.CooldownSeconds", 30);
         c.exclusiveNameMentionResponder = Bounded(
             "AzerothVoices.NameMention.ExclusiveResponder", 1, 0, 1) != 0;
         c.directAddressChance = Percent("AzerothVoices.Chance.DirectAddress", 100);
         c.nameMentionChance = Percent("AzerothVoices.Chance.NameMention", 70);
         c.overhearChance = Percent("AzerothVoices.Chance.Overhear", 8);
+        c.sayConversationReplyWindowSeconds = Bounded(
+            "AzerothVoices.Say.ConversationReplyWindowSeconds", 30, 5, 300);
+        c.sayConversationMaxTurns = Bounded(
+            "AzerothVoices.Say.ConversationMaxTurns", 5, 1, 20);
+        c.partySpeakerRotationPenalty = Percent(
+            "AzerothVoices.Party.SpeakerRotationPenalty", 40);
         c.playerReplyChanceSay = Percent("AzerothVoices.PlayerReplyChance.Say", 90);
         c.botReplyChanceSay = Percent("AzerothVoices.BotReplyChance.Say", 10);
         c.playerReplyChanceChannel = Percent("AzerothVoices.PlayerReplyChance.Channel", 60);
         c.botReplyChanceChannel = Percent("AzerothVoices.BotReplyChance.Channel", 3);
         c.playerReplyChanceParty = Percent("AzerothVoices.PlayerReplyChance.Party", 90);
-        c.botReplyChanceParty = Percent("AzerothVoices.BotReplyChance.Party", 25);
+        c.botReplyChanceParty = Percent("AzerothVoices.BotReplyChance.Party", 10);
         c.playerReplyChanceGuild = Percent("AzerothVoices.PlayerReplyChance.Guild", 70);
         c.botReplyChanceGuild = Percent("AzerothVoices.BotReplyChance.Guild", 5);
         c.botToBotChatChance = Percent("AiPlayerbot.LLMBotToBotChatChance", 10);
@@ -370,12 +385,12 @@ namespace AzerothVoices
 
         c.groupChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.GroupChatter.Enable", true);
         c.raidChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.RaidChatter.Enable", true);
-        c.groupChatterScanSeconds = Positive("AzerothVoices.GroupChatter.ScanSeconds", 60, 5);
-        c.groupConversationChance = Percent("AzerothVoices.GroupChatter.ConversationChance", 25);
+        c.groupChatterScanSeconds = Positive("AzerothVoices.GroupChatter.ScanSeconds", 120, 5);
+        c.groupConversationChance = Percent("AzerothVoices.GroupChatter.ConversationChance", 10);
         c.groupConversationMaximumLines = Bounded("AzerothVoices.GroupChatter.ConversationMaximumLines", 3, 1, 10);
         c.groupConversationMaximumParticipants = Bounded("AzerothVoices.GroupChatter.ConversationMaximumParticipants", 2, 1, 10);
-        c.groupConversationMaximumReplyTurns = Bounded("AzerothVoices.GroupChatter.ConversationMaximumReplyTurns", 3, 1, 10);
-        c.groupConversationTurnGapSeconds = Bounded("AzerothVoices.GroupChatter.ConversationTurnGapSeconds", 6, 1, 60);
+        c.groupConversationMaximumReplyTurns = Bounded("AzerothVoices.GroupChatter.ConversationMaximumReplyTurns", 2, 1, 10);
+        c.groupConversationTurnGapSeconds = Bounded("AzerothVoices.GroupChatter.ConversationTurnGapSeconds", 12, 1, 60);
         c.groupConversationReplyWindowSeconds = Bounded("AzerothVoices.GroupChatter.ConversationReplyWindowSeconds", 30, 5, 300);
         c.groupDungeonEntryChance = Percent("AzerothVoices.GroupChatter.DungeonEntryChance", 60);
         c.groupDungeonEntryCooldownSeconds = Positive("AzerothVoices.GroupChatter.DungeonEntryCooldownSeconds", 300);
@@ -391,8 +406,8 @@ namespace AzerothVoices
         c.groupResurrectCooldownSeconds = Positive("AzerothVoices.GroupChatter.ResurrectCooldownSeconds", 120);
         c.groupDeathChance = Percent("AzerothVoices.GroupChatter.DeathChance", 25);
         c.groupDeathCooldownSeconds = Positive("AzerothVoices.GroupChatter.DeathCooldownSeconds", 60);
-        c.groupKillChance = Percent("AzerothVoices.GroupChatter.KillChance", 8);
-        c.groupKillCooldownSeconds = Positive("AzerothVoices.GroupChatter.KillCooldownSeconds", 180);
+        c.groupKillChance = Percent("AzerothVoices.GroupChatter.KillChance", 4);
+        c.groupKillCooldownSeconds = Positive("AzerothVoices.GroupChatter.KillCooldownSeconds", 300);
         c.groupLootUncommonChance = Percent("AzerothVoices.GroupChatter.LootChanceGreen", 10);
         c.groupLootRareChance = Percent("AzerothVoices.GroupChatter.LootChanceBlue", 35);
         c.groupLootEpicChance = Percent("AzerothVoices.GroupChatter.LootChancePurple", 70);
@@ -403,26 +418,26 @@ namespace AzerothVoices
         c.groupQuestObjectiveDebounceSeconds = Positive("AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds", 60);
         c.groupQuestCompleteChance = Percent("AzerothVoices.GroupChatter.QuestCompleteChance", 25);
         c.groupQuestCooldownSeconds = Positive("AzerothVoices.GroupChatter.QuestCooldownSeconds", 60);
-        c.groupSpellCastChance = Percent("AzerothVoices.GroupChatter.SpellCastChance", 8);
-        c.groupSpellCastCooldownSeconds = Positive("AzerothVoices.GroupChatter.SpellCastCooldownSeconds", 60);
+        c.groupSpellCastChance = Percent("AzerothVoices.GroupChatter.SpellCastChance", 2);
+        c.groupSpellCastCooldownSeconds = Positive("AzerothVoices.GroupChatter.SpellCastCooldownSeconds", 180);
         c.groupLowHealthChance = Percent("AzerothVoices.GroupChatter.LowHealthChance", 40);
         c.groupLowHealthThresholdPercent = Bounded("AzerothVoices.GroupChatter.LowHealthThresholdPercent", 35, 1, 99);
         c.groupLowHealthCooldownSeconds = Positive("AzerothVoices.GroupChatter.LowHealthCooldownSeconds", 180);
         c.groupLowManaChance = Percent("AzerothVoices.GroupChatter.LowManaChance", 30);
         c.groupLowManaThresholdPercent = Bounded("AzerothVoices.GroupChatter.LowManaThresholdPercent", 20, 1, 99);
         c.groupLowManaCooldownSeconds = Positive("AzerothVoices.GroupChatter.LowManaCooldownSeconds", 180);
-        c.groupNearbyObjectChance = Percent("AzerothVoices.GroupChatter.NearbyObjectChance", 10);
-        c.groupNearbyObjectScanSeconds = Positive("AzerothVoices.GroupChatter.NearbyObjectScanSeconds", 60, 5);
-        c.groupNearbyObjectCooldownSeconds = Positive("AzerothVoices.GroupChatter.NearbyObjectCooldownSeconds", 300);
+        c.groupNearbyObjectChance = Percent("AzerothVoices.GroupChatter.NearbyObjectChance", 3);
+        c.groupNearbyObjectScanSeconds = Positive("AzerothVoices.GroupChatter.NearbyObjectScanSeconds", 180, 5);
+        c.groupNearbyObjectCooldownSeconds = Positive("AzerothVoices.GroupChatter.NearbyObjectCooldownSeconds", 600);
         c.groupBotQuestionChance = Percent("AzerothVoices.GroupChatter.BotQuestionChance", 1);
         c.groupBotQuestionScanSeconds = Positive("AzerothVoices.GroupChatter.BotQuestionScanSeconds", 60, 5);
         c.groupBotQuestionCooldownSeconds = Positive("AzerothVoices.GroupChatter.BotQuestionCooldownSeconds", 300);
-        c.groupPlayerFollowupChance = Percent("AzerothVoices.GroupChatter.PlayerFollowupChance", 15);
-        c.groupPlayerFollowupCooldownSeconds = Positive("AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds", 30);
+        c.groupPlayerFollowupChance = Percent("AzerothVoices.GroupChatter.PlayerFollowupChance", 5);
+        c.groupPlayerFollowupCooldownSeconds = Positive("AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds", 120);
         c.groupZoneChangeChance = Percent("AzerothVoices.GroupChatter.ZoneChangeChance", 15);
         c.groupZoneChangeCooldownSeconds = Positive("AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds", 180);
-        c.groupIdleChance = Percent("AzerothVoices.GroupChatter.IdleChance", 5);
-        c.groupIdleCooldownSeconds = Positive("AzerothVoices.GroupChatter.IdleCooldownSeconds", 120);
+        c.groupIdleChance = Percent("AzerothVoices.GroupChatter.IdleChance", 2);
+        c.groupIdleCooldownSeconds = Positive("AzerothVoices.GroupChatter.IdleCooldownSeconds", 300);
         c.raidBattleCryChance = Percent("AzerothVoices.RaidChatter.BattleCryChance", 40);
         c.raidBattleCryCooldownSeconds = Positive("AzerothVoices.RaidChatter.BattleCryCooldownSeconds", 300);
         c.raidMoraleChance = Percent("AzerothVoices.RaidChatter.MoraleChance", 15);
@@ -434,8 +449,8 @@ namespace AzerothVoices
 
         // Party delivery gate (PartyGate)
         c.partyGateEnabled = sConfig.GetBoolDefault("AzerothVoices.PartyGate.Enable", true);
-        c.partyGateFillerMinGapSeconds = Positive("AzerothVoices.PartyGate.FillerMinGapSeconds", 12, 0);
-        c.partyGateContextualMinGapSeconds = Positive("AzerothVoices.PartyGate.ContextualMinGapSeconds", 10, 0);
+        c.partyGateFillerMinGapSeconds = Positive("AzerothVoices.PartyGate.FillerMinGapSeconds", 30, 0);
+        c.partyGateContextualMinGapSeconds = Positive("AzerothVoices.PartyGate.ContextualMinGapSeconds", 20, 0);
         c.partyGateResponsiveMinGapSeconds = Positive("AzerothVoices.PartyGate.ResponsiveMinGapSeconds", 4, 0);
         c.partyGateUrgentMinGapSeconds = Positive("AzerothVoices.PartyGate.UrgentMinGapSeconds", 0, 0);
         c.partyGatePreLLMDeferThresholdSeconds = Positive("AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds", 4, 0);
@@ -592,8 +607,8 @@ namespace AzerothVoices
         c.typingBaseDelayMilliseconds = Positive("AzerothVoices.Typing.BaseDelayMilliseconds", 0);
         c.typingDelayPerCharacterMilliseconds = Positive("AzerothVoices.Typing.DelayPerCharacterMilliseconds", 200);
         c.subtractGenerationTime = sConfig.GetBoolDefault("AzerothVoices.Typing.SubtractGenerationTime", true);
-        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 180, 1);
-        c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 3, 1);
+        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 90, 1);
+        c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 6, 1);
 
         bool const legacyHistoryEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);
         c.historyStorageMode = std::min<uint32_t>(2, Positive(

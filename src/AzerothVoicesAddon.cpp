@@ -224,7 +224,7 @@ namespace AzerothVoices
                 return true;
             }
 
-            if (verb != "get" && verb != "set" && verb != "regenbackstory" && verb != "forget")
+            if (verb != "get" && verb != "set" && verb != "regenbackstory" && verb != "regentone" && verb != "forget")
             {
                 error = "Unknown Chatter command.";
                 return false;
@@ -254,6 +254,8 @@ namespace AzerothVoices
                 command.kind = CommandKind::Get;
             else if (verb == "regenbackstory")
                 command.kind = CommandKind::RegenBackstory;
+            else if (verb == "regentone")
+                command.kind = CommandKind::RegenTone;
             else if (verb == "forget")
                 command.kind = CommandKind::Forget;
             else
@@ -309,6 +311,11 @@ namespace AzerothVoices
             return "BACKSTORY_REGEN " + std::to_string(guid) + " " + Encode(name);
         }
 
+        std::string LogicalToneRegen(uint64_t guid, std::string const& name)
+        {
+            return "TONE_REGEN " + std::to_string(guid) + " " + Encode(name);
+        }
+
         std::string LogicalForgotten(uint64_t guid, std::string const& name)
         {
             return "FORGOTTEN " + std::to_string(guid) + " " + Encode(name);
@@ -358,6 +365,11 @@ namespace AzerothVoices
         std::string BackstoryRegen(uint64_t guid, std::string const& name)
         {
             return Response(LogicalBackstoryRegen(guid, name));
+        }
+
+        std::string ToneRegen(uint64_t guid, std::string const& name)
+        {
+            return Response(LogicalToneRegen(guid, name));
         }
 
         std::string Forgotten(uint64_t guid, std::string const& name)

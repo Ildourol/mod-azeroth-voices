@@ -188,8 +188,8 @@ namespace AzerothVoices
                     return false;
             }
 
-            // If the token starts with a non-alphanumeric punctuation/symbol (e.g. '.', '/', '!', '#', '$', '?', '~', '@'),
-            // any message beginning with that prefix is an ignored command.
+            // If the token starts with a non-alphanumeric punctuation/symbol (e.g. '.', '/', '!', '#', '$', '~', '@'),
+            // any message beginning with that prefix is an ignored server/addon/bot command.
             unsigned char const firstTokenChar = static_cast<unsigned char>(token.front());
             if (!std::isalnum(firstTokenChar))
                 return true;
@@ -202,10 +202,80 @@ namespace AzerothVoices
             if (text.size() == token.size())
                 return true;
 
+            // If text is followed immediately by '?' (e.g. "stats?", "ready?", "who?"), treat as command query.
+            if (text.size() == token.size() + 1 && text[token.size()] == '?')
+                return true;
+
             // Otherwise, the character right after the token in text must be a delimiter (not alphanumeric).
-            // This prevents "c" from blocking "can", "d" from blocking "do", "follow" from blocking "following", etc.
+            // This prevents "c" from blocking "can", "follow" from blocking "following", etc.
             unsigned char const nextChar = static_cast<unsigned char>(text[token.size()]);
-            return !std::isalnum(nextChar);
+            if (std::isalnum(nextChar))
+                return false;
+
+            // Single-letter commands ("c", "e", "u", "s", "b"):
+            // In Warband, these are only standalone ("c") or followed by an item link ([Item Name]) or flags (?, +, -).
+            // Do NOT match conversational sentences like "u want to quest", "c you soon".
+            if (token.size() == 1)
+            {
+                if (text.size() > 2 && text[1] == ' ')
+                {
+                    char const c = text[2];
+                    return c == '[' || c == '?' || c == '+' || c == '-';
+                }
+                return false;
+            }
+
+            // Check if the remainder is a command argument or flag (e.g. "+...", "-...", "?...", "~...", item link, digit).
+            std::string remainder = text.substr(token.size());
+            size_t const start = remainder.find_first_not_of(" \t");
+            if (start == std::string::npos)
+                return true; // only trailing whitespace
+
+            char const remFirst = remainder[start];
+            if (remFirst == '?' || remFirst == '+' || remFirst == '-' || remFirst == '~' || remFirst == '[' ||
+                std::isdigit(static_cast<unsigned char>(remFirst)))
+                return true;
+
+            // If token is a multi-word command (contains space, e.g. "d buff", "stance tank", "save mana", "pull rti")
+            // matching the prefix is authoritative.
+            if (token.find(' ') != std::string::npos)
+                return true;
+
+            // For common English words (who, where, home, ready, trade, talk, friends, dungeon, quest, quests, spells, stats, talents, trainer):
+            // In Playerbots, these commands take no target name or multi-word sentences.
+            // If the message has multiple words continuing as normal text, it is natural conversation, NOT a bot command.
+            static char const* const kConversationalCommandWords[] = {
+                "who", "where", "home", "ready", "trade", "talk", "friends",
+                "dungeon", "quest", "quests", "spells", "stats", "talents", "trainer", "mail", "online", "roles"
+            };
+            for (char const* convWord : kConversationalCommandWords)
+            {
+                if (token == convWord)
+                    return false; // conversational argument, not a bot command!
+            }
+
+            // For other command verbs (like follow, attack, summon, cast, formation, strategy):
+            // If remainder has only 1 single argument (e.g. "follow bob", "attack skull"), treat as command.
+            // If it has multiple words (e.g. "follow me to the castle on the hill"), treat as conversation.
+            size_t wordCount = 0;
+            bool inWord = false;
+            for (size_t i = start; i < remainder.size(); ++i)
+            {
+                if (!std::isspace(static_cast<unsigned char>(remainder[i])))
+                {
+                    if (!inWord)
+                    {
+                        inWord = true;
+                        ++wordCount;
+                    }
+                }
+                else
+                {
+                    inWord = false;
+                }
+            }
+
+            return wordCount <= 1;
         }
 
         // Comprehensive master directory of all Warband / Playerbots commands,
@@ -218,7 +288,6 @@ namespace AzerothVoices
             "!",
             "#",
             "$",
-            "?",
             "~",
             "@",
 
@@ -228,7 +297,6 @@ namespace AzerothVoices
             "u",         // Section 2 ID 68 / Section 7: Use item link
             "s",         // Section 2 ID 67 / Section 7: Sell item link
             "b",         // Section 7: Buy item link
-            "d",         // Action "d" Engine prefix (buff, food, drink, loot, equip, repair, etc.)
 
             // Two-letter and short command prefixes
             "ue",        // Section 7: Unequip slot
@@ -608,6 +676,29 @@ namespace AzerothVoices
             "You overheard this exchange. Do not answer " + input.playerName +
             "'s question as though they addressed you. " +
             "Make one short, natural comment or reaction about what you overheard.";
+
+        return prompt;
+    }
+
+    NpcReplyObserverPrompt BuildNpcReplyObserverPrompt(NpcReplyObserverPromptInput const& input)
+    {
+        NpcReplyObserverPrompt prompt;
+        std::string npcDesc = input.npcName.empty() ? "a nearby NPC" : input.npcName;
+        if (!input.npcRole.empty())
+            npcDesc += " (" + input.npcRole + ")";
+
+        std::string const location = input.zoneOrArea.empty() ? "the area" : input.zoneOrArea;
+
+        prompt.systemPromptExtension = "You are " + (input.botName.empty() ? "a nearby adventurer" : input.botName) +
+            ", an adventurer in " + location + ". You just overheard the NPC " + npcDesc +
+            " reply to player " + input.playerName + " with: \"" + input.npcReply + "\". " +
+            "React naturally in character to what the NPC said or comment on the exchange in one short, natural sentence. " +
+            "Do not answer for the player, do not pretend to be " + (input.npcName.empty() ? "the NPC" : input.npcName) +
+            ", and do not repeat verbatim what was already said.";
+
+        prompt.userPrompt = "NPC " + npcDesc + " answered " + input.playerName +
+            " (who asked: \"" + input.playerMessage + "\") with: \"" + input.npcReply + "\"\n" +
+            "React naturally in character to the NPC's answer in one short sentence.";
 
         return prompt;
     }

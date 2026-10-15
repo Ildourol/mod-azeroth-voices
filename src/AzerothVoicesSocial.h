@@ -217,6 +217,25 @@ namespace AzerothVoices
 
     TargetedNpcObserverPrompt BuildTargetedNpcObserverPrompt(TargetedNpcObserverPromptInput const& input);
 
+    struct NpcReplyObserverPromptInput
+    {
+        std::string playerName;
+        std::string npcName;
+        std::string npcRole;
+        std::string playerMessage;
+        std::string npcReply;
+        std::string zoneOrArea;
+        std::string botName;
+    };
+
+    struct NpcReplyObserverPrompt
+    {
+        std::string systemPromptExtension;
+        std::string userPrompt;
+    };
+
+    NpcReplyObserverPrompt BuildNpcReplyObserverPrompt(NpcReplyObserverPromptInput const& input);
+
     struct ObserverCandidate
     {
         uint64_t guid = 0;

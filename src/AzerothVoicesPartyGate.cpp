@@ -47,7 +47,7 @@ namespace AzerothVoices
         // Responsive: direct replies to player, follow-ups to player questions
         if (t == "player_directed" || t == "player_followup" || t == "name_directed" ||
             t == "player-reply" || t == "name-mention" || t == "direct-address" ||
-            t == "direct" || t == "targeted-npc-observer")
+            t == "direct" || t == "targeted-npc-observer" || t == "npc-reply-observer")
             return PartyGatePolicy::Responsive;
 
         // Contextual: game progression events (dungeon entry, zone changes, kills, loot, quests, resurrections)

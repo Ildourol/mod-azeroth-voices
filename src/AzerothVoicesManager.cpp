@@ -317,7 +317,7 @@ namespace AzerothVoices
             if (creature->IsPet() || creature->IsTotem() || creature->IsTemporarySummon() ||
                 creature->IsCharmed() || !creature->GetCharmerOrOwnerGuid().IsEmpty() ||
                 creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED | UNIT_FLAG_POSSESSED) ||
-                creature->IsTrigger() || creature->IsCritter() ||
+                creature->IsTrigger() || IsCreatureCritter(creature) ||
                 !creature->HasStaticDBSpawnData())
                 return NpcEligibilityResult::Temporary;
 
@@ -410,7 +410,7 @@ namespace AzerothVoices
                 creature->IsTemporarySummon() || creature->IsCharmed() ||
                 !creature->GetCharmerOrOwnerGuid().IsEmpty() ||
                 creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED | UNIT_FLAG_POSSESSED) ||
-                creature->IsTrigger() || creature->IsCritter() || !creature->HasStaticDBSpawnData();
+                creature->IsTrigger() || IsCreatureCritter(creature) || !creature->HasStaticDBSpawnData();
             if (input.safetyExcluded)
                 return EvaluateProximitySpeaker(input);
 
@@ -496,7 +496,7 @@ namespace AzerothVoices
             if (scope == ChatScope::Channel)
             {
                 ChannelMgr* manager = channelMgr(speaker->GetTeam());
-                channel = manager ? manager->GetChannel(channelName, speaker, false) : nullptr;
+                channel = manager ? manager->GetChannel(channelName, nullptr, false) : nullptr;
                 if (!channel)
                     return false;
             }
@@ -715,7 +715,7 @@ namespace AzerothVoices
             if (!player)
                 return "unknown";
             std::array<uint32_t, 3> points = { 0, 0, 0 };
-            uint32_t const classMask = player->getClassMask();
+            uint32_t const classMask = player->GetClassMask();
             for (uint32_t i = 0; i < sTalentStore.GetNumRows(); ++i)
             {
                 TalentEntry const* talent = sTalentStore.LookupEntry(i);
@@ -1649,7 +1649,7 @@ namespace AzerothVoices
 
             Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(actor.anchorPlayerGuid));
             Creature* creature = anchor && anchor->IsInWorld() && anchor->GetMapId() == actor.mapId
-                ? ObjectAccessor::GetCreature(*anchor, ObjectGuid(actor.guid)) : nullptr;
+                ? GetCreatureFromAnchor(*anchor, ObjectGuid(actor.guid)) : nullptr;
             if (!creature || creature->GetName() != actor.name)
             {
                 RecordPreflightRejection(PreflightReason::InvalidActor);
@@ -1764,13 +1764,14 @@ namespace AzerothVoices
                                 uint32_t conversationDepth, ProximityScene const* scene,
                                 BossPresence const* boss, bool bossDirected,
                                 GroupConversation const* groupScene,
-                                ActorSnapshot const* targetedNpc)
+                                ActorSnapshot const* targetedNpc,
+                                std::string const& customContext)
     {
         if (!PreflightDialogue(actor, speaker, scope, channelName, trigger, priority, ambient))
             return false;
 
         ChatRequest request = BuildRequest(actor, speaker, scope, channelName, trigger,
-            message, priority, ambient, allowFollowup, scene, boss, bossDirected, groupScene, targetedNpc);
+            message, priority, ambient, allowFollowup, scene, boss, bossDirected, groupScene, targetedNpc, customContext);
         request.conversationDepth = conversationDepth;
         if (Enqueue(std::move(request)))
             return true;
@@ -1925,7 +1926,8 @@ namespace AzerothVoices
                                       RequestPriority priority, bool ambient, bool allowFollowup,
                                       ProximityScene const* scene, BossPresence const* boss,
                                       bool bossDirected, GroupConversation const* groupScene,
-                                      ActorSnapshot const* targetedNpc)
+                                      ActorSnapshot const* targetedNpc,
+                                      std::string const& customContext)
     {
         ChatRequest request;
         request.id = m_nextRequestId++;
@@ -2020,11 +2022,11 @@ namespace AzerothVoices
             Player* sentimentActor = ObjectAccessor::FindPlayer(ObjectGuid(actor.guid));
             Player* target = ObjectAccessor::FindPlayer(ObjectGuid(speaker.guid));
             bool const directConversation = !ambient && !eventTrigger && !speaker.isBot &&
-                (trigger != "targeted-npc-observer") &&
+                (trigger != "targeted-npc-observer") && (trigger != "npc-reply-observer") &&
                 IsDirectSentimentConversation(sentimentActor, target, scope, message);
             bool const readOnlyContext = (ambient && m_config->sentimentUseInRandom) ||
                 (eventTrigger && m_config->sentimentUseInEvents) ||
-                (trigger == "targeted-npc-observer");
+                (trigger == "targeted-npc-observer") || (trigger == "npc-reply-observer");
             if (IsOnlineRealPlayer(target) && (directConversation || readOnlyContext))
             {
                 SentimentKey const key { actor.guid, target->GetObjectGuid().GetRawValue() };
@@ -2145,13 +2147,30 @@ namespace AzerothVoices
             request.systemPrompt += "\n" + observerPrompt.systemPromptExtension;
             request.userPrompt = observerPrompt.userPrompt;
         }
+        else if (trigger == "npc-reply-observer")
+        {
+            NpcReplyObserverPromptInput promptInput;
+            promptInput.playerName = speaker.name;
+            promptInput.npcName = request.targetedNpc.name;
+            promptInput.npcRole = request.targetedNpc.role;
+            promptInput.playerMessage = customContext;
+            promptInput.npcReply = message;
+            promptInput.zoneOrArea = actor.area.empty() ? actor.zone : actor.area;
+            promptInput.botName = actor.name;
+
+            NpcReplyObserverPrompt observerPrompt = BuildNpcReplyObserverPrompt(promptInput);
+            request.systemPrompt += "\n" + observerPrompt.systemPromptExtension;
+            request.userPrompt = observerPrompt.userPrompt;
+        }
         else if (trigger == "guild:player-reply")
             request.userPrompt = "Respond naturally in guild chat to what your guildmate said: " + message;
         else if (trigger == "guild:login-greeting")
             request.userPrompt = "Respond naturally in guild chat to greet your guildmate: " + message;
+        else if (trigger == "targeted-npc-conversation-sequence" || trigger == "bot-say-conversation-sequence")
+            request.userPrompt = "Continue the conversation naturally in character with this player: " + message;
         else
             request.userPrompt = m_config->prompt;
-        if (!m_config->postPrompt.empty() && trigger != "targeted-npc-observer")
+        if (!m_config->postPrompt.empty() && trigger != "targeted-npc-observer" && trigger != "npc-reply-observer")
             request.userPrompt += "\n" + m_config->postPrompt;
 
         request.systemPrompt = Expand(request.systemPrompt, request);
@@ -2165,6 +2184,13 @@ namespace AzerothVoices
                 request.systemPrompt += "\nEarlier, " + pName + " mentioned: \"" + request.guildCallbackTopic + "\". If relevant, naturally reference this.";
             if (request.guildFollowupQuestion)
                 request.systemPrompt += "\nInclude a relevant question in your reply to keep the conversation flowing.";
+        }
+        if (request.conversationDepth > 0 &&
+            (trigger == "targeted-npc-conversation-sequence" || trigger == "bot-say-conversation-sequence"))
+        {
+            request.systemPrompt += "\nThis is a continuing direct conversation turn " +
+                std::to_string(request.conversationDepth + 1) + " with " + speaker.name +
+                ". Maintain dialogue continuity with what was just discussed.";
         }
         if (actor.kind == ActorKind::PlayerBot && !request.personalityBlock.empty() && !personalityPlaceholder)
             request.systemPrompt += "\n" + request.personalityBlock;
@@ -2711,11 +2737,12 @@ namespace AzerothVoices
             Creature* selectedNpc = nullptr;
             if (selected.IsCreature())
             {
-                selectedNpc = ObjectAccessor::GetCreature(*speaker, selected);
+                selectedNpc = GetCreatureFromAnchor(*speaker, selected);
                 if (selectedNpc && selectedNpc->IsInWorld() && selectedNpc->IsAlive())
                     selectedIsNpc = true;
             }
 
+            Creature* handledNpc = nullptr;
             if (selectedIsNpc)
             {
                 {
@@ -2738,12 +2765,14 @@ namespace AzerothVoices
 
                 if (explicitBotMention)
                 {
-                    npcHandled = ProcessPlayerSay(speaker, message, targetName, channelName);
+                    npcHandled = ProcessPlayerSay(speaker, message, targetName, channelName, &handledNpc);
                 }
                 else
                 {
-                    npcHandled = ProcessPlayerSay(speaker, message, targetName, channelName);
-                    MaybeQueueTargetedNpcObserverComment(speaker, selectedNpc, message, channelName);
+                    npcHandled = ProcessPlayerSay(speaker, message, targetName, channelName, &handledNpc);
+                    Creature* targetNpc = handledNpc ? handledNpc : selectedNpc;
+                    if (targetNpc)
+                        MaybeQueueTargetedNpcObserverComment(speaker, targetNpc, message, channelName);
                     return;
                 }
             }
@@ -2752,7 +2781,89 @@ namespace AzerothVoices
                 // Real-player /say has an ordered NPC priority chain that owns the
                 // NPC side of the reply; PlayerBots stay eligible through the
                 // generic candidate path below.
-                npcHandled = ProcessPlayerSay(speaker, message, targetName, channelName);
+                npcHandled = ProcessPlayerSay(speaker, message, targetName, channelName, &handledNpc);
+                if (npcHandled && handledNpc && !explicitBotMention)
+                {
+                    // An NPC was matched and handled (e.g. by name match or conversation sequence).
+                    // Trigger observer comments if enabled, and suppress direct bot replies.
+                    MaybeQueueTargetedNpcObserverComment(speaker, handledNpc, message, channelName);
+                    return;
+                }
+            }
+            if (npcHandled)
+                return;
+
+            // If an NPC was explicitly mentioned in the message, suppress direct bot replies
+            // so bots don't impersonate or steal replies from NPCs.
+            if (!explicitBotMention)
+            {
+                Creature* mentionedNpc = FindMentionedNpc(speaker, message);
+                if (mentionedNpc)
+                {
+                    if (m_config->npcMentionSuppressesDirectBotReply)
+                    {
+                        if (m_config->npcMentionBotDirectReplyChance == 0 ||
+                            !Roll(m_config->npcMentionBotDirectReplyChance))
+                        {
+                            if (m_config->targetedNpcBotCommentsEnabled)
+                                MaybeQueueTargetedNpcObserverComment(speaker, mentionedNpc, message, channelName);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (!speakerIsBot)
+            {
+                ActiveSayConversation* activeBotConv = FindActiveSayConversation(speaker);
+                if (activeBotConv && !activeBotConv->isNpc && !explicitBotMention && !selectedIsNpc &&
+                    (!selected.IsPlayer() || selected.GetRawValue() == activeBotConv->partnerGuid))
+                {
+                    Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(activeBotConv->partnerGuid));
+                    if (bot && bot->IsInWorld() && bot->IsAlive() && Script_IsAIControlled(bot) &&
+                        bot->GetMapId() == speaker->GetMapId() &&
+                        speaker->IsWithinDist(bot, m_config->sayDistance, false) &&
+                        (!m_config->disableRepliesInCombat || !bot->IsInCombat()))
+                    {
+                        ActorSnapshot actor = SnapshotBot(bot);
+                        if (QueueDialogue(actor, speakerSnapshot, ChatScope::Say, "",
+                                "bot-say-conversation-sequence", message, RequestPriority::Direct,
+                                false, allowAiFollowup, activeBotConv->turnCount))
+                        {
+                            RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
+                                activeBotConv->partnerGuid, activeBotConv->partnerName,
+                                false, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
+                            if (m_config->speakerCooldownSeconds)
+                                m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
+                                    now + std::chrono::seconds(m_config->speakerCooldownSeconds);
+                            return;
+                        }
+                    }
+                }
+
+                if (selected.IsPlayer())
+                {
+                    Player* selectedBot = ObjectAccessor::FindPlayer(selected);
+                    if (selectedBot && selectedBot->IsInWorld() && selectedBot->IsAlive() &&
+                        Script_IsAIControlled(selectedBot) && selectedBot->GetMapId() == speaker->GetMapId() &&
+                        speaker->IsWithinDist(selectedBot, m_config->sayDistance, false) &&
+                        (!m_config->disableRepliesInCombat || !selectedBot->IsInCombat()))
+                    {
+                        ActorSnapshot actor = SnapshotBot(selectedBot);
+                        if (QueueDialogue(actor, speakerSnapshot, ChatScope::Say, "",
+                                "targeted-bot-selected", message, RequestPriority::Direct,
+                                false, allowAiFollowup))
+                        {
+                            RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
+                                selectedBot->GetObjectGuid().GetRawValue(), selectedBot->GetName(),
+                                false, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
+                            if (m_config->speakerCooldownSeconds)
+                                m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
+                                    now + std::chrono::seconds(m_config->speakerCooldownSeconds);
+                            return;
+                        }
+                    }
+                }
             }
         }
         std::vector<Candidate> candidates = CollectCandidates(
@@ -2778,10 +2889,31 @@ namespace AzerothVoices
                     }), candidates.end());
             }
         }
+        if ((scope == ChatScope::Party || scope == ChatScope::Raid) && speaker->GetGroup())
+        {
+            auto last = m_partyLastSpeaker.find(speaker->GetGroup()->GetId());
+            if (last != m_partyLastSpeaker.end() &&
+                now - last->second.second < std::chrono::seconds(m_config->proximityReplyWindowSeconds))
+            {
+                uint64_t const lastGuid = last->second.first;
+                if (candidates.size() > 1)
+                {
+                    for (auto& cand : candidates)
+                    {
+                        if (cand.actor.guid == lastGuid && !IsExplicitPlayerBotNameMention(message, cand.actor.name))
+                        {
+                            cand.score -= static_cast<int>(m_config->partySpeakerRotationPenalty);
+                        }
+                    }
+                    std::sort(candidates.begin(), candidates.end(), [](Candidate const& left, Candidate const& right) {
+                        return left.score > right.score;
+                    });
+                }
+            }
+        }
         if (candidates.empty())
             return;
-        if (scope == ChatScope::Whisper)
-            RecordSurroundingChat(scope, channelName, candidates.front().actor, speakerSnapshot, message);
+        RecordSurroundingChat(scope, channelName, candidates.front().actor, speakerSnapshot, message);
 
         bool accepted = false;
         uint64_t acceptedActorGuid = 0;
@@ -2831,6 +2963,11 @@ namespace AzerothVoices
         if (accepted && scope != ChatScope::Whisper && m_config->speakerCooldownSeconds)
             m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
                 now + std::chrono::seconds(m_config->speakerCooldownSeconds);
+        if (accepted && (scope == ChatScope::Party || scope == ChatScope::Raid) && speaker->GetGroup())
+        {
+            m_partyLastSpeaker[speaker->GetGroup()->GetId()] =
+                std::make_pair(acceptedActorGuid, now);
+        }
         if (accepted && guildScope && m_config->guildChatterEnabled)
         {
             if (acceptedActorGuid && speaker->GetGuildId())
@@ -3467,8 +3604,10 @@ namespace AzerothVoices
                 ? "Trait replacement is running; tone and background are being regenerated."
                 : mode == PersonalityGenerationMode::BackgroundOnly
                     ? "Background regeneration is running."
-                    : forced ? "GM-requested personality replacement is running."
-                             : "On-demand personality generation is running.");
+                    : mode == PersonalityGenerationMode::ToneOnly
+                        ? "Tone regeneration is running."
+                        : forced ? "GM-requested personality replacement is running."
+                                 : "On-demand personality generation is running.");
         return true;
     }
 
@@ -3543,8 +3682,9 @@ namespace AzerothVoices
             fail(error);
             return;
         }
-        personality.createdUnix = UnixNow();
-        personality.updatedUnix = personality.createdUnix;
+        personality.createdUnix = completion.request.personalityFixed.createdUnix
+            ? completion.request.personalityFixed.createdUnix : UnixNow();
+        personality.updatedUnix = UnixNow();
         m_personalityRetryAfter.erase(guid);
         m_databaseLoadedPersonalityGuids.insert(guid);
         CachePersonality(personality);
@@ -4107,7 +4247,7 @@ namespace AzerothVoices
                         ObjectGuid(request.actor.anchorPlayerGuid));
                     actorCreature = lookupAnchor && lookupAnchor->IsInWorld() &&
                         lookupAnchor->GetMapId() == request.actor.mapId
-                            ? ObjectAccessor::GetCreature(*lookupAnchor,
+                            ? GetCreatureFromAnchor(*lookupAnchor,
                                 ObjectGuid(request.actor.guid)) : nullptr;
                     anchor = FindNearbyRealPlayer(actorCreature, observerDistance);
                 }
@@ -4119,7 +4259,7 @@ namespace AzerothVoices
         if (!actor && request.actor.kind == ActorKind::Creature && !actorCreature &&
             anchor->GetMapId() == request.actor.mapId)
         {
-            actorCreature = ObjectAccessor::GetCreature(*anchor,
+            actorCreature = GetCreatureFromAnchor(*anchor,
                 ObjectGuid(request.actor.guid));
         }
         WorldObject* previousActor = actor
@@ -4145,7 +4285,7 @@ namespace AzerothVoices
                     if (candidate.actor.kind == ActorKind::PlayerBot)
                         nextActor = ObjectAccessor::FindPlayer(ObjectGuid(candidate.actor.guid));
                     else
-                        nextActor = ObjectAccessor::GetCreature(*anchor,
+                        nextActor = GetCreatureFromAnchor(*anchor,
                             ObjectGuid(candidate.actor.guid));
                     return !nextActor || !nextActor->IsInWorld() ||
                         nextActor->GetMapId() != anchor->GetMapId() ||
@@ -4280,7 +4420,8 @@ namespace AzerothVoices
 
             uint64_t cumulativeDelay = m_config->typingSimulationEnabled
                 ? m_config->typingBaseDelayMilliseconds : 0;
-            if (completion.request.trigger == "targeted-npc-observer")
+            if (completion.request.trigger == "targeted-npc-observer" ||
+                completion.request.trigger == "npc-reply-observer")
                 cumulativeDelay += 2000;
             if (completion.request.guildInitialDelaySeconds > 0)
                 cumulativeDelay += static_cast<uint64_t>(completion.request.guildInitialDelaySeconds) * 1000;
@@ -4493,6 +4634,38 @@ namespace AzerothVoices
                     (it->request.scope == ChatScope::Party || it->request.scope == ChatScope::Raid) &&
                     it->request.actor.kind == ActorKind::PlayerBot && !it->request.speaker.isBot)
                     MaybeQueueGroupPlayerFollowup(it->request, it->text);
+                if (it->request.scope == ChatScope::Say)
+                {
+                    uint64_t playerGuid = 0;
+                    if (it->request.speaker.guid && !it->request.speaker.isBot)
+                        playerGuid = it->request.speaker.guid;
+                    else if (it->request.actor.anchorPlayerGuid)
+                        playerGuid = it->request.actor.anchorPlayerGuid;
+
+                    if (playerGuid)
+                    {
+                        RecordSayConversationTurn(playerGuid, it->request.actor.guid, it->request.actor.name,
+                                                  it->request.actor.kind == ActorKind::Creature,
+                                                  it->request.actor.mapId, it->request.actor.instanceId,
+                                                  it->request.incomingMessage, it->text);
+
+                        if (it->request.actor.kind == ActorKind::Creature)
+                        {
+                            Player* realPlayer = ObjectAccessor::FindPlayer(ObjectGuid(playerGuid));
+                            if (IsOnlineRealPlayer(realPlayer))
+                            {
+                                MaybeQueueNpcReplyObserverComment(realPlayer, it->request.actor,
+                                    it->request.incomingMessage, it->text);
+                            }
+                        }
+                    }
+                }
+                if (it->request.scope == ChatScope::Party || it->request.scope == ChatScope::Raid)
+                {
+                    if (it->request.speaker.groupId)
+                        m_partyLastSpeaker[it->request.speaker.groupId] =
+                            std::make_pair(it->request.actor.guid, Clock::now());
+                }
                 if (it->request.actor.kind == ActorKind::PlayerBot && it->request.speaker.guid &&
                     !it->request.speaker.isBot)
                 {
@@ -4541,7 +4714,7 @@ namespace AzerothVoices
                     if (lookupAnchor && lookupAnchor->IsInWorld() &&
                         lookupAnchor->GetMapId() == request.actor.mapId)
                     {
-                        currentActor = ObjectAccessor::GetCreature(*lookupAnchor,
+                        currentActor = GetCreatureFromAnchor(*lookupAnchor,
                             ObjectGuid(request.actor.guid));
                     }
                 }
@@ -4550,7 +4723,7 @@ namespace AzerothVoices
                 if (previousGuid.IsPlayer())
                     previousActor = ObjectAccessor::FindPlayer(previousGuid);
                 else if (previousGuid.IsCreature() && currentActor)
-                    previousActor = ObjectAccessor::GetCreature(*currentActor, previousGuid);
+                    previousActor = GetCreatureFromAnchor(*currentActor, previousGuid);
 
                 if (!currentActor || !previousActor || !currentActor->IsInWorld() ||
                     !previousActor->IsInWorld() ||
@@ -4608,7 +4781,7 @@ namespace AzerothVoices
                     Player* receiver = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
                     if (!IsOnlineRealPlayer(receiver))
                         return false;
-                    bot->Whisper(line.text, LANG_UNIVERSAL, receiver->GetObjectGuid());
+                    BotWhisperPlayer(bot, receiver, line.text);
                     return true;
                 }
                 case ChatScope::Party:
@@ -4661,7 +4834,7 @@ namespace AzerothVoices
         Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.anchorPlayerGuid));
         if (!anchor || !anchor->IsInWorld() || anchor->GetMapId() != request.actor.mapId)
             return false;
-        Creature* creature = ObjectAccessor::GetCreature(*anchor, ObjectGuid(request.actor.guid));
+        Creature* creature = GetCreatureFromAnchor(*anchor, ObjectGuid(request.actor.guid));
         if (!creature || creature->GetName() != request.actor.name)
             return false;
 
@@ -4733,7 +4906,7 @@ namespace AzerothVoices
         {
             anchor = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.anchorPlayerGuid));
             if (anchor && anchor->IsInWorld())
-                center = ObjectAccessor::GetCreature(*anchor, ObjectGuid(request.actor.guid));
+                center = GetCreatureFromAnchor(*anchor, ObjectGuid(request.actor.guid));
         }
 
         std::ostringstream context;
@@ -4937,7 +5110,7 @@ namespace AzerothVoices
             uint32_t count = 0;
             for (uint8_t slot = 0; slot < MAX_QUEST_LOG_SIZE && count < m_config->snapshotMaximumQuests; ++slot)
             {
-                uint32_t const questId = bot->GetQuestSlotQuestId(slot);
+                uint32_t const questId = GetPlayerQuestSlotQuestId(bot, slot);
                 if (!questId)
                     continue;
                 Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
@@ -4965,7 +5138,7 @@ namespace AzerothVoices
                 for (Creature* creature : creatures)
                 {
                     if (!creature || !creature->IsInWorld() || creature->IsPet() || creature->IsTotem() ||
-                        creature->IsCritter() || !bot->IsWithinLOSInMap(creature))
+                        IsCreatureCritter(creature) || !bot->IsWithinLOSInMap(creature))
                         continue;
                     std::ostringstream line;
                     line << creature->GetName() << ", level " << creature->GetLevel() << ", "
@@ -4997,7 +5170,7 @@ namespace AzerothVoices
                 std::vector<std::pair<float, std::string>> visible;
                 for (GameObject* object : gameObjects)
                 {
-                    if (!object || !object->IsInWorld() || !object->IsSpawned() || !object->GetGOInfo() ||
+                    if (!object || !object->IsInWorld() || !IsGameObjectSpawned(object) || !object->GetGOInfo() ||
                         object->GetGOInfo()->name.empty() || !bot->IsWithinLOSInMap(object))
                         continue;
                     visible.emplace_back(bot->GetDistance(object), object->GetGOInfo()->name +
@@ -5791,23 +5964,54 @@ namespace AzerothVoices
             message = "A player and bot GUID are required.";
             return false;
         }
+
+        // 1. Check if bot is online in world
+        if (Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(botGuid)))
+        {
+            if (Script_IsAIControlled(bot))
+            {
+                botName = bot->GetName();
+                return true;
+            }
+        }
+
+        // 2. Check if player has group with this bot
+        if (Player* player = ObjectAccessor::FindPlayer(ObjectGuid(playerGuid)))
+        {
+            if (Group* group = player->GetGroup())
+            {
+                for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                {
+                    Player* member = ref->getSource();
+                    if (member && member->GetObjectGuid().GetRawValue() == botGuid)
+                    {
+                        botName = member->GetName();
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 3. Check persistent contacts DB
         if (!m_addonDatabaseAvailable)
         {
             message = "Addon contact storage is unavailable on this realm.";
             return false;
         }
 
-        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+        QueryResult* result = CharacterDatabase.PQuery(
             "SELECT `bot_name` FROM `azeroth_voices_addon_contacts` "
             "WHERE `player_guid`='%llu' AND `bot_guid`='%llu' LIMIT 1",
             static_cast<unsigned long long>(playerGuid),
-            static_cast<unsigned long long>(botGuid)));
+            static_cast<unsigned long long>(botGuid));
         if (!result)
         {
             message = "That bot is not in your known roster. Use Refresh after meeting it in game.";
             return false;
         }
         botName = result->Fetch()[0].GetCppString();
+        delete result;
+
         if (botName.empty())
             botName = "PlayerBot " + std::to_string(botGuid);
         return true;
@@ -5912,25 +6116,56 @@ namespace AzerothVoices
         {
             case Addon::CommandKind::Roster:
             {
-                // A missing contact table degrades to an empty roster; dialogue
-                // and every other subsystem keep working.
-                logicalPayloads.push_back(Addon::LogicalRosterBegin());
+                // Collect contacts from active party bots and persistent DB
+                std::unordered_map<uint64_t, std::string> contacts;
+                std::vector<std::pair<uint64_t, std::string>> ordered;
+
+                // 1. Inspect active group members
+                if (Group* group = player->GetGroup())
+                {
+                    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                    {
+                        Player* member = ref->getSource();
+                        if (member && member != player && Script_IsAIControlled(member))
+                        {
+                            uint64_t const bGuid = member->GetObjectGuid().GetRawValue();
+                            std::string const bName = member->GetName();
+                            contacts[bGuid] = bName;
+                            ordered.push_back({ bGuid, bName });
+                            RecordAddonContact(playerGuid, bGuid, bName);
+                        }
+                    }
+                }
+
+                // 2. Query persistent contacts
                 if (m_addonDatabaseAvailable)
                 {
-                    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+                    QueryResult* result = CharacterDatabase.PQuery(
                         "SELECT `bot_guid`,`bot_name` FROM `azeroth_voices_addon_contacts` "
                         "WHERE `player_guid`='%llu' ORDER BY `bot_name` LIMIT %u",
                         static_cast<unsigned long long>(playerGuid),
-                        m_config->addonMaximumRosterEntries));
+                        m_config->addonMaximumRosterEntries);
                     if (result)
                     {
                         do
                         {
                             Field* fields = result->Fetch();
-                            logicalPayloads.push_back(Addon::LogicalRosterEntry(
-                                fields[0].GetUInt64(), fields[1].GetCppString()));
+                            uint64_t const bGuid = fields[0].GetUInt64();
+                            std::string const bName = fields[1].GetCppString();
+                            if (contacts.find(bGuid) == contacts.end())
+                            {
+                                contacts[bGuid] = bName;
+                                ordered.push_back({ bGuid, bName });
+                            }
                         } while (result->NextRow());
+                        delete result;
                     }
+                }
+
+                logicalPayloads.push_back(Addon::LogicalRosterBegin());
+                for (auto const& pair : ordered)
+                {
+                    logicalPayloads.push_back(Addon::LogicalRosterEntry(pair.first, pair.second));
                 }
                 logicalPayloads.push_back(Addon::LogicalRosterEnd());
                 return true;
@@ -5996,22 +6231,19 @@ namespace AzerothVoices
                 replacement.createdUnix = hadStored && stored.createdUnix
                     ? stored.createdUnix : UnixNow();
                 replacement.updatedUnix = UnixNow();
+                if (hadStored)
+                {
+                    replacement.tone = stored.tone;
+                    replacement.background = stored.background;
+                }
                 CachePersonality(replacement);
                 PersistPersonality(replacement);
                 CancelPersonalityGeneration(command.guid);
 
-                ActorSnapshot actor;
-                actor.kind = ActorKind::PlayerBot;
-                actor.guid = command.guid;
-                actor.name = botName;
-                if (!QueuePersonalityGeneration(actor, true,
-                        PersonalityGenerationMode::ReplaceTraits, replacement))
-                {
-                    logicalPayloads.push_back(Addon::LogicalError(channel,
-                        "The traits were saved, but tone and background regeneration could not be queued."));
-                }
                 logicalPayloads.push_back(Addon::LogicalUpdated(command.guid, botName, true));
-                logicalPayloads.push_back(Addon::LogicalProfile(command.guid, botName, command.traits, ""));
+                logicalPayloads.push_back(Addon::LogicalProfile(command.guid, botName,
+                    command.traits, replacement.tone));
+                logicalPayloads.push_back(Addon::LogicalBackstory(command.guid, replacement.background));
                 return true;
             }
 
@@ -6057,6 +6289,51 @@ namespace AzerothVoices
                     return false;
                 }
                 logicalPayloads.push_back(Addon::LogicalBackstoryRegen(command.guid, botName));
+                return true;
+            }
+
+            case Addon::CommandKind::RegenTone:
+            {
+                if (!m_config->personalityGenerateTone)
+                {
+                    logicalPayloads.push_back(Addon::LogicalError(channel,
+                        "Tone generation is disabled on this server."));
+                    return false;
+                }
+                std::string botName;
+                std::string message;
+                if (!ResolveAddonContact(playerGuid, command.guid, botName, message))
+                {
+                    logicalPayloads.push_back(Addon::LogicalError(channel, message));
+                    return false;
+                }
+                BotPersonality stored;
+                if (!LoadPersonalityForGuid(command.guid, botName, stored, false) ||
+                    stored.traits.size() != PersonalityTraitCount)
+                {
+                    logicalPayloads.push_back(Addon::LogicalError(channel,
+                        "No stored personality is available for this bot yet."));
+                    return false;
+                }
+
+                stored.tone.clear();
+                stored.updatedUnix = UnixNow();
+                CachePersonality(stored);
+                PersistPersonality(stored);
+                CancelPersonalityGeneration(command.guid);
+
+                ActorSnapshot actor;
+                actor.kind = ActorKind::PlayerBot;
+                actor.guid = command.guid;
+                actor.name = botName;
+                if (!QueuePersonalityGeneration(actor, true,
+                        PersonalityGenerationMode::ToneOnly, stored))
+                {
+                    logicalPayloads.push_back(Addon::LogicalError(channel,
+                        "Tone regeneration could not be queued; try again shortly."));
+                    return false;
+                }
+                logicalPayloads.push_back(Addon::LogicalToneRegen(command.guid, botName));
                 return true;
             }
 
@@ -6126,7 +6403,7 @@ namespace AzerothVoices
             player->SendAddonMessage(Addon::NativePrefix, frame);
     }
 
-    void Manager::OnPlayerLogout(Player* player)
+    void Manager::HandlePlayerLogout(Player* player)
     {
         if (player)
         {
@@ -6902,7 +7179,7 @@ namespace AzerothVoices
             // Quest log diff: accept / objective progress / completion.
             QuestLogSnapshot snapshot;
             snapshot.known = true;
-            QuestStatusMap& quests = bot->GetQuestStatusMap();
+            QuestStatusMap& quests = bot->getQuestStatusMap();
             for (auto const& entry : quests)
             {
                 if (entry.second.m_status == QUEST_STATUS_INCOMPLETE)
@@ -7104,7 +7381,7 @@ namespace AzerothVoices
                     std::vector<GameObject*> visible;
                     for (GameObject* object : objects)
                     {
-                        if (!object || !object->IsInWorld() || !object->IsSpawned() ||
+                        if (!object || !object->IsInWorld() || !IsGameObjectSpawned(object) ||
                             !object->GetGOInfo() || object->GetGOInfo()->name.empty() ||
                             !player->IsWithinLOSInMap(object))
                             continue;
@@ -8063,7 +8340,7 @@ namespace AzerothVoices
         std::vector<Creature*> candidates;
         for (uint64_t guid : scene.speakers)
         {
-            Creature* creature = ObjectAccessor::GetCreature(*anchor, ObjectGuid(guid));
+            Creature* creature = GetCreatureFromAnchor(*anchor, ObjectGuid(guid));
             if (!creature || creature->GetObjectGuid().GetRawValue() == request.actor.guid)
                 continue;
             if (creature->IsInCombat() || !creature->IsWithinDist(anchor, m_config->sayDistance, false))
@@ -8115,6 +8392,82 @@ namespace AzerothVoices
             it = it->second.expires <= now ? m_proximityScenes.erase(it) : std::next(it);
         for (auto it = m_proximitySpeakerCooldowns.begin(); it != m_proximitySpeakerCooldowns.end(); )
             it = it->second <= now ? m_proximitySpeakerCooldowns.erase(it) : std::next(it);
+        for (auto it = m_activeSayConversations.begin(); it != m_activeSayConversations.end(); )
+            it = it->second.expires <= now ? m_activeSayConversations.erase(it) : std::next(it);
+        for (auto it = m_partyLastSpeaker.begin(); it != m_partyLastSpeaker.end(); )
+            it = now - it->second.second > std::chrono::minutes(5) ? m_partyLastSpeaker.erase(it) : std::next(it);
+    }
+
+    void Manager::RecordSayConversationTurn(uint64_t playerGuid, uint64_t partnerGuid,
+                                           std::string const& partnerName, bool isNpc,
+                                           uint32_t mapId, uint32_t instanceId,
+                                           std::string const& playerMessage,
+                                           std::string const& reply)
+    {
+        if (!m_config || !playerGuid || !partnerGuid)
+            return;
+
+        auto const now = Clock::now();
+        auto& conv = m_activeSayConversations[playerGuid];
+        if (conv.playerGuid != playerGuid || conv.partnerGuid != partnerGuid || conv.expires < now)
+        {
+            conv.playerGuid = playerGuid;
+            conv.partnerGuid = partnerGuid;
+            conv.partnerName = partnerName;
+            conv.isNpc = isNpc;
+            conv.mapId = mapId;
+            conv.instanceId = instanceId;
+            conv.turnCount = 1;
+        }
+        else
+        {
+            ++conv.turnCount;
+        }
+
+        if (!playerMessage.empty())
+            conv.lastPlayerMessage = playerMessage;
+        if (!reply.empty())
+            conv.lastReply = reply;
+        conv.lastActivity = now;
+
+        uint32_t const windowSeconds = m_config->sayConversationReplyWindowSeconds > 0
+            ? m_config->sayConversationReplyWindowSeconds : m_config->proximityReplyWindowSeconds;
+        conv.expires = now + std::chrono::seconds(windowSeconds);
+    }
+
+    Manager::ActiveSayConversation* Manager::FindActiveSayConversation(Player* player)
+    {
+        if (!player || !m_config)
+            return nullptr;
+
+        uint64_t const playerGuid = player->GetObjectGuid().GetRawValue();
+        auto it = m_activeSayConversations.find(playerGuid);
+        if (it == m_activeSayConversations.end())
+            return nullptr;
+
+        auto const now = Clock::now();
+        if (it->second.expires < now)
+        {
+            m_activeSayConversations.erase(it);
+            return nullptr;
+        }
+
+        uint32_t const maxTurns = m_config->sayConversationMaxTurns > 0
+            ? m_config->sayConversationMaxTurns : m_config->proximityMaximumReplyTurns;
+        if (it->second.turnCount >= maxTurns)
+        {
+            m_activeSayConversations.erase(it);
+            return nullptr;
+        }
+
+        if (it->second.mapId != player->GetMapId() ||
+            it->second.instanceId != CurrentInstanceId(player))
+        {
+            m_activeSayConversations.erase(it);
+            return nullptr;
+        }
+
+        return &it->second;
     }
 
     void Manager::RunBossDialogue()
@@ -8279,7 +8632,7 @@ namespace AzerothVoices
             BossPresence& presence = entry.second;
             if (presence.mapId != mapId || presence.instanceId != instanceId)
                 continue;
-            Creature* boss = ObjectAccessor::GetCreature(*speaker, ObjectGuid(presence.bossGuid));
+            Creature* boss = GetCreatureFromAnchor(*speaker, ObjectGuid(presence.bossGuid));
             if (!boss || !boss->IsAlive() || boss->IsInCombat())
                 continue;
             if (NpcPlayableFactionReaction(boss) >= REP_NEUTRAL)
@@ -8312,7 +8665,8 @@ namespace AzerothVoices
 
     bool Manager::ProcessPlayerSay(Player* speaker, std::string const& message,
                                    std::string const& /*targetName*/,
-                                   std::string const& /*channelName*/)
+                                   std::string const& /*channelName*/,
+                                   Creature** outHandledNpc)
     {
         if (!m_started || !m_config || !speaker || !m_config->npcReplies)
             return false;
@@ -8358,14 +8712,21 @@ namespace AzerothVoices
                 match.kind == NameMatchKind::FullName ? "named-full" : "named-first");
             if (QueueDialogue(actor, SnapshotSpeaker(speaker), ChatScope::Say, "",
                     "targeted-npc-named", message, RequestPriority::Direct, false, false))
+            {
+                RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
+                    chosen->GetObjectGuid().GetRawValue(), chosen->GetName(),
+                    true, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
+                if (outHandledNpc)
+                    *outHandledNpc = chosen;
                 return true;
+            }
         }
 
         // 2. The explicitly selected target.
         ObjectGuid const selected = speaker->GetSelectionGuid();
         if (selected.IsCreature())
         {
-            Creature* selectedNpc = ObjectAccessor::GetCreature(*speaker, selected);
+            Creature* selectedNpc = GetCreatureFromAnchor(*speaker, selected);
             if (selectedNpc && selectedNpc->IsInWorld() && selectedNpc->IsAlive() &&
                 selectedNpc->IsWithinLOSInMap(speaker) &&
                 EvaluateNpcSpeaker(selectedNpc, m_config->sayDistance, *m_config) ==
@@ -8376,11 +8737,58 @@ namespace AzerothVoices
                 ActorSnapshot actor = SnapshotCreature(selectedNpc, speaker, disposition, "selected");
                 if (QueueDialogue(actor, SnapshotSpeaker(speaker), ChatScope::Say, "",
                         "targeted-npc-selected", message, RequestPriority::Direct, false, false))
+                {
+                    RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
+                        selectedNpc->GetObjectGuid().GetRawValue(), selectedNpc->GetName(),
+                        true, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
+                    if (outHandledNpc)
+                        *outHandledNpc = selectedNpc;
                     return true;
+                }
             }
         }
 
-        // 3. The last active scene participant, if the scene is still open.
+        // 3. Active multi-turn proximity conversation sequence with an NPC.
+        //    If the player already spoke to an NPC and speaks again in /say without naming
+        //    or selecting another actor, the same NPC responds with high priority.
+        if (!selected.IsPlayer())
+        {
+            ActiveSayConversation* activeConv = FindActiveSayConversation(speaker);
+            if (activeConv)
+            {
+                if (activeConv->isNpc)
+                {
+                    Creature* partner = GetCreatureFromAnchor(*speaker, ObjectGuid(activeConv->partnerGuid));
+                    if (partner && partner->IsInWorld() && partner->IsAlive() &&
+                        partner->IsWithinDist(speaker, m_config->sayDistance, false) &&
+                        partner->IsWithinLOSInMap(speaker) &&
+                        (!m_config->disableRepliesInCombat || !partner->IsInCombat()) &&
+                        EvaluateNpcSpeaker(partner, m_config->sayDistance, *m_config) == NpcEligibilityResult::Eligible)
+                    {
+                        NpcDisposition const disposition = ClassifyNpcDisposition(partner, speaker);
+                        ActorSnapshot actor = SnapshotCreature(partner, speaker, disposition, "conversation-sequence");
+                        if (QueueDialogue(actor, SnapshotSpeaker(speaker), ChatScope::Say, "",
+                                "targeted-npc-conversation-sequence", message, RequestPriority::Direct,
+                                false, false, activeConv->turnCount))
+                        {
+                            RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
+                                activeConv->partnerGuid, activeConv->partnerName,
+                                true, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
+                            if (outHandledNpc)
+                                *outHandledNpc = partner;
+                            return true;
+                        }
+                    }
+                }
+                else
+                {
+                    // Active conversation is with a PlayerBot; yield to ProcessChat bot routing
+                    return false;
+                }
+            }
+        }
+
+        // 4. The last active scene participant, if the scene is still open.
         auto const now = Clock::now();
         for (auto& entry : m_proximityScenes)
         {
@@ -8391,7 +8799,7 @@ namespace AzerothVoices
                 continue;
             for (uint64_t guid : scene.speakers)
             {
-                Creature* participant = ObjectAccessor::GetCreature(*speaker, ObjectGuid(guid));
+                Creature* participant = GetCreatureFromAnchor(*speaker, ObjectGuid(guid));
                 if (!participant || !participant->IsAlive() || participant->IsInCombat() ||
                     !participant->IsWithinDist(speaker, m_config->sayDistance, false) ||
                     !participant->IsWithinLOSInMap(speaker) ||
@@ -8402,13 +8810,50 @@ namespace AzerothVoices
                     "scene-participant");
                 if (QueueDialogue(actor, SnapshotSpeaker(speaker), ChatScope::Say, "",
                         "targeted-npc-scene", message, RequestPriority::Direct, false, false))
+                {
+                    if (outHandledNpc)
+                        *outHandledNpc = participant;
                     return true;
+                }
             }
             break;
         }
 
-        // 4. Otherwise open a fresh proximity scene around the speaker.
+        // 5. Otherwise open a fresh proximity scene around the speaker.
         return QueueProximityScene(speaker, true);
+    }
+
+    Creature* Manager::FindMentionedNpc(Player* speaker, std::string const& message)
+    {
+        if (!speaker || !speaker->IsInWorld() || message.empty() || !m_config)
+            return nullptr;
+
+        float const distance = m_config->npcDistance;
+        MaNGOS::AllCreaturesInRange check(speaker, distance);
+        std::list<Creature*> creatures;
+        MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesInRange> searcher(creatures, check);
+        Cell::VisitGridObjects(speaker, searcher, distance);
+
+        std::vector<Creature*> candidates;
+        std::vector<std::string> names;
+        for (Creature* creature : creatures)
+        {
+            if (!creature || !creature->IsInWorld() || !creature->IsAlive() || !creature->GetCreatureInfo())
+                continue;
+            if (!creature->IsWithinLOSInMap(speaker))
+                continue;
+            candidates.push_back(creature);
+            names.push_back(creature->GetName());
+        }
+
+        if (candidates.empty())
+            return nullptr;
+
+        NpcNameMatch const match = SelectNamedNpc(names, message);
+        if (match.found && match.index < candidates.size())
+            return candidates[match.index];
+
+        return nullptr;
     }
 
     void Manager::MaybeQueueTargetedNpcObserverComment(Player* speaker, Creature* targetedNpc,
@@ -8424,6 +8869,15 @@ namespace AzerothVoices
         if (!Roll(m_config->targetedNpcBotCommentChance))
             return;
 
+        auto const now = Clock::now();
+        uint64_t const npcGuid = targetedNpc->GetObjectGuid().GetRawValue();
+
+        // Check if an observer comment already occurred recently for this NPC interaction
+        auto lastComment = m_npcLastInteractionCommentTime.find(npcGuid);
+        if (lastComment != m_npcLastInteractionCommentTime.end() &&
+            now - lastComment->second < std::chrono::seconds(m_config->npcReplyObserverCooldownSeconds))
+            return;
+
         std::vector<Player*> onlinePlayers;
         {
             HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
@@ -8434,7 +8888,6 @@ namespace AzerothVoices
 
         std::vector<ObserverCandidate> eligibleBots;
         std::unordered_map<uint64_t, Player*> botMap;
-        auto const now = Clock::now();
         float const sayDist = m_config->sayDistance;
 
         for (Player* bot : onlinePlayers)
@@ -8465,6 +8918,11 @@ namespace AzerothVoices
             if (cd != m_actorCooldowns.end() && cd->second > now)
                 continue;
 
+            // Respect observer cooldown
+            auto observerCd = m_npcReplyObserverCooldowns.find(botGuid);
+            if (observerCd != m_npcReplyObserverCooldowns.end() && observerCd->second > now)
+                continue;
+
             // Standard real player audience check
             if (!HasNearbyRealPlayer(bot, sayDist))
                 continue;
@@ -8484,11 +8942,16 @@ namespace AzerothVoices
             ClassifyNpcDisposition(targetedNpc, speaker), "targeted-npc");
         SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(speaker);
 
+        m_npcLastInteractionCommentTime[npcGuid] = now;
+
         for (ObserverCandidate const& candidate : chosen)
         {
             Player* bot = botMap[candidate.guid];
             if (!bot)
                 continue;
+
+            m_npcReplyObserverCooldowns[candidate.guid] =
+                now + std::chrono::seconds(m_config->npcReplyObserverCooldownSeconds);
 
             ActorSnapshot botActor = SnapshotBot(bot);
             QueueDialogue(botActor, speakerSnapshot, ChatScope::Say, channelName,
@@ -8500,6 +8963,113 @@ namespace AzerothVoices
                 sLog.outDebug("[AzerothVoices] Queued targeted-npc-observer comment for bot %s overhearing %s speaking to %s",
                     botActor.name.c_str(), speaker->GetName(), npcSnapshot.name.c_str());
             }
+        }
+    }
+
+    void Manager::MaybeQueueNpcReplyObserverComment(Player* originalPlayer,
+                                                   ActorSnapshot const& npcActor,
+                                                   std::string const& playerMessage,
+                                                   std::string const& npcReply)
+    {
+        if (!m_started || !m_config || !m_config->enabled || m_paused || !originalPlayer)
+            return;
+        if (!m_config->npcReplyObserverEnabled)
+            return;
+
+        // Roll once for whether a bot reacts to the NPC's reply
+        if (!Roll(m_config->npcReplyObserverChance))
+            return;
+
+        auto const now = Clock::now();
+        uint64_t const npcGuid = npcActor.guid;
+
+        // Check if an interaction comment already occurred recently for this NPC interaction
+        auto lastComment = m_npcLastInteractionCommentTime.find(npcGuid);
+        if (lastComment != m_npcLastInteractionCommentTime.end() &&
+            now - lastComment->second < std::chrono::seconds(m_config->npcReplyObserverCooldownSeconds))
+            return;
+
+        std::vector<Player*> onlinePlayers;
+        {
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+                if (entry.second)
+                    onlinePlayers.push_back(entry.second);
+        }
+
+        std::vector<ObserverCandidate> eligibleBots;
+        std::unordered_map<uint64_t, Player*> botMap;
+        float const sayDist = m_config->sayDistance;
+
+        for (Player* bot : onlinePlayers)
+        {
+            if (!bot || bot == originalPlayer || !bot->IsInWorld() || !bot->IsAlive() ||
+                !Script_IsAIControlled(bot))
+                continue;
+
+            uint64_t const botGuid = bot->GetObjectGuid().GetRawValue();
+
+            if (bot->GetMapId() != originalPlayer->GetMapId() ||
+                CurrentInstanceId(bot) != CurrentInstanceId(originalPlayer))
+                continue;
+
+            if (m_config->disableRepliesInCombat && bot->IsInCombat())
+                continue;
+
+            // Must be within say range of original player
+            if (!bot->IsWithinDist(originalPlayer, sayDist, false))
+                continue;
+
+            // Line of sight to original player
+            if (!bot->IsWithinLOSInMap(originalPlayer))
+                continue;
+
+            // Respect actor cooldown
+            auto cd = m_actorCooldowns.find(botGuid);
+            if (cd != m_actorCooldowns.end() && cd->second > now)
+                continue;
+
+            // Respect observer cooldown
+            auto observerCd = m_npcReplyObserverCooldowns.find(botGuid);
+            if (observerCd != m_npcReplyObserverCooldowns.end() && observerCd->second > now)
+                continue;
+
+            // Standard real player audience check
+            if (!HasNearbyRealPlayer(bot, sayDist))
+                continue;
+
+            float const dist = bot->GetDistance(originalPlayer);
+            eligibleBots.push_back({ botGuid, bot->GetName(), dist });
+            botMap[botGuid] = bot;
+        }
+
+        if (eligibleBots.empty())
+            return;
+
+        // Pick one observer candidate to react to the NPC's response
+        std::vector<ObserverCandidate> chosen = SelectObserverCandidates(eligibleBots, 1);
+        if (chosen.empty())
+            return;
+
+        Player* bot = botMap[chosen.front().guid];
+        if (!bot)
+            return;
+
+        m_npcLastInteractionCommentTime[npcGuid] = now;
+        m_npcReplyObserverCooldowns[chosen.front().guid] =
+            now + std::chrono::seconds(m_config->npcReplyObserverCooldownSeconds);
+
+        ActorSnapshot botActor = SnapshotBot(bot);
+        SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(originalPlayer);
+
+        QueueDialogue(botActor, speakerSnapshot, ChatScope::Say, "",
+            "npc-reply-observer", npcReply, RequestPriority::Nearby,
+            false, false, 0, nullptr, nullptr, false, nullptr, &npcActor, playerMessage);
+
+        if (m_config->debug)
+        {
+            sLog.outDebug("[AzerothVoices] Queued npc-reply-observer comment for bot %s reacting to NPC %s's reply to %s",
+                botActor.name.c_str(), npcActor.name.c_str(), originalPlayer->GetName());
         }
     }
 

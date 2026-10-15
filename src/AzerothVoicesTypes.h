@@ -52,11 +52,14 @@ namespace AzerothVoices
     //                background are generated (the stock Chatter addon save).
     // BackgroundOnly: traits and tone are kept and only the background story is
     //                 regenerated.
+    // ToneOnly: traits and background are kept and only the speaking tone is
+    //           regenerated.
     enum class PersonalityGenerationMode : uint8_t
     {
         Full,
         ReplaceTraits,
-        BackgroundOnly
+        BackgroundOnly,
+        ToneOnly
     };
 
     struct BotPersonality

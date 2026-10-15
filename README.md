@@ -113,7 +113,7 @@ source/build/SQL/startup/live-game evidence as separate validation levels.
 
 Source identity: this working copy of `mod-azeroth-voices`, staged into the checked-out `tortoise-wow-extended` tree (core revision `1f18041d565d7b4a19a4`) through a Windows directory junction at `modules/mod-azeroth-voices`. The bundled addon is `client/AzerothVoices`, a Turtle WoW 1.18.1 / Vanilla Interface 11200 native addon providing dual-transport communication (`.avaddon` / `AZEROTH_VOICES` addon messages alongside backward compatibility for legacy `.llmc` / `CHATTER_ADDON` systems). The curated boss registry was derived from that checkout's audited `modules/mod-dungeon-clear/.../DcBossEntries1121.h`, and the instance-lore map IDs come from that checkout's `sql/base/tw_world_map_template.sql`.
 
-Configure (Visual Studio 17 2022, x64, Release, static modules, PlayerBots and Turtle addons enabled):
+Configure and build (Visual Studio on Windows):
 
 ```powershell
 cmake -S <core> -B <build> -G "Visual Studio 17 2022" -A x64 `
@@ -124,6 +124,23 @@ cmake -S <core> -B <build> -G "Visual Studio 17 2022" -A x64 `
   -DACE_LIBRARIES=C:/vcpkg/installed/x64-windows/lib/ACE.lib `
   -DBOOST_ROOT=C:/vcpkg/installed/x64-windows
 cmake --build <build> --config Release --target mangosd --parallel
+```
+
+Configure and build (Linux / Ubuntu 22.04 & 24.04 LTS):
+
+```bash
+# Install dependencies
+sudo apt update && sudo apt install -y build-essential cmake git libace-dev libmysqlclient-dev libssl-dev libbz2-dev zlib1g-dev
+
+# Configure and compile
+cmake -S <core> -B <build> \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_PLAYERBOTS=ON \
+  -DMODULES=disabled \
+  -DMODULE_MOD_AZEROTH_VOICES=static \
+  -DBUILD_ELUNA=OFF \
+  -DALLOW_TURTLE_ADDONS=ON
+cmake --build <build> --target mangosd -j$(nproc)
 ```
 
 Results actually observed on this machine:
