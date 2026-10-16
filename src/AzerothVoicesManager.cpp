@@ -2114,7 +2114,7 @@ namespace AzerothVoices
         }
         request.systemPrompt += "\nThe reply will be sent through " +
             (channelName.empty() ? ScopeName(scope) : channelName) +
-            ". Keep it concise and return dialogue only. Treat the current message and current live environment "
+            ". Keep it concise, return dialogue only, and never prefix your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). Treat the current message and current live environment "
             "as authoritative. Older conversation, snapshot history, and retrieved lore are optional context: "
             "use only details directly relevant to the current reply, do not assume old state is still true, and "
             "do not invent facts to reconcile stale or conflicting context.";
@@ -4388,7 +4388,8 @@ namespace AzerothVoices
                 completion.request.sentimentDeltaAvailable = hasSentimentDelta;
                 completion.request.sentimentDelta = sentimentDelta;
             }
-            std::vector<std::string> lines = Provider::SplitReply(*m_config, completion.responseText);
+            std::vector<std::string> lines = Provider::SplitReply(*m_config, completion.responseText,
+                completion.request.actor.name);
             if (completion.request.bossLine && !lines.empty())
             {
                 // One yell per opportunity, and only if it satisfies the
@@ -4438,7 +4439,7 @@ namespace AzerothVoices
 
                 ScheduledLine line;
                 line.request = completion.request;
-                line.text = lines[i];
+                line.text = StripSpeakerPrefix(lines[i], completion.request.actor.name);
                 line.due = now + std::chrono::milliseconds(effectiveDelay);
                 // A proximity conversation keeps its configured turn gap: the
                 // next line is never delivered before the scene's next turn.
@@ -4751,6 +4752,10 @@ namespace AzerothVoices
             }
         }
 
+        std::string const text = StripSpeakerPrefix(line.text, request.actor.name);
+        if (text.empty())
+            return false;
+
         if (request.actor.kind == ActorKind::PlayerBot)
         {
             Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.guid));
@@ -4771,17 +4776,17 @@ namespace AzerothVoices
             switch (request.scope)
             {
                 case ChatScope::Say:
-                    bot->Say(line.text, LANG_UNIVERSAL);
+                    bot->Say(text, LANG_UNIVERSAL);
                     return true;
                 case ChatScope::Yell:
-                    bot->Yell(line.text, LANG_UNIVERSAL);
+                    bot->Yell(text, LANG_UNIVERSAL);
                     return true;
                 case ChatScope::Whisper:
                 {
                     Player* receiver = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
                     if (!IsOnlineRealPlayer(receiver))
                         return false;
-                    BotWhisperPlayer(bot, receiver, line.text);
+                    BotWhisperPlayer(bot, receiver, text);
                     return true;
                 }
                 case ChatScope::Party:
@@ -4792,7 +4797,7 @@ namespace AzerothVoices
                         return false;
                     WorldPacket packet;
                     ChatMsg type = request.scope == ChatScope::Raid ? CHAT_MSG_RAID : CHAT_MSG_PARTY;
-                    ChatHandler::BuildChatPacket(packet, type, line.text, LANG_UNIVERSAL,
+                    ChatHandler::BuildChatPacket(packet, type, text, LANG_UNIVERSAL,
                         bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
                     int subgroup = request.scope == ChatScope::Party
                         ? group->GetMemberGroup(bot->GetObjectGuid()) : -1;
@@ -4807,9 +4812,9 @@ namespace AzerothVoices
                         !HasRealPlayerAudience(bot, request.scope, "", 0.0f))
                         return false;
                     if (request.scope == ChatScope::Officer)
-                        guild->BroadcastToOfficers(bot->GetSession(), line.text, LANG_UNIVERSAL);
+                        guild->BroadcastToOfficers(bot->GetSession(), text, LANG_UNIVERSAL);
                     else
-                        guild->BroadcastToGuild(bot->GetSession(), line.text, LANG_UNIVERSAL);
+                        guild->BroadcastToGuild(bot->GetSession(), text, LANG_UNIVERSAL);
                     return true;
                 }
                 case ChatScope::Channel:
@@ -4823,7 +4828,7 @@ namespace AzerothVoices
                     Channel* channel = manager ? manager->GetOrCreateChannel(channelName) : nullptr;
                     if (!channel)
                         return false;
-                    channel->AsyncSay(bot->GetObjectGuid(), line.text.c_str(), LANG_UNIVERSAL, true);
+                    channel->AsyncSay(bot->GetObjectGuid(), text.c_str(), LANG_UNIVERSAL, true);
                     return true;
                 }
             }
@@ -4857,7 +4862,7 @@ namespace AzerothVoices
             if (!creature->IsWithinLOSInMap(anchor) ||
                 !creature->IsVisibleForOrDetect(anchor, anchor, true))
                 return false;
-            creature->MonsterYell(line.text, LANG_UNIVERSAL, anchor);
+            creature->MonsterYell(text, LANG_UNIVERSAL, anchor);
             return true;
         }
 
@@ -4873,7 +4878,7 @@ namespace AzerothVoices
                 !creature->IsVisibleForOrDetect(anchor, anchor, true) ||
                 !EvaluateProximityCreature(creature, *m_config).eligible)
                 return false;
-            creature->MonsterSay(line.text, LANG_UNIVERSAL, anchor);
+            creature->MonsterSay(text, LANG_UNIVERSAL, anchor);
             return true;
         }
 
@@ -4883,7 +4888,7 @@ namespace AzerothVoices
             return false;
 
         Player* receiver = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
-        creature->MonsterSay(line.text, LANG_UNIVERSAL,
+        creature->MonsterSay(text, LANG_UNIVERSAL,
             receiver && receiver->IsInWorld() ? receiver : nullptr);
         return true;
     }

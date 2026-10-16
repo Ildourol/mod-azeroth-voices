@@ -14,6 +14,17 @@ AzerothVoices.backstoryPollElapsed = 0
 AzerothVoices.backstoryPollRemaining = 0
 AzerothVoices.requestId = 0
 AzerothVoices.inboundBuffers = {}
+AzerothVoices.sendQueue = {}
+AzerothVoices.sendElapsed = 0
+AzerothVoices.saveLocked = false
+AzerothVoices.saveLockRemaining = 0
+AzerothVoices.uploadGuid = nil
+AzerothVoices.uploadState = nil
+AzerothVoices.unsavedTraits = nil
+AzerothVoices.loadedTraits = nil
+
+local SEND_INTERVAL = 0.3
+local SAVE_LOCK_TIMEOUT = 20
 
 local function trim(value)
     if not value then
@@ -60,7 +71,11 @@ function AzerothVoices:Encode(value)
     end
 
     return (string.gsub(value, "([^%w%-_%.~])", function(char)
-        return string.format("%%%02X", string.byte(char))
+        local byte = string.byte(char)
+        if byte >= 240 then
+            return string.format("~%02X", byte)
+        end
+        return string.format("%%%02X", byte)
     end))
 end
 
@@ -69,9 +84,13 @@ function AzerothVoices:Decode(value)
         return ""
     end
 
-    return (string.gsub(value, "%%(%x%x)", function(hex)
+    local out = string.gsub(value, "%%(%x%x)", function(hex)
         return string.char(tonumber(hex, 16))
-    end))
+    end)
+    out = string.gsub(out, "~(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end)
+    return out
 end
 
 function AzerothVoices:SetStatus(text, r, g, b)
@@ -105,11 +124,102 @@ function AzerothVoices:SendCommand(command)
     end
 end
 
+function AzerothVoices:QueueCommand(command)
+    table.insert(self.sendQueue, command)
+end
+
+function AzerothVoices:FlushSendQueue()
+    self.sendQueue = {}
+    self.sendElapsed = 0
+end
+
+function AzerothVoices:HandleSendQueue(elapsed)
+    if table.getn(self.sendQueue) == 0 then
+        return
+    end
+
+    self.sendElapsed = (self.sendElapsed or 0) + elapsed
+    if self.sendElapsed < SEND_INTERVAL then
+        return
+    end
+
+    self.sendElapsed = 0
+    local nextCmd = table.remove(self.sendQueue, 1)
+    if nextCmd then
+        self:SendCommand(nextCmd)
+    end
+
+    if table.getn(self.sendQueue) == 0 and self.uploadState == "sending" then
+        self:BeginConfirmWait()
+    end
+end
+
+function AzerothVoices:LockSave()
+    self.saveLocked = true
+    self.saveLockRemaining = 0
+    self:SetSaveEnabled(false)
+end
+
+function AzerothVoices:BeginConfirmWait()
+    self.uploadState = "awaiting"
+    self.saveLockRemaining = SAVE_LOCK_TIMEOUT
+end
+
+function AzerothVoices:UnlockSave()
+    self.saveLocked = false
+    self.saveLockRemaining = 0
+    self:UpdateSaveButton()
+end
+
+function AzerothVoices:HandleSaveLock(elapsed)
+    if not self.saveLocked or self.uploadState ~= "awaiting" then
+        return
+    end
+
+    self.saveLockRemaining = (self.saveLockRemaining or 0) - elapsed
+    if self.saveLockRemaining <= 0 then
+        self:AbortUpload(
+            "The server did not answer. Your traits are still here - save again to retry.",
+            1, 0.82, 0
+        )
+    end
+end
+
+function AzerothVoices:RestoreUnsavedTraits()
+    local t = self.unsavedTraits
+    if not t or type(t) ~= "table" or t.guid ~= self.selectedGuid then
+        return
+    end
+
+    local p = self.frame
+    if p then
+        if p.trait1 and t.trait1 then p.trait1:SetText(t.trait1) end
+        if p.trait2 and t.trait2 then p.trait2:SetText(t.trait2) end
+        if p.trait3 and t.trait3 then p.trait3:SetText(t.trait3) end
+    end
+end
+
+function AzerothVoices:AbortUpload(message, r, g, b)
+    if self.uploadGuid then
+        self:FlushSendQueue()
+    end
+    self.uploadGuid = nil
+    self.uploadState = nil
+    self.generatingAllInfo = nil
+    self:StopTonePoll()
+    self:StopBackstoryPoll()
+    self:RestoreUnsavedTraits()
+    self:UnlockSave()
+    if message then
+        self:SetStatus(message, r, g, b)
+    end
+end
+
 function AzerothVoices:StopTonePoll()
     self.pendingToneGuid = nil
     self.tonePollElapsed = 0
     self.tonePollRemaining = 0
-    self:SetRegenToneEnabled(self.selectedGuid ~= nil and not self.pendingProfileGuid and not self.forgetQueue)
+    self:SetRegenStoryEnabled(true)
 end
 
 function AzerothVoices:StartTonePoll(guid)
@@ -121,7 +231,7 @@ function AzerothVoices:StartTonePoll(guid)
     self.pendingToneGuid = guid
     self.tonePollElapsed = 0
     self.tonePollRemaining = 120
-    self:SetRegenToneEnabled(false)
+    self:SetRegenStoryEnabled(false)
 
     if self.frame and self.frame.tone then
         self.frame.tone:SetTextColor(0.5, 0.5, 0.5)
@@ -134,14 +244,15 @@ function AzerothVoices:HandleTonePoll(elapsed)
         return
     end
 
-    self.tonePollElapsed = self.tonePollElapsed + elapsed
-    self.tonePollRemaining = self.tonePollRemaining - elapsed
+    self.tonePollElapsed = (self.tonePollElapsed or 0) + elapsed
+    self.tonePollRemaining = (self.tonePollRemaining or 0) - elapsed
 
     if self.tonePollRemaining <= 0 then
         self:SetStatus(
             "Tone generation is still pending. Use Refresh.",
             1, 0.82, 0
         )
+        self.generatingAllInfo = nil
         self:StopTonePoll()
         return
     end
@@ -152,32 +263,33 @@ function AzerothVoices:HandleTonePoll(elapsed)
     end
 end
 
-function AzerothVoices:SetRegenTraitsEnabled(enabled)
-    if self.frame and self.frame.regenTraitsBtn then
-        if enabled then
-            self.frame.regenTraitsBtn:Enable()
+function AzerothVoices:SetRegenStoryEnabled(enabled)
+    if self.frame and self.frame.regenStoryBtn then
+        if enabled and not self.pendingBackstoryGuid then
+            self.frame.regenStoryBtn:Enable()
         else
-            self.frame.regenTraitsBtn:Disable()
+            self.frame.regenStoryBtn:Disable()
         end
     end
-end
-
-function AzerothVoices:SetRegenToneEnabled(enabled)
     if self.frame and self.frame.regenToneBtn then
-        if enabled then
+        if enabled and not self.pendingToneGuid then
             self.frame.regenToneBtn:Enable()
         else
             self.frame.regenToneBtn:Disable()
         end
     end
-end
-
-function AzerothVoices:SetRegenStoryEnabled(enabled)
-    if self.frame and self.frame.regenStoryBtn then
-        if enabled then
-            self.frame.regenStoryBtn:Enable()
+    if self.frame and self.frame.regenTraitsBtn then
+        if enabled and not self.pendingToneGuid and not self.pendingBackstoryGuid then
+            self.frame.regenTraitsBtn:Enable()
         else
-            self.frame.regenStoryBtn:Disable()
+            self.frame.regenTraitsBtn:Disable()
+        end
+    end
+    if self.frame and self.frame.regenAllBtn then
+        if enabled and not self.pendingToneGuid and not self.pendingBackstoryGuid then
+            self.frame.regenAllBtn:Enable()
+        else
+            self.frame.regenAllBtn:Disable()
         end
     end
 end
@@ -193,38 +305,14 @@ function AzerothVoices:SetSaveEnabled(enabled)
 end
 
 function AzerothVoices:UpdateSaveButton()
-    local loaded = self.loadedTraits
-    if not loaded or self.pendingProfileGuid or self.forgetQueue then
-        self:SetSaveEnabled(false)
-        return
-    end
-    local p = self.frame
-    if not p then
-        self:SetSaveEnabled(false)
-        return
-    end
-    local t1 = sanitizeInput(
-        p.trait1 and p.trait1:GetText() or ""
-    )
-    local t2 = sanitizeInput(
-        p.trait2 and p.trait2:GetText() or ""
-    )
-    local t3 = sanitizeInput(
-        p.trait3 and p.trait3:GetText() or ""
-    )
-    local changed = (
-        t1 ~= (loaded.trait1 or "")
-        or t2 ~= (loaded.trait2 or "")
-        or t3 ~= (loaded.trait3 or "")
-    )
-    self:SetSaveEnabled(changed)
+    -- Save Traits button removed; traits save automatically on generation.
 end
 
 function AzerothVoices:StopBackstoryPoll()
     self.pendingBackstoryGuid = nil
     self.backstoryPollElapsed = 0
     self.backstoryPollRemaining = 0
-    self:SetRegenStoryEnabled(self.selectedGuid ~= nil and not self.pendingProfileGuid and not self.forgetQueue)
+    self:SetRegenStoryEnabled(true)
 end
 
 function AzerothVoices:StartBackstoryPoll(guid)
@@ -236,15 +324,12 @@ function AzerothVoices:StartBackstoryPoll(guid)
     self.pendingBackstoryGuid = guid
     self.backstoryPollElapsed = 0
     self.backstoryPollRemaining = 120
-
     self:SetRegenStoryEnabled(false)
 
     local placeholder = "Creating background story..."
     if self.frame and self.frame.backstory then
         self.frame.backstory:SetText(placeholder)
-        self.frame.backstory:SetTextColor(
-            0.5, 0.5, 0.5
-        )
+        self.frame.backstory:SetTextColor(0.5, 0.5, 0.5)
     end
 end
 
@@ -253,15 +338,12 @@ function AzerothVoices:HandleBackstoryPoll(elapsed)
         return
     end
 
-    self.backstoryPollElapsed =
-        self.backstoryPollElapsed + elapsed
-    self.backstoryPollRemaining =
-        self.backstoryPollRemaining - elapsed
+    self.backstoryPollElapsed = (self.backstoryPollElapsed or 0) + elapsed
+    self.backstoryPollRemaining = (self.backstoryPollRemaining or 0) - elapsed
 
     if self.backstoryPollRemaining <= 0 then
         self:SetStatus(
-            "Backstory generation still pending."
-            .. " Use Refresh.",
+            "Backstory generation still pending. Use Refresh.",
             1, 0.82, 0
         )
         self:StopBackstoryPoll()
@@ -270,31 +352,7 @@ function AzerothVoices:HandleBackstoryPoll(elapsed)
 
     if self.backstoryPollElapsed >= 2.0 then
         self.backstoryPollElapsed = 0
-        self:SendCommand(
-            "get " .. self.pendingBackstoryGuid
-        )
-    end
-end
-
-function AzerothVoices:MigrateSavedVariables()
-    AzerothVoicesDB = AzerothVoicesDB or {}
-    if ChatterDB and not AzerothVoicesDB.migratedFromChatter then
-        if ChatterDB.point then
-            AzerothVoicesDB.point = ChatterDB.point
-        end
-        if ChatterDB.relPoint then
-            AzerothVoicesDB.relPoint = ChatterDB.relPoint
-        end
-        if ChatterDB.x then
-            AzerothVoicesDB.x = ChatterDB.x
-        end
-        if ChatterDB.y then
-            AzerothVoicesDB.y = ChatterDB.y
-        end
-        if ChatterDB.selectedGuid then
-            AzerothVoicesDB.selectedGuid = ChatterDB.selectedGuid
-        end
-        AzerothVoicesDB.migratedFromChatter = true
+        self:SendCommand("get " .. self.pendingBackstoryGuid)
     end
 end
 
@@ -303,13 +361,18 @@ function AzerothVoices:SaveWindowPosition()
         return
     end
 
-    local point, _, relPoint, x, y =
-        self.frame:GetPoint(1)
+    local point, _, relPoint, x, y = self.frame:GetPoint(1)
     AzerothVoicesDB = AzerothVoicesDB or {}
     AzerothVoicesDB.point = point
     AzerothVoicesDB.relPoint = relPoint
     AzerothVoicesDB.x = x
     AzerothVoicesDB.y = y
+
+    ChatterDB = ChatterDB or {}
+    ChatterDB.point = point
+    ChatterDB.relPoint = relPoint
+    ChatterDB.x = x
+    ChatterDB.y = y
 end
 
 function AzerothVoices:RestoreWindowPosition()
@@ -318,49 +381,63 @@ function AzerothVoices:RestoreWindowPosition()
     end
 
     self.frame:ClearAllPoints()
-    if AzerothVoicesDB and AzerothVoicesDB.point then
+    local db = AzerothVoicesDB
+    if not (db and db.point) and ChatterDB and ChatterDB.point then
+        db = ChatterDB
+    end
+
+    if db and db.point then
         self.frame:SetPoint(
-            AzerothVoicesDB.point,
+            db.point,
             UIParent,
-            AzerothVoicesDB.relPoint or AzerothVoicesDB.point,
-            AzerothVoicesDB.x or 0,
-            AzerothVoicesDB.y or 0
+            db.relPoint or db.point,
+            db.x or 0,
+            db.y or 0
         )
     else
         self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
 end
 
-function AzerothVoices:ApplyProfileToPanel(p, profile)
+function AzerothVoices:MigrateSavedVariables()
+    AzerothVoicesDB = AzerothVoicesDB or {}
+    if ChatterDB and not AzerothVoicesDB.migratedFromChatter then
+        if ChatterDB.point then AzerothVoicesDB.point = ChatterDB.point end
+        if ChatterDB.relPoint then AzerothVoicesDB.relPoint = ChatterDB.relPoint end
+        if ChatterDB.x then AzerothVoicesDB.x = ChatterDB.x end
+        if ChatterDB.y then AzerothVoicesDB.y = ChatterDB.y end
+        if ChatterDB.selectedGuid then AzerothVoicesDB.selectedGuid = ChatterDB.selectedGuid end
+        AzerothVoicesDB.migratedFromChatter = true
+    end
+end
+
+function AzerothVoices:ApplyProfileToPanel(p, profile, keepTraits)
     if not p then
         return
     end
-    if p.trait1 then
+
+    if p.trait1 and not keepTraits then
         p.trait1:SetText(profile.trait1 or "")
     end
-    if p.trait2 then
+    if p.trait2 and not keepTraits then
         p.trait2:SetText(profile.trait2 or "")
     end
-    if p.trait3 then
+    if p.trait3 and not keepTraits then
         p.trait3:SetText(profile.trait3 or "")
     end
+
     if p.tone then
         local toneText = profile.tone or ""
-        local polling = (
-            self.pendingToneGuid
-            and self.pendingToneGuid == profile.guid
-        )
+        local polling = (self.pendingToneGuid and self.pendingToneGuid == profile.guid)
         if not polling or toneText ~= "" then
             p.tone:SetText(toneText)
             p.tone:SetTextColor(0.8, 0.8, 0.8)
         end
     end
+
     if p.backstory then
         local bsText = profile.backstory or ""
-        local polling = (
-            self.pendingBackstoryGuid
-            and self.pendingBackstoryGuid == profile.guid
-        )
+        local polling = (self.pendingBackstoryGuid and self.pendingBackstoryGuid == profile.guid)
         if not polling or bsText ~= "" then
             p.backstory:SetText(bsText)
             p.backstory:SetTextColor(0.8, 0.8, 0.8)
@@ -372,46 +449,60 @@ function AzerothVoices:ApplyProfile(profile)
     if profile.guid ~= self.selectedGuid or self.forgetQueue then
         return
     end
-    self.pendingProfileGuid = nil
-    self:SetRegenTraitsEnabled(true)
-    self:SetRegenToneEnabled(not self.pendingToneGuid)
-    self:SetRegenStoryEnabled(not self.pendingBackstoryGuid)
-    local awaitingTone = (
-        self.pendingToneGuid == profile.guid
+
+    if self.uploadState and self.uploadGuid == profile.guid then
+        return
+    end
+
+    local keepTraits = (
+        type(self.unsavedTraits) == "table"
+        and self.unsavedTraits.guid == profile.guid
     )
+
+    self.pendingProfileGuid = nil
+    self:SetRegenStoryEnabled(not self.pendingBackstoryGuid)
+    local awaitingTone = (self.pendingToneGuid == profile.guid)
     self.selectedGuid = profile.guid
 
     self.loadedTraits = {
         trait1 = profile.trait1 or "",
         trait2 = profile.trait2 or "",
-        trait3 = profile.trait3 or "",
+        trait3 = profile.trait3 or ""
     }
 
-    self:ApplyProfileToPanel(self.frame, profile)
-    self:SetSaveEnabled(false)
+    self:ApplyProfileToPanel(self.frame, profile, keepTraits)
+
+    if keepTraits then
+        self:UpdateSaveButton()
+    else
+        self:SetSaveEnabled(false)
+    end
 
     AzerothVoicesDB = AzerothVoicesDB or {}
     AzerothVoicesDB.selectedGuid = profile.guid
+    ChatterDB = ChatterDB or {}
+    ChatterDB.selectedGuid = profile.guid
 
     self:UpdateRosterViews()
+
     if awaitingTone then
         if profile.tone and profile.tone ~= "" then
             self:StopTonePoll()
-            self:SetStatus(
-                "Generated tone for "
-                    .. (profile.name or "bot"),
-                0.3, 1, 0.3
-            )
+            local bName = profile.name or self:GetSelectedBotName() or "bot"
+            if self.generatingAllInfo then
+                self:SetStatus("Tone generated! Generating backstory...", 1, 0.82, 0)
+                if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generated tone for |cff00ff00" .. bName .. "|r: \"" .. profile.tone .. "\". Now generating backstory...")
+                end
+                self:RegenBackstory()
+            else
+                self:SetStatus("Generated tone for " .. bName .. ".", 0.3, 1, 0.3)
+            end
         else
-            self:SetStatus(
-                "Generating tone...", 1, 0.82, 0
-            )
+            self:SetStatus("Generating tone...", 1, 0.82, 0)
         end
     else
-        self:SetStatus(
-            "Loaded " .. (profile.name or "bot"),
-            0.3, 1, 0.3
-        )
+        self:SetStatus("Loaded " .. (profile.name or "bot"), 0.3, 1, 0.3)
     end
 end
 
@@ -424,23 +515,26 @@ function AzerothVoices:SelectBot(guid)
 
     if self.pendingToneGuid and self.pendingToneGuid ~= guid then
         self:StopTonePoll()
+        self.generatingAllInfo = nil
     end
-    if self.pendingBackstoryGuid
-        and self.pendingBackstoryGuid ~= guid then
+    if self.pendingBackstoryGuid and self.pendingBackstoryGuid ~= guid then
         self:StopBackstoryPoll()
+    end
+
+    if type(self.unsavedTraits) == "table" and self.unsavedTraits.guid ~= guid then
+        self.unsavedTraits = nil
+    end
+    if self.uploadGuid and self.uploadGuid ~= guid then
+        self:AbortUpload()
     end
 
     self.selectedGuid = guid
     self.pendingProfileGuid = guid
     self.loadedTraits = nil
     self:SetSaveEnabled(false)
-    self:SetRegenTraitsEnabled(false)
-    self:SetRegenToneEnabled(false)
     self:SetRegenStoryEnabled(false)
-    local empty = {
-        trait1 = "", trait2 = "", trait3 = "",
-        tone = "", backstory = ""
-    }
+
+    local empty = { trait1 = "", trait2 = "", trait3 = "", tone = "", backstory = "" }
     self:ApplyProfileToPanel(self.frame, empty)
     self:UpdateRosterViews()
     self:SetStatus("Loading bot profile...", 1, 0.82, 0)
@@ -454,85 +548,6 @@ function AzerothVoices:RequestRoster()
     self:UpdateRosterViews()
     self:SetStatus("Requesting roster...", 1, 0.82, 0)
     self:SendCommand("roster")
-end
-
-local PERSONALITY_TRAIT_POOLS = {
-    "fiery", "calm", "brooding", "volatile", "serene", "melancholic", "jovial",
-    "quick-tempered", "patient", "restless", "intense", "mercurial", "passionate",
-    "gregarious", "reclusive", "charming", "blunt", "diplomatic", "awkward",
-    "commanding", "deferential", "flirtatious", "standoffish", "nurturing", "aloof",
-    "boisterous", "soft-spoken", "tactful", "abrasive", "endearing",
-    "stoic", "sarcastic", "whimsical", "cynical", "earnest", "pessimistic",
-    "optimistic", "suspicious", "trusting", "haughty", "humble", "playful",
-    "solemn", "boastful", "modest", "paranoid", "carefree", "fretful",
-    "fearless", "reckless", "cautious", "methodical", "erratic", "curious",
-    "inquisitive", "ambitious", "content", "ruthless", "compassionate", "spiteful",
-    "forgiving", "vengeful", "loyal", "fickle", "devout", "skeptical",
-    "scholarly", "superstitious", "cunning", "naive", "pragmatic", "idealistic"
-}
-
-function AzerothVoices:RollRandomTraits()
-    local total = table.getn(PERSONALITY_TRAIT_POOLS)
-    if total < 3 then return "cunning", "bold", "stoic" end
-    local idx1 = math.random(1, total)
-    local idx2 = math.random(1, total)
-    while idx2 == idx1 do idx2 = math.random(1, total) end
-    local idx3 = math.random(1, total)
-    while idx3 == idx1 or idx3 == idx2 do idx3 = math.random(1, total) end
-    return PERSONALITY_TRAIT_POOLS[idx1], PERSONALITY_TRAIT_POOLS[idx2], PERSONALITY_TRAIT_POOLS[idx3]
-end
-
-function AzerothVoices:RegenTraits()
-    if self.pendingProfileGuid or self.forgetQueue then return end
-    if not self.selectedGuid then
-        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
-        return
-    end
-
-    local t1, t2, t3 = self:RollRandomTraits()
-    local loaded = self.loadedTraits or {}
-    local attempts = 0
-    while attempts < 10 and t1 == (loaded.trait1 or "") and t2 == (loaded.trait2 or "") and t3 == (loaded.trait3 or "") do
-        t1, t2, t3 = self:RollRandomTraits()
-        attempts = attempts + 1
-    end
-
-    if self.frame then
-        if self.frame.trait1 then self.frame.trait1:SetText(t1) end
-        if self.frame.trait2 then self.frame.trait2:SetText(t2) end
-        if self.frame.trait3 then self.frame.trait3:SetText(t3) end
-    end
-
-    self:UpdateSaveButton()
-    self:SetStatus("Generated traits: " .. t1 .. ", " .. t2 .. ", " .. t3 .. ". Click 'Save Traits' to save.", 1, 0.82, 0)
-end
-
-function AzerothVoices:RegenTone()
-    if self.pendingProfileGuid or self.forgetQueue then return end
-    if not self.selectedGuid then
-        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
-        return
-    end
-
-    local guid = self.selectedGuid
-    self:StopTonePoll()
-    self:SendCommand("regentone " .. guid)
-    self:StartTonePoll(guid)
-    self:SetStatus("Generating tone...", 1, 0.82, 0)
-end
-
-function AzerothVoices:RegenBackstory()
-    if self.pendingProfileGuid or self.forgetQueue then return end
-    if not self.selectedGuid then
-        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
-        return
-    end
-
-    local guid = self.selectedGuid
-    self:StopBackstoryPoll()
-    self:SendCommand("regenbackstory " .. guid)
-    self:StartBackstoryPoll(guid)
-    self:SetStatus("Generating backstory...", 1, 0.82, 0)
 end
 
 function AzerothVoices:SaveProfile()
@@ -561,8 +576,7 @@ function AzerothVoices:SaveProfile()
         return
     end
 
-    if string.len(trait1) > 64 or string.len(trait2) > 64
-        or string.len(trait3) > 64 then
+    if string.len(trait1) > 64 or string.len(trait2) > 64 or string.len(trait3) > 64 then
         self:SetStatus("Traits must stay under 64 characters.", 1, 0.2, 0.2)
         return
     end
@@ -591,20 +605,35 @@ end
 
 function AzerothVoices:DoSaveProfile()
     local t = self.pendingTraits
-    if not t or t.guid ~= self.selectedGuid
-        or self.pendingProfileGuid or self.forgetQueue then
+    if not t or t.guid ~= self.selectedGuid or self.pendingProfileGuid or self.forgetQueue then
         return
     end
 
     local guid = self.selectedGuid
-    self:SendCommand(
-        "set " .. guid .. " " ..
+    self:StopTonePoll()
+    self:StopBackstoryPoll()
+    self:FlushSendQueue()
+
+    self.unsavedTraits = {
+        guid = guid,
+        trait1 = t.trait1,
+        trait2 = t.trait2,
+        trait3 = t.trait3,
+    }
+    self.pendingTraits = nil
+
+    local line = "set " .. guid .. " " ..
         self:Encode(t.trait1) .. " " ..
         self:Encode(t.trait2) .. " " ..
         self:Encode(t.trait3)
-    )
+
+    self.uploadGuid = guid
+    self.uploadState = "sending"
+    self:SendCommand(line)
+    self:LockSave()
+    self:BeginConfirmWait()
+
     self:SetStatus("Saving traits...", 1, 0.82, 0)
-    self.pendingTraits = nil
 end
 
 function AzerothVoices:GetSelectedName()
@@ -623,8 +652,155 @@ function AzerothVoices:GetSelectedName()
     return nil
 end
 
+AzerothVoices.GetSelectedBotName = AzerothVoices.GetSelectedName
+
+local PERSONALITY_TRAIT_POOLS = {
+    "fiery", "calm", "brooding", "volatile", "serene", "melancholic", "jovial",
+    "quick-tempered", "patient", "restless", "intense", "mercurial", "passionate",
+    "gregarious", "reclusive", "charming", "blunt", "diplomatic", "awkward",
+    "commanding", "deferential", "flirtatious", "standoffish", "nurturing", "aloof",
+    "boisterous", "soft-spoken", "tactful", "abrasive", "endearing",
+    "hopeful", "fatalistic", "pragmatic", "idealistic", "cynical", "wistful",
+    "defiant", "resigned", "ambitious", "content", "suspicious", "trusting",
+    "world-weary", "jaded", "reverent", "skeptical",
+    "fearless", "cautious", "reckless", "hesitant", "bold", "calculating",
+    "foolhardy", "steadfast", "skittish", "dauntless", "wary", "brash", "daring",
+    "honorable", "ruthless", "merciful", "vengeful", "selfless", "self-serving",
+    "just", "cunning", "compassionate", "cold-hearted", "principled", "opportunistic",
+    "forgiving", "grudge-holding", "charitable", "greedy", "noble-spirited",
+    "scholarly", "sharp-witted", "naive", "perceptive", "philosophical",
+    "literal-minded", "inquisitive", "shrewd", "bookish", "street-smart",
+    "sarcastic", "deadpan", "mirthful", "dark-humored", "witty", "dry",
+    "bawdy", "whimsical", "sardonic", "teasing", "earnest", "irreverent",
+    "stoic", "dramatic", "gruff", "gentle", "stern", "playful",
+    "solemn", "lighthearted", "imposing", "unassuming", "eccentric", "dignified", "wild"
+}
+
+function AzerothVoices:RollRandomTraits()
+    local total = table.getn(PERSONALITY_TRAIT_POOLS)
+    if total < 3 then return "cunning", "bold", "stoic" end
+    local idx1 = math.random(1, total)
+    local idx2 = math.random(1, total)
+    while idx2 == idx1 do idx2 = math.random(1, total) end
+    local idx3 = math.random(1, total)
+    while idx3 == idx1 or idx3 == idx2 do idx3 = math.random(1, total) end
+    return PERSONALITY_TRAIT_POOLS[idx1], PERSONALITY_TRAIT_POOLS[idx2], PERSONALITY_TRAIT_POOLS[idx3]
+end
+
+function AzerothVoices:RegenTraits()
+    if self.pendingProfileGuid or self.forgetQueue or self.pendingToneGuid or self.pendingBackstoryGuid then return end
+    if not self.selectedGuid then
+        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
+        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r |cffff2020Select a bot first from the roster to generate traits.|r")
+        end
+        return
+    end
+
+    local guid = self.selectedGuid
+    local loaded = self.loadedTraits or {}
+    local t1, t2, t3 = self:RollRandomTraits()
+    local attempts = 0
+    while attempts < 10 and t1 == (loaded.trait1 or "") and t2 == (loaded.trait2 or "") and t3 == (loaded.trait3 or "") do
+        t1, t2, t3 = self:RollRandomTraits()
+        attempts = attempts + 1
+    end
+
+    if self.frame then
+        if self.frame.trait1 then self.frame.trait1:SetText(t1) end
+        if self.frame.trait2 then self.frame.trait2:SetText(t2) end
+        if self.frame.trait3 then self.frame.trait3:SetText(t3) end
+    end
+
+    self.unsavedTraits = nil
+    self.pendingTraits = {
+        guid = guid,
+        trait1 = t1,
+        trait2 = t2,
+        trait3 = t3,
+    }
+    self:UpdateSaveButton()
+
+    -- Automatically commit traits to server via 'set' so that SQL is updated without altering tone & backstory
+    self:DoSaveProfile()
+    self:SetStatus("Generated traits: " .. t1 .. ", " .. t2 .. ", " .. t3 .. ". Saving...", 1, 0.82, 0)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        local bName = self:GetSelectedBotName() or "bot"
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generated traits for |cff00ff00" .. bName .. "|r: " .. t1 .. ", " .. t2 .. ", " .. t3 .. ".")
+    end
+end
+
+function AzerothVoices:RegenTone()
+    if self.pendingProfileGuid or self.forgetQueue then return end
+    if not self.selectedGuid then
+        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
+        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r |cffff2020Select a bot first from the roster to generate tone.|r")
+        end
+        return
+    end
+
+    local guid = self.selectedGuid
+    self:StopTonePoll()
+    self:SendCommand("regentone " .. guid)
+    self:StartTonePoll(guid)
+    self:SetStatus("Generating tone via LLM endpoint...", 1, 0.82, 0)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        local bName = self:GetSelectedBotName() or "bot"
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generating tone for |cff00ff00" .. bName .. "|r via LLM...")
+    end
+end
+
+function AzerothVoices:RegenBackstory()
+    if self.pendingProfileGuid or self.forgetQueue then return end
+    if not self.selectedGuid then
+        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
+        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r |cffff2020Select a bot first from the roster to generate backstory.|r")
+        end
+        return
+    end
+
+    local guid = self.selectedGuid
+    self:StopBackstoryPoll()
+    self:SendCommand("regenbackstory " .. guid)
+    self:StartBackstoryPoll(guid)
+    self:SetStatus("Generating background story via LLM...", 1, 0.82, 0)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        local bName = self:GetSelectedBotName() or "bot"
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generating background story for |cff00ff00" .. bName .. "|r via LLM...")
+    end
+end
+
+function AzerothVoices:RegenAll()
+    if self.pendingProfileGuid or self.forgetQueue or self.pendingToneGuid or self.pendingBackstoryGuid then return end
+    if not self.selectedGuid then
+        self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
+        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r |cffff2020Select a bot first from the roster to generate all info.|r")
+        end
+        return
+    end
+
+    self.generatingAllInfo = true
+    self:RegenTraits()
+    self:RegenTone()
+    self:SetStatus("Generating traits & tone via LLM...", 1, 0.82, 0)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        local bName = self:GetSelectedBotName() or "bot"
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generating all info for |cff00ff00" .. bName .. "|r: traits updated, generating tone then backstory...")
+    end
+end
+
+function AzerothVoices:RequestStatus()
+    self:SendCommand("status")
+end
+
 function AzerothVoices:Toggle()
     self:BuildFrame()
+    if not self.minimapButton then
+        self:CreateMinimapButton()
+    end
 
     if self.frame:IsShown() then
         self.frame:Hide()
@@ -668,8 +844,6 @@ function AzerothVoices:FinishRoster()
         self:StopTonePoll()
         self:StopBackstoryPoll()
         self:SetSaveEnabled(false)
-        self:SetRegenTraitsEnabled(false)
-        self:SetRegenToneEnabled(false)
         self:SetRegenStoryEnabled(false)
         self:UpdateRosterViews()
         local empty = {
@@ -734,24 +908,29 @@ function AzerothVoices:HandleBackstoryPayload(rest)
     local numGuid = tonumber(guid)
     local text = self:Decode(encoded or "-")
 
-    if text and text ~= ""
-        and self.selectedGuid == numGuid then
+    if self.uploadState and self.uploadGuid == numGuid then
+        return
+    end
+
+    if text and text ~= "" and self.selectedGuid == numGuid then
         if self.frame and self.frame.backstory then
             self.frame.backstory:SetText(text)
-            self.frame.backstory:SetTextColor(
-                0.8, 0.8, 0.8
-            )
+            self.frame.backstory:SetTextColor(0.8, 0.8, 0.8)
         end
     end
 
     if self.pendingBackstoryGuid == numGuid then
         if text and text ~= "" then
             self:StopBackstoryPoll()
-            if not self.pendingToneGuid then
-                self:SetStatus(
-                    "Backstory generated.",
-                    0.3, 1, 0.3
-                )
+            local bName = self:GetSelectedBotName() or "bot"
+            if self.generatingAllInfo then
+                self.generatingAllInfo = nil
+                self:SetStatus("All info generated for " .. bName .. "!", 0.3, 1, 0.3)
+                if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r All info generated for |cff00ff00" .. bName .. "|r (Traits + Tone + Backstory).")
+                end
+            elseif not self.pendingToneGuid then
+                self:SetStatus("Backstory generated for " .. bName .. ".", 0.3, 1, 0.3)
             end
         end
     end
@@ -761,9 +940,16 @@ function AzerothVoices:HandleUpdatedPayload(rest)
     local _, _, guid, name, flag = string.find(
         rest, "^(%d+)%s+(%S+)%s+(%S+)$"
     )
-    if guid and name and tonumber(guid) == self.selectedGuid
-        and not self.forgetQueue then
+    if guid and name and tonumber(guid) == self.selectedGuid and not self.forgetQueue then
         self.selectedGuid = tonumber(guid)
+        self:FlushSendQueue()
+        self.uploadGuid = nil
+        self.uploadState = nil
+        self.unsavedTraits = nil
+        self:UnlockSave()
+
+        self:StopTonePoll()
+        self:StopBackstoryPoll()
         local botName = self:Decode(name)
         self:SetStatus(
             "Traits saved for " .. botName .. ".",
@@ -779,29 +965,51 @@ function AzerothVoices:HandleUpdatedPayload(rest)
     end
 end
 
-function AzerothVoices:HandleToneRegenPayload(rest)
-    local _, _, guid, name = string.find(
-        rest, "^(%d+)%s+(%S+)$"
-    )
-    if guid and name then
-        self:SetStatus(
-            "Regenerating tone for "
-                .. self:Decode(name) .. "...",
-            1, 0.82, 0
-        )
-    end
-end
-
 function AzerothVoices:HandleBackstoryRegenPayload(rest)
     local _, _, guid, name = string.find(
         rest, "^(%d+)%s+(%S+)$"
     )
     if guid and name then
         self:SetStatus(
-            "Regenerating backstory for "
-                .. self:Decode(name) .. "...",
+            "Regenerating backstory for " .. self:Decode(name) .. "...",
             1, 0.82, 0
         )
+    end
+end
+
+function AzerothVoices:HandleTraitsRegenPayload(rest)
+    local _, _, guid, name = string.find(rest, "^(%d+)%s+(%S+)$")
+    if guid and name then
+        self:SetStatus("Traits generated for " .. self:Decode(name) .. ".", 0.3, 1, 0.3)
+    end
+end
+
+function AzerothVoices:HandleToneRegenPayload(rest)
+    local _, _, guid, name = string.find(rest, "^(%d+)%s+(%S+)$")
+    if guid and name then
+        self:SetStatus("Generating tone for " .. self:Decode(name) .. "...", 1, 0.82, 0)
+        self:StartTonePoll(tonumber(guid))
+    end
+end
+
+function AzerothVoices:HandleAllRegenPayload(rest)
+    local _, _, guid, name = string.find(rest, "^(%d+)%s+(%S+)$")
+    if guid and name then
+        self:SetStatus("Full LLM generation running for " .. self:Decode(name) .. "...", 1, 0.82, 0)
+        self:StartTonePoll(tonumber(guid))
+        self:StartBackstoryPoll(tonumber(guid))
+    end
+end
+
+function AzerothVoices:HandleStatusPayload(rest)
+    local _, _, enabled, apiConfigured, endpoint, model = string.find(rest, "^(%S+)%s+(%S+)%s+(%S+)%s*(%S*)$")
+    if enabled then
+        self.serverStatus = {
+            enabled = (enabled == "enabled"),
+            apiConfigured = (apiConfigured == "configured"),
+            endpoint = self:Decode(endpoint or "-"),
+            model = self:Decode(model or "-"),
+        }
     end
 end
 
@@ -822,9 +1030,13 @@ function AzerothVoices:HandleErrorPayload(rest)
     local _, _, _, encoded = string.find(
         rest, "^(%S+)%s*(.*)$"
     )
-    self:SetStatus(
-        self:Decode(encoded or rest), 1, 0.2, 0.2
-    )
+    local text = self:Decode(encoded or rest)
+    if self.uploadState then
+        self:AbortUpload(text, 1, 0.2, 0.2)
+    else
+        self:UnlockSave()
+        self:SetStatus(text, 1, 0.2, 0.2)
+    end
 end
 
 function AzerothVoices:HandlePayload(payload)
@@ -871,8 +1083,23 @@ function AzerothVoices:HandlePayload(payload)
         return
     end
 
+    if command == "TRAITS_REGEN" then
+        self:HandleTraitsRegenPayload(rest)
+        return
+    end
+
     if command == "TONE_REGEN" then
         self:HandleToneRegenPayload(rest)
+        return
+    end
+
+    if command == "ALL_REGEN" then
+        self:HandleAllRegenPayload(rest)
+        return
+    end
+
+    if command == "STATUS" then
+        self:HandleStatusPayload(rest)
         return
     end
 
@@ -910,7 +1137,6 @@ function AzerothVoices:HandleAddonMessage(prefix, message, channel, sender)
     local bufferKey = reqId .. ":" .. msgIdx
     local now = GetTime and GetTime() or 0
 
-    -- Expire stale buffers older than 10 seconds
     for key, buf in pairs(self.inboundBuffers) do
         if buf.timestamp and (now - buf.timestamp > 10) then
             self.inboundBuffers[key] = nil
@@ -961,19 +1187,50 @@ StaticPopupDialogs["AZEROTHVOICES_CONFIRM_SAVE_TRAITS"] = {
     whileDead = false,
     hideOnEscape = true,
 }
+
 StaticPopupDialogs["CHATTER_CONFIRM_SAVE_TRAITS"] = StaticPopupDialogs["AZEROTHVOICES_CONFIRM_SAVE_TRAITS"]
 
 SLASH_AZEROTHVOICES1 = "/azerothvoices"
 SLASH_AZEROTHVOICES2 = "/avvoices"
 SLASH_AZEROTHVOICES3 = "/chatter"
 SLASH_AZEROTHVOICES4 = "/llmc"
-SlashCmdList["AZEROTHVOICES"] = function()
-    AzerothVoices:Toggle()
+SLASH_AZEROTHVOICES5 = "/av"
+SLASH_AZEROTHVOICES6 = "/botchat"
+
+SlashCmdList["AZEROTHVOICES"] = function(msg)
+    local cmd = ""
+    if msg then
+        local _, _, first = string.find(msg, "^(%S+)")
+        if first then
+            cmd = string.lower(first)
+        end
+    end
+    if cmd == "minimap" then
+        AzerothVoices:ToggleMinimapButton()
+    elseif cmd == "icon" then
+        AzerothVoices:CycleMinimapIcon()
+    elseif cmd == "reset" then
+        AzerothVoices:ResetMinimapPosition()
+    elseif cmd == "help" then
+        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[Azeroth Voices Slash Commands]|r")
+            DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/azerothvoices|r or |cff00ff00/av|r - Toggle main editor window")
+            DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/av minimap|r - Toggle minimap quick access button")
+            DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/av icon|r - Cycle minimap icon")
+            DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/av reset|r - Reset window & minimap position")
+        end
+    else
+        AzerothVoices:Toggle()
+    end
 end
+
+SlashCmdList["CHATTER"] = SlashCmdList["AZEROTHVOICES"]
 
 AzerothVoices:SetScript("OnUpdate", function()
     local self = this
     local elapsed = arg1 or 0
+    self:HandleSendQueue(elapsed)
+    self:HandleSaveLock(elapsed)
     if self.pendingRoster then
         self.rosterElapsed = (self.rosterElapsed or 0) + elapsed
         if self.rosterElapsed >= 10 then
@@ -993,6 +1250,8 @@ AzerothVoices:SetScript("OnEvent", function()
     if currentEvent == "PLAYER_LOGIN" then
         self:MigrateSavedVariables()
         self:BuildFrame()
+        self:CreateMinimapButton()
+        self:RequestStatus()
     elseif currentEvent == "PLAYER_LOGOUT" then
         self:SaveWindowPosition()
     elseif currentEvent == "CHAT_MSG_ADDON" then

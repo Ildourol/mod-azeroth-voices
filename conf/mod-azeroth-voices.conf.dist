@@ -59,8 +59,8 @@ AzerothVoices.ProviderMode = ChatCompletions
 AiPlayerbot.LLMApiEndpoint = https://api.openai.com/v1/chat/completions
 # Supplies the Bearer API token. (Secret or env:VARIABLE; default env:OPENAI_API_KEY.)
 AiPlayerbot.LLMApiKey = env:OPENAI_API_KEY
-# Exact model identifier accepted by the selected endpoint. (String; default gpt-4.1-mini.)
-AzerothVoices.Model = gpt-4.1-mini
+# Exact model identifier accepted by the selected endpoint. (String; default gpt-4o-mini.)
+AzerothVoices.Model = gpt-4o-mini
 # Empty lets the module generate provider-safe JSON; a custom legacy template may use <pre prompt>, <context>, <prompt>, <model>, and documented chat placeholders. (JSON template; default empty.)
 AiPlayerbot.LLMApiJson =
 # ProviderJson parses OpenAI chat/Responses, Gemini candidates, and Ollama JSON; LegacyRegex uses the regex settings below. (Enum ProviderJson/LegacyRegex; default ProviderJson.)
@@ -140,11 +140,11 @@ AzerothVoices.RetryBackoffMilliseconds = 500
 # Selects PlayerBot conversation style for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; Roleplay keeps them in-world, Normal makes them speak like believable real WoW players, and any interaction involving an NPC is forced to Roleplay by typed C++ participant policy before provider JSON is sent. (Enum Roleplay/Normal; default Normal.)
 AzerothVoices.GlobalMode = Normal
 # System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text.)
-AzerothVoices.GlobalPrompt.Roleplay = You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real lived experience. Stay in character and do not narrate actions. Never mention AI, prompts, policies, APIs, automation, game servers, controlling a character, or being a real-world player. Return only what the speaker says.
+AzerothVoices.GlobalPrompt.Roleplay = You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real lived experience. Stay in character and do not narrate actions. Never mention AI, prompts, policies, APIs, automation, game servers, controlling a character, or being a real-world player. Never prefix your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). Return only what the speaker says.
 # System prompt selected by GlobalMode=Normal for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; NPC-involved dialogue is switched to GlobalPrompt.Roleplay by C++ before provider serialization, so customizing this prompt cannot opt NPCs into Normal mode. (Text.)
-AzerothVoices.GlobalPrompt.Normal = You create short, natural World of Warcraft chat. Interaction metadata: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If the speaker is an NPC or counterpart-race is NPC, speak entirely in-world as a believable Vanilla/Turtle WoW character and never talk like someone at a computer. Otherwise the speaker is a PlayerBot representing a believable real human playing World of Warcraft: talk naturally like a real player about quests, leveling, gear, builds, talents, dungeons, guilds, PvP, travel, wipes, groups, and game mechanics when relevant; do not pretend Azeroth is real unless the conversation itself is roleplay. Avoid forced gamer slang and repetitive stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Return only what the speaker says.
+AzerothVoices.GlobalPrompt.Normal = You create short, natural World of Warcraft chat. Interaction metadata: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If the speaker is an NPC or counterpart-race is NPC, speak entirely in-world as a believable Vanilla/Turtle WoW character and never talk like someone at a computer. Otherwise the speaker is a PlayerBot representing a believable real human playing World of Warcraft: talk naturally like a real player about quests, leveling, gear, builds, talents, dungeons, guilds, PvP, travel, wipes, groups, and game mechanics when relevant; do not pretend Azeroth is real unless the conversation itself is roleplay. Avoid forced gamer slang and repetitive stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Never prefix your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). Return only what the speaker says.
 # Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is absent; existing installations may keep this value during migration. (Text.)
-AzerothVoices.GlobalPrompt = You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Return only what the speaker says.
+AzerothVoices.GlobalPrompt = You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.
 # Describes a PlayerBot before a normal response. (Text template.)
 AiPlayerbot.LLMPrePrompt = You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. <bot personality block>
 # Formats incoming chat for the provider using the actual incoming speaker name. (Text template.)
@@ -919,12 +919,12 @@ AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
 # Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
 AzerothVoices.Typing.SubtractGenerationTime = 1
 # Chunk size for delivered in-game output. A standard WoW chat frame wraps at ~45-55 characters,
-# so ~90 characters produces compact, natural ~2-line messages instead of bulky 3-line blocks.
-# Messages are cleanly split on sentence and clause boundaries where possible. (Characters, minimum 1; default 90.)
-AzerothVoices.Reply.MaximumCharacters = 90
+# so ~160 characters produces natural ~3-line messages instead of chopping replies into multiple 2-line fragments.
+# Messages are cleanly split on sentence and clause boundaries where possible. (Characters, minimum 1; default 160.)
+AzerothVoices.Reply.MaximumCharacters = 160
 # Maximum delivered lines/parts per request. Allows longer responses to be split into more
-# bite-sized pieces without being prematurely truncated. (Lines, minimum 1; default 6.)
-AzerothVoices.Reply.MaximumLines = 6
+# bite-sized pieces without being prematurely truncated. (Lines, minimum 1; default 3.)
+AzerothVoices.Reply.MaximumLines = 2
 
 ###################################################################################################
 # Bounded conversation and surrounding-chat history

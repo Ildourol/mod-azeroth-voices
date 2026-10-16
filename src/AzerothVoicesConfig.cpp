@@ -187,8 +187,9 @@ namespace AzerothVoices
             "You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth "
             "and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real "
             "lived experience. Stay in character and do not narrate actions. Never mention AI, prompts, policies, "
-            "APIs, automation, game servers, controlling a character, or being a real-world player. Return only "
-            "what the speaker says.";
+            "APIs, automation, game servers, controlling a character, or being a real-world player. Never prefix "
+            "your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). "
+            "Return only what the speaker says.";
         std::string const defaultNormalPrompt =
             "You create short, natural World of Warcraft chat. Interaction metadata: speaker=<bot type>; "
             "counterpart=<other type>; counterpart-race=<other race>. If the speaker is an NPC or counterpart-race "
@@ -197,8 +198,9 @@ namespace AzerothVoices
             "playing World of Warcraft: talk naturally like a real player about quests, leveling, gear, builds, "
             "talents, dungeons, guilds, PvP, travel, wipes, groups, and game mechanics when relevant; do not pretend "
             "Azeroth is real unless the conversation itself is roleplay. Avoid forced gamer slang and repetitive "
-            "stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Return only "
-            "what the speaker says.";
+            "stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Never prefix "
+            "your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). "
+            "Return only what the speaker says.";
         std::string const roleplayFallback = legacyGlobalPrompt.empty()
             ? defaultRoleplayPrompt : legacyGlobalPrompt;
         c.globalPromptRoleplay = Trim(sConfig.GetStringDefault(
@@ -607,7 +609,7 @@ namespace AzerothVoices
         c.typingBaseDelayMilliseconds = Positive("AzerothVoices.Typing.BaseDelayMilliseconds", 0);
         c.typingDelayPerCharacterMilliseconds = Positive("AzerothVoices.Typing.DelayPerCharacterMilliseconds", 200);
         c.subtractGenerationTime = sConfig.GetBoolDefault("AzerothVoices.Typing.SubtractGenerationTime", true);
-        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 90, 1);
+        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 140, 1);
         c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 6, 1);
 
         bool const legacyHistoryEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);

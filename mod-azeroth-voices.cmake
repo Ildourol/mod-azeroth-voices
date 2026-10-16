@@ -12,8 +12,10 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
     if(TARGET ${AV_TARGET})
       if(WIN32)
         target_include_directories(${AV_TARGET} BEFORE PRIVATE
+          "${CMAKE_SOURCE_DIR}/dep/windows/include/zlib"
           "${CMAKE_SOURCE_DIR}/dep/windows/include"
           "${CMAKE_SOURCE_DIR}/dep/include-windows")
+        target_compile_definitions(${AV_TARGET} PRIVATE ZLIB_INTERNAL)
       else()
         target_include_directories(${AV_TARGET} BEFORE PRIVATE
           ${OPENSSL_INCLUDE_DIR})
@@ -31,11 +33,10 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
   # The module answers both native .avaddon frames and legacy .llmc requests.
   install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/client/"
     DESTINATION "modules/mod-azeroth-voices/client")
-  # Volume presets are deliberately stored outside conf/ so the module system
-  # never auto-loads them. Operators copy the settings they want into the live
-  # mod-azeroth-voices.conf.
-  install(FILES "${CMAKE_CURRENT_LIST_DIR}/conf/presets/mod-azeroth-voices-quieter.conf.dist"
-    DESTINATION "modules/mod-azeroth-voices/conf/presets")
+  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/conf/presets/mod-azeroth-voices-quieter.conf.dist")
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/conf/presets/mod-azeroth-voices-quieter.conf.dist"
+      DESTINATION "modules/mod-azeroth-voices/conf/presets")
+  endif()
   install(FILES "${CMAKE_CURRENT_LIST_DIR}/README.md"
     DESTINATION "modules/mod-azeroth-voices")
 

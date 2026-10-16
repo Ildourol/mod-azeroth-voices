@@ -1,6 +1,7 @@
 #include "AzerothVoicesProvider.h"
 
 #include "AzerothVoicesReasoning.h"
+#include "AzerothVoicesSocial.h"
 
 #include "AzerothVoicesPersonality.h"
 #include "AzerothVoicesSentiment.h"
@@ -753,8 +754,9 @@ namespace AzerothVoices
         return finish();
     }
 
-    std::vector<std::string> Provider::SplitReply(Config const& config, std::string text)
+    std::vector<std::string> Provider::SplitReply(Config const& config, std::string text, std::string const& speakerName)
     {
+        text = StripSpeakerPrefix(text, speakerName);
         std::vector<std::string> rawLines;
         if (Lower(config.parserMode) == "legacyregex" && !config.responseSplitPattern.empty())
         {
@@ -781,7 +783,9 @@ namespace AzerothVoices
         std::vector<std::string> result;
         for (std::string line : rawLines)
         {
+            line = StripSpeakerPrefix(line, speakerName);
             line = SanitizeReply(line);
+            line = StripSpeakerPrefix(line, speakerName);
             while (!line.empty() && result.size() < config.maximumReplyLines)
             {
                 size_t limit = std::min<size_t>(config.maximumReplyCharacters, 240);
@@ -796,6 +800,7 @@ namespace AzerothVoices
                     split = limit;
                 result.push_back(Trim(line.substr(0, split)));
                 line = Trim(line.substr(split));
+                line = StripSpeakerPrefix(line, speakerName);
             }
             if (result.size() >= config.maximumReplyLines)
                 break;
@@ -803,3 +808,4 @@ namespace AzerothVoices
         return result;
     }
 }
+

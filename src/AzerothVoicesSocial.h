@@ -352,4 +352,9 @@ namespace AzerothVoices
         uint32_t delaySeconds = 0;
         bool cancelled = false;
     };
+
+    // Strips redundant speaker prefixes (e.g. "Runebane: Hi", "[Runebane] whispers: Hi",
+    // "Runebane says: Hi", or generic "Bot:/NPC:") that LLMs frequently output in replies.
+    std::string StripSpeakerPrefix(std::string value, std::string const& speakerName = "");
 }
+

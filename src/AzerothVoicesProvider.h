@@ -13,7 +13,8 @@ namespace AzerothVoices
     public:
         static bool InitializeTls(std::string& error);
         static ChatCompletion Execute(Config const& config, ChatRequest const& request);
-        static std::vector<std::string> SplitReply(Config const& config, std::string text);
+        static std::vector<std::string> SplitReply(Config const& config, std::string text,
+                                                  std::string const& speakerName = "");
 
     private:
         static std::string BuildBody(Config const& config, ChatRequest const& request, std::string& error);

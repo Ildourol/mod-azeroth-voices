@@ -860,4 +860,229 @@ namespace AzerothVoices
                 return 8 + (randomRangeVal % 13);
         }
     }
+
+    std::string StripSpeakerPrefix(std::string value, std::string const& speakerName)
+    {
+        auto trimStr = [](std::string const& s) -> std::string {
+            size_t start = 0;
+            while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
+                ++start;
+            size_t end = s.size();
+            while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
+                --end;
+            return s.substr(start, end - start);
+        };
+
+        auto unwrapQuotes = [&trimStr](std::string s) -> std::string {
+            s = trimStr(s);
+            if (s.size() >= 2 && ((s.front() == '"' && s.back() == '"') ||
+                                  (s.front() == '\'' && s.back() == '\'')))
+            {
+                s = trimStr(s.substr(1, s.size() - 2));
+            }
+            return s;
+        };
+
+        auto toLowerChar = [](char c) -> char {
+            return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        };
+
+        auto startsWithCaseInsensitive = [&toLowerChar](std::string const& str, size_t pos, std::string const& prefix) -> bool {
+            if (pos + prefix.size() > str.size())
+                return false;
+            for (size_t i = 0; i < prefix.size(); ++i)
+            {
+                if (toLowerChar(str[pos + i]) != toLowerChar(prefix[i]))
+                    return false;
+            }
+            return true;
+        };
+
+        value = trimStr(value);
+        bool strippedAny = false;
+
+        // Loop up to 3 times to strip repeated/nested prefixes (e.g. "[Runebane] whispers: Runebane: Hi")
+        for (int iteration = 0; iteration < 3; ++iteration)
+        {
+            value = trimStr(value);
+            if (value.empty())
+                break;
+
+            value = unwrapQuotes(value);
+            if (value.empty())
+                break;
+
+            bool matched = false;
+
+            // 1. Try matching with known speakerName if provided
+            std::string const trimmedSpeaker = trimStr(speakerName);
+            if (!trimmedSpeaker.empty())
+            {
+                size_t pos = 0;
+                char closeBracket = 0;
+                if (pos < value.size())
+                {
+                    if (value[pos] == '[') closeBracket = ']';
+                    else if (value[pos] == '<') closeBracket = '>';
+                    else if (value[pos] == '(') closeBracket = ')';
+                }
+
+                if (closeBracket != 0)
+                    ++pos;
+
+                if (startsWithCaseInsensitive(value, pos, trimmedSpeaker))
+                {
+                    pos += trimmedSpeaker.size();
+                    if (closeBracket != 0 && pos < value.size() && value[pos] == closeBracket)
+                        ++pos;
+
+                    // Skip spaces
+                    while (pos < value.size() && std::isspace(static_cast<unsigned char>(value[pos])))
+                        ++pos;
+
+                    // Check for optional dialogue verbs
+                    static const char* const verbs[] = {
+                        "whispers", "whisper", "says", "say", "yells", "yell",
+                        "asks", "ask", "replies", "reply", "tells you", "tells",
+                        "exclaims", "shouts", nullptr
+                    };
+                    for (size_t v = 0; verbs[v] != nullptr; ++v)
+                    {
+                        std::string verb = verbs[v];
+                        if (startsWithCaseInsensitive(value, pos, verb))
+                        {
+                            pos += verb.size();
+                            while (pos < value.size() && std::isspace(static_cast<unsigned char>(value[pos])))
+                                ++pos;
+                            break;
+                        }
+                    }
+
+                    // Check for separator ':', '-', '--', '—'
+                    bool hadSeparator = false;
+                    if (pos < value.size() && (value[pos] == ':' || value[pos] == '-'))
+                    {
+                        hadSeparator = true;
+                        ++pos;
+                        if (pos < value.size() && value[pos] == '-')
+                            ++pos;
+                    }
+                    else if (pos + 2 < value.size() &&
+                             static_cast<unsigned char>(value[pos]) == 0xe2 &&
+                             static_cast<unsigned char>(value[pos + 1]) == 0x80 &&
+                             (static_cast<unsigned char>(value[pos + 2]) == 0x94 || static_cast<unsigned char>(value[pos + 2]) == 0x93))
+                    {
+                        // UTF-8 em-dash or en-dash
+                        hadSeparator = true;
+                        pos += 3;
+                    }
+
+                    if (hadSeparator || closeBracket != 0 || pos > trimmedSpeaker.size())
+                    {
+                        value = trimStr(value.substr(pos));
+                        matched = true;
+                        strippedAny = true;
+                        continue;
+                    }
+                }
+            }
+
+            // 2. Generic dialogue verb pattern: "[Name] whispers: ", "Name says: ", etc.
+            static const char* const genericVerbSuffixes[] = {
+                " whispers:", " whisper:", " says:", " say:", " yells:", " yell:",
+                " asks:", " replies:", " tells you:", nullptr
+            };
+            for (size_t g = 0; genericVerbSuffixes[g] != nullptr; ++g)
+            {
+                std::string gv = genericVerbSuffixes[g];
+                for (size_t i = 0; i <= 35 && i + gv.size() <= value.size(); ++i)
+                {
+                    if (startsWithCaseInsensitive(value, i, gv))
+                    {
+                        size_t cut = i + gv.size();
+                        value = trimStr(value.substr(cut));
+                        matched = true;
+                        strippedAny = true;
+                        break;
+                    }
+                }
+                if (matched)
+                    break;
+            }
+            if (matched)
+                break;
+
+            // 3. Generic bracketed prefix: "^\[[A-Za-z0-9' _\-]{1,24}\]\s*:\s*"
+            if (!value.empty() && value.front() == '[')
+            {
+                size_t close = value.find(']');
+                if (close != std::string::npos && close >= 2 && close <= 30)
+                {
+                    size_t pos = close + 1;
+                    while (pos < value.size() && std::isspace(static_cast<unsigned char>(value[pos])))
+                        ++pos;
+                    if (pos < value.size() && value[pos] == ':')
+                    {
+                        ++pos;
+                        value = trimStr(value.substr(pos));
+                        matched = true;
+                        strippedAny = true;
+                        continue;
+                    }
+                }
+            }
+
+            // 4. Generic label prefix: "NPC:", "Bot:", "Playerbot:", "Character:"
+            static const char* const genericLabels[] = {
+                "npc:", "bot:", "playerbot:", "character:", "response:", "dialogue:", nullptr
+            };
+            for (size_t l = 0; genericLabels[l] != nullptr; ++l)
+            {
+                std::string label = genericLabels[l];
+                if (startsWithCaseInsensitive(value, 0, label))
+                {
+                    value = trimStr(value.substr(label.size()));
+                    matched = true;
+                    strippedAny = true;
+                    break;
+                }
+            }
+            if (matched)
+                continue;
+
+            // 5. If an outer prefix was already stripped (e.g. "[Runebane] whispers: "),
+            // any immediate "Name: " is a nested duplicate speaker prefix.
+            if (strippedAny)
+            {
+                size_t colon = value.find(':');
+                if (colon != std::string::npos && colon >= 1 && colon <= 24)
+                {
+                    bool validName = true;
+                    for (size_t i = 0; i < colon; ++i)
+                    {
+                        unsigned char c = static_cast<unsigned char>(value[i]);
+                        if (!std::isalnum(c) && c != ' ' && c != '\'' && c != '_' && c != '-')
+                        {
+                            validName = false;
+                            break;
+                        }
+                    }
+                    if (validName)
+                    {
+                        value = trimStr(value.substr(colon + 1));
+                        matched = true;
+                        continue;
+                    }
+                }
+            }
+
+            break;
+        }
+
+        if (strippedAny)
+            value = unwrapQuotes(value);
+
+        return value;
+    }
 }
+

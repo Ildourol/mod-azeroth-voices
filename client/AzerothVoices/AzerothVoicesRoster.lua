@@ -214,3 +214,5 @@ StaticPopupDialogs["AZEROTHVOICES_CONFIRM_FORGET"] = {
     whileDead = false,
     hideOnEscape = true,
 }
+
+StaticPopupDialogs["CHATTER_CONFIRM_FORGET"] = StaticPopupDialogs["AZEROTHVOICES_CONFIRM_FORGET"]
