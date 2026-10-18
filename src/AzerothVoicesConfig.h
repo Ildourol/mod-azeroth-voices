@@ -76,12 +76,13 @@ namespace AzerothVoices
         uint32_t queueMaximum = 128;
         uint32_t highPriorityReserve = 32;
         uint32_t requestTtlSeconds = 90;
-        uint32_t actorCooldownSeconds = 10;
         uint32_t ambientActorCooldownSeconds = 120;
         uint32_t retryMaximum = 1;
         uint32_t retryBackoffMilliseconds = 500;
         uint32_t globalRequestsPerMinute = 60;
-        uint32_t speakerCooldownSeconds = 3;
+        bool speakerCoalesceEnabled = true;
+        uint32_t speakerCoalesceDelayMilliseconds = 2000;
+        uint32_t speakerCoalesceMaxLines = 3;
 
         GlobalMode globalMode = GlobalMode::Normal;
         std::string globalPromptRoleplay;

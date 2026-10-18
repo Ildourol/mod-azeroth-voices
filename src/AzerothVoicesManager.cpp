@@ -1293,8 +1293,8 @@ namespace AzerothVoices
             m_ingress.clear();
         }
         m_scheduled.clear();
+        m_pendingCoalesce.clear();
         m_actorCooldowns.clear();
-        m_speakerCooldowns.clear();
         m_eventCooldowns.clear();
         m_history.clear();
         m_surroundingChat.clear();
@@ -1352,6 +1352,7 @@ namespace AzerothVoices
         if (!m_started || !m_config || !m_config->enabled)
             return;
         DrainIngress();
+        FlushPendingCoalescedChat();
         DrainCompletions();
         ReportTelemetry();
         DeliverScheduled();
@@ -1566,9 +1567,9 @@ namespace AzerothVoices
 
         auto const now = Clock::now();
         uint32_t const cooldownSeconds = ambient
-            ? m_config->ambientActorCooldownSeconds : m_config->actorCooldownSeconds;
+            ? m_config->ambientActorCooldownSeconds : 0;
         auto cooldown = m_actorCooldowns.find(actor.guid);
-        if (priority != RequestPriority::Direct && cooldown != m_actorCooldowns.end() &&
+        if (ambient && priority != RequestPriority::Direct && cooldown != m_actorCooldowns.end() &&
             cooldown->second > now)
         {
             RecordPreflightRejection(PreflightReason::Cooldown);
@@ -1817,9 +1818,9 @@ namespace AzerothVoices
         auto const now = Clock::now();
         bool const personalityRequest = request.kind == RequestKind::PersonalityGeneration;
         uint32_t cooldownSeconds = request.ambient
-            ? m_config->ambientActorCooldownSeconds : m_config->actorCooldownSeconds;
+            ? m_config->ambientActorCooldownSeconds : 0;
         auto cooldown = m_actorCooldowns.find(request.actor.guid);
-        if (!personalityRequest && request.priority != RequestPriority::Direct &&
+        if (!personalityRequest && request.ambient && request.priority != RequestPriority::Direct &&
             cooldown != m_actorCooldowns.end() && cooldown->second > now)
         {
             ++m_dropped;
@@ -1908,7 +1909,7 @@ namespace AzerothVoices
                 personalityActor = request.actor;
             m_queues[priorityIndex].push_back(std::move(request));
             m_requestBudget.push_back(now);
-            if (!personalityRequest)
+            if (!personalityRequest && cooldownSeconds > 0)
                 m_actorCooldowns[m_queues[priorityIndex].back().actor.guid] =
                     now + std::chrono::seconds(cooldownSeconds);
             ++m_accepted;
@@ -2514,8 +2515,96 @@ namespace AzerothVoices
         m_ingress.push_back(std::move(signal));
     }
 
+    void Manager::FlushPendingCoalescedChat()
+    {
+        if (m_pendingCoalesce.empty())
+            return;
+
+        auto const now = Clock::now();
+        std::vector<PendingCoalescedChat> toFlush;
+        for (auto it = m_pendingCoalesce.begin(); it != m_pendingCoalesce.end(); )
+        {
+            if (now >= it->second.flushAt)
+            {
+                toFlush.push_back(std::move(it->second));
+                it = m_pendingCoalesce.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        for (PendingCoalescedChat const& pending : toFlush)
+        {
+            Player* player = ObjectAccessor::FindPlayer(ObjectGuid(pending.playerGuid));
+            if (!player || !player->IsInWorld())
+                continue;
+
+            ProcessChatImmediate(player, pending.scope, pending.combinedMessage,
+                                 pending.targetName, pending.channelName);
+        }
+    }
+
     void Manager::ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                               std::string const& targetName, std::string const& channelName)
+    {
+        if (!m_started || !m_config || !m_config->enabled || m_paused || !speaker ||
+            message.empty() || !IsScopeEnabled(*m_config, scope) ||
+            IsBlockedChannel(*m_config, scope, channelName) || IsBlacklisted(*m_config, message))
+            return;
+
+        bool const speakerIsBot = Script_IsAIControlled(speaker);
+        if (!speakerIsBot && m_config->speakerCoalesceEnabled && m_config->speakerCoalesceDelayMilliseconds > 0)
+        {
+            SpeakerCoalesceKey key;
+            key.speakerGuid = speaker->GetObjectGuid().GetRawValue();
+            key.scope = scope;
+            key.targetName = Lower(Trim(targetName));
+            key.channelName = Lower(Trim(channelName));
+
+            auto const now = Clock::now();
+            auto it = m_pendingCoalesce.find(key);
+            if (it != m_pendingCoalesce.end())
+            {
+                it->second.combinedMessage += " " + message;
+                it->second.lineCount++;
+                it->second.lastSeen = now;
+                auto const windowDuration = std::chrono::milliseconds(m_config->speakerCoalesceDelayMilliseconds);
+                auto const maxTotalWindow = std::chrono::milliseconds(m_config->speakerCoalesceDelayMilliseconds * 2);
+                it->second.flushAt = std::min(now + windowDuration, it->second.firstSeen + maxTotalWindow);
+
+                if (it->second.lineCount >= m_config->speakerCoalesceMaxLines ||
+                    it->second.combinedMessage.size() >= 500)
+                {
+                    std::string const combined = it->second.combinedMessage;
+                    m_pendingCoalesce.erase(it);
+                    ProcessChatImmediate(speaker, scope, combined, targetName, channelName);
+                }
+                return;
+            }
+            else
+            {
+                PendingCoalescedChat pending;
+                pending.playerGuid = speaker->GetObjectGuid().GetRawValue();
+                pending.scope = scope;
+                pending.targetName = targetName;
+                pending.channelName = channelName;
+                pending.combinedMessage = message;
+                pending.lineCount = 1;
+                pending.firstSeen = now;
+                pending.lastSeen = now;
+                pending.flushAt = now + std::chrono::milliseconds(m_config->speakerCoalesceDelayMilliseconds);
+                m_pendingCoalesce[key] = std::move(pending);
+                return;
+            }
+        }
+
+        ProcessChatImmediate(speaker, scope, message, targetName, channelName);
+    }
+
+    void Manager::ProcessChatImmediate(Player* speaker, ChatScope scope, std::string const& message,
+                                       std::string const& targetName, std::string const& channelName)
     {
         if (!m_started || !m_config || !m_config->enabled || m_paused || !speaker ||
             message.empty() || !IsScopeEnabled(*m_config, scope) ||
@@ -2541,12 +2630,6 @@ namespace AzerothVoices
             RecordSurroundingChat(scope, channelName, SnapshotBot(speaker), speakerSnapshot, message);
 
         auto now = Clock::now();
-        if (scope != ChatScope::Whisper && m_config->speakerCooldownSeconds)
-        {
-            auto cooldown = m_speakerCooldowns.find(speaker->GetObjectGuid().GetRawValue());
-            if (cooldown != m_speakerCooldowns.end() && cooldown->second > now)
-                return;
-        }
 
         // V0.8 guild reply gating: a short per-speaker debounce, plus suppression
         // of the bot that spoke most recently in this guild.
@@ -2712,8 +2795,6 @@ namespace AzerothVoices
                 m_guildSessionHistory[sessionKey].AddTurn(message, "", static_cast<uint32_t>(time(nullptr)));
                 if (m_config->guildPlayerRepliesDebounceSeconds)
                     m_guildReplyDebounce[speakerGuid] = now + std::chrono::seconds(m_config->guildPlayerRepliesDebounceSeconds);
-                if (m_config->speakerCooldownSeconds)
-                    m_speakerCooldowns[speakerGuid] = now + std::chrono::seconds(m_config->speakerCooldownSeconds);
                 return;
             }
             else if (m_config->guildReplyDebounceSeconds)
@@ -2833,9 +2914,6 @@ namespace AzerothVoices
                             RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
                                 activeBotConv->partnerGuid, activeBotConv->partnerName,
                                 false, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
-                            if (m_config->speakerCooldownSeconds)
-                                m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
-                                    now + std::chrono::seconds(m_config->speakerCooldownSeconds);
                             return;
                         }
                     }
@@ -2857,9 +2935,6 @@ namespace AzerothVoices
                             RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
                                 selectedBot->GetObjectGuid().GetRawValue(), selectedBot->GetName(),
                                 false, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
-                            if (m_config->speakerCooldownSeconds)
-                                m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
-                                    now + std::chrono::seconds(m_config->speakerCooldownSeconds);
                             return;
                         }
                     }
@@ -2960,9 +3035,7 @@ namespace AzerothVoices
             if (!responderAccepted)
                 break;
         }
-        if (accepted && scope != ChatScope::Whisper && m_config->speakerCooldownSeconds)
-            m_speakerCooldowns[speaker->GetObjectGuid().GetRawValue()] =
-                now + std::chrono::seconds(m_config->speakerCooldownSeconds);
+
         if (accepted && (scope == ChatScope::Party || scope == ChatScope::Raid) && speaker->GetGroup())
         {
             m_partyLastSpeaker[speaker->GetGroup()->GetId()] =
@@ -6415,6 +6488,13 @@ namespace AzerothVoices
             uint64_t const guid = player->GetObjectGuid().GetRawValue();
             m_addonReassembler.ClearPlayer(guid);
             CancelPendingGuildGreeting(guid);
+            for (auto it = m_pendingCoalesce.begin(); it != m_pendingCoalesce.end(); )
+            {
+                if (it->second.playerGuid == guid)
+                    it = m_pendingCoalesce.erase(it);
+                else
+                    ++it;
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 # Documentation and internal planning files
-docs/
+docs/*
+!docs/CONFIGURATION_GUIDE.md
 AGENTS.md
 Addon/
 tests/

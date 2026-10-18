@@ -160,12 +160,13 @@ namespace AzerothVoices
         c.highPriorityReserve = Positive("AzerothVoices.HighPriorityReserve", 32);
         c.highPriorityReserve = std::min(c.highPriorityReserve, c.queueMaximum);
         c.requestTtlSeconds = Positive("AzerothVoices.RequestTTLSeconds", 90, 1);
-        c.actorCooldownSeconds = Positive("AzerothVoices.ActorCooldownSeconds", 10);
         c.ambientActorCooldownSeconds = Positive("AzerothVoices.AmbientActorCooldownSeconds", 120);
         c.retryMaximum = Positive("AzerothVoices.RetryMaximum", 1);
         c.retryBackoffMilliseconds = Positive("AzerothVoices.RetryBackoffMilliseconds", 500);
         c.globalRequestsPerMinute = Positive("AzerothVoices.GlobalRequestsPerMinute", 60, 1);
-        c.speakerCooldownSeconds = Positive("AzerothVoices.SpeakerCooldownSeconds", 3);
+        c.speakerCoalesceEnabled = sConfig.GetBoolDefault("AzerothVoices.SpeakerCoalesce.Enable", true);
+        c.speakerCoalesceDelayMilliseconds = Positive("AzerothVoices.SpeakerCoalesce.DelayMilliseconds", 2000, 500);
+        c.speakerCoalesceMaxLines = Positive("AzerothVoices.SpeakerCoalesce.MaxLines", 3, 2);
 
         std::string globalMode = Trim(sConfig.GetStringDefault("AzerothVoices.GlobalMode", "Normal"));
         std::transform(globalMode.begin(), globalMode.end(), globalMode.begin(), [](unsigned char value) {
@@ -563,7 +564,8 @@ namespace AzerothVoices
         c.generalNpcGossipChance = Percent("AzerothVoices.General.NpcGossipChance", 5);
         c.generalBotGossipChance = Percent("AzerothVoices.General.BotGossipChance", 5);
         c.generalGossipTargetCooldownSeconds = Positive("AzerothVoices.General.GossipTargetCooldownSeconds", 1800, 0);
-        c.generalBotSpeakerCooldownSeconds = Positive("AzerothVoices.General.BotSpeakerCooldownSeconds", 900, 0);
+        c.generalBotSpeakerCooldownSeconds = Positive("AzerothVoices.BotSpeakerCooldownSeconds",
+            Positive("AzerothVoices.General.BotSpeakerCooldownSeconds", 900, 0), 0);
 
         c.environmentContextEnabled = sConfig.GetBoolDefault("AzerothVoices.Environment.Enable", true);
         c.environmentContextDistance = std::min(100.0f, std::max(1.0f,

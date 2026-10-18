@@ -122,12 +122,30 @@ AzerothVoices.HighPriorityReserve = 32
 AzerothVoices.GlobalRequestsPerMinute = 60
 # Drops queued requests that are no longer timely. (Seconds, minimum 1; default 90.)
 AzerothVoices.RequestTTLSeconds = 90
-# Cooldown before an actor gives another normal reply. (Seconds, minimum 0; default 10.)
-AzerothVoices.ActorCooldownSeconds = 10
 # Longer per-actor random-chatter cooldown. (Seconds, minimum 0; default 120.)
 AzerothVoices.AmbientActorCooldownSeconds = 120
-# Coalesces rapid non-whispers from one speaker. (Seconds, minimum 0; default 3.)
-AzerothVoices.SpeakerCooldownSeconds = 3
+
+# Per-bot cooldown (seconds) for General channel speech.
+# After a bot speaks in General, it cannot speak again
+# until this cooldown expires. Spreads voices across
+# different bots so the same one doesn't dominate.
+# Does NOT affect party chat or event reactions.
+# Default: 900 (15 minutes)
+AzerothVoices.BotSpeakerCooldownSeconds = 900
+
+
+# Enables merging rapid consecutive messages from a real human player into a single prompt
+# for bots and NPCs. For example, typing "hi" followed by "ready for deadmines?" within the
+# window is combined into "hi ready for deadmines?" before calling the LLM.
+# Recommended: 1. (Boolean, default 1.)
+AzerothVoices.SpeakerCoalesce.Enable = 1
+
+# Time window in milliseconds to wait for additional follow-up lines from the player before
+# dispatching the combined message to the LLM. (Milliseconds, minimum 500, default 2000.)
+AzerothVoices.SpeakerCoalesce.DelayMilliseconds = 2000
+
+# Maximum number of consecutive lines to merge before forcing dispatch. (Count, minimum 2, default 3.)
+AzerothVoices.SpeakerCoalesce.MaxLines = 3
 # Retries transient connection, 429, and 5xx failures. (Retries, minimum 0; default 1.)
 AzerothVoices.RetryMaximum = 1
 # Base increasing delay between retries. (Milliseconds, minimum 0; default 500.)
@@ -391,8 +409,8 @@ AzerothVoices.Proximity.ScanSecondsOutdoor = 30
 AzerothVoices.Proximity.ScanSecondsInstance = 30
 # Trigger chance per outdoor scan, before zone fatigue. (Percentage; default 15.)
 AzerothVoices.Proximity.OutdoorChance = 15
-# Trigger chance per dungeon/raid scan, before zone fatigue. (Percentage; default 100.)
-AzerothVoices.Proximity.InstanceChance = 100
+# Trigger chance per dungeon/raid scan, before zone fatigue. (Percentage; default 75.)
+AzerothVoices.Proximity.InstanceChance = 75
 # Includes dungeons and raids; they are never required for outdoor chatter. (Default 1.)
 AzerothVoices.Proximity.IncludeInstances = 1
 # Per-speaker cooldown after a delivered proximity line. (Seconds, 0-86400; default 60.)
@@ -469,7 +487,7 @@ AzerothVoices.BossDialogue.AllowEntries =
 AzerothVoices.BossDialogue.DenyEntries =
 
 ###################################################################################################
-# Party and raid chatter (V0.8)
+# Party and raid chatter 
 ###################################################################################################
 #
 # Group reactions run on top of the existing reply system: they need a real
@@ -609,7 +627,7 @@ AzerothVoices.RaidChatter.IdleScanSeconds = 60
 AzerothVoices.RaidChatter.IdleCooldownSeconds = 180
 
 ###################################################################################################
-# Guild chatter (V0.8)
+# Guild chatter 
 ###################################################################################################
 
 # Enables guild ambient conversation, login greetings and reply gating. Guild replies still require
@@ -693,7 +711,7 @@ AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMinSeconds = 2
 AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMaxSeconds = 6
 
 ###################################################################################################
-# Deterministic bot memory ledger (V0.8)
+# Deterministic bot memory ledger 
 ###################################################################################################
 #
 # C++ writes short fixed-template memories from verified facts only: no provider
