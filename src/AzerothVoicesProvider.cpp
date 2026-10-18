@@ -774,36 +774,37 @@ namespace AzerothVoices
 
         if (rawLines.empty())
         {
-            std::stringstream stream(text);
-            std::string line;
-            while (std::getline(stream, line))
-                rawLines.push_back(line);
+            return SplitReplyLinesStructured(
+                text,
+                speakerName,
+                config.maximumReplyCharacters,
+                config.maximumReplyLines,
+                config.sentenceAwareSplitting);
         }
 
         std::vector<std::string> result;
-        for (std::string line : rawLines)
+        size_t currentTotalChars = 0;
+        for (std::string const& raw : rawLines)
         {
-            line = StripSpeakerPrefix(line, speakerName);
-            line = SanitizeReply(line);
-            line = StripSpeakerPrefix(line, speakerName);
-            while (!line.empty() && result.size() < config.maximumReplyLines)
-            {
-                size_t limit = std::min<size_t>(config.maximumReplyCharacters, 240);
-                if (line.size() <= limit)
-                {
-                    result.push_back(line);
-                    break;
-                }
-
-                size_t split = line.rfind(' ', limit);
-                if (split == std::string::npos || split < limit / 2)
-                    split = limit;
-                result.push_back(Trim(line.substr(0, split)));
-                line = Trim(line.substr(split));
-                line = StripSpeakerPrefix(line, speakerName);
-            }
-            if (result.size() >= config.maximumReplyLines)
+            if (result.size() >= config.maximumReplyLines || currentTotalChars >= config.maximumReplyCharacters)
                 break;
+
+            size_t remainingLines = config.maximumReplyLines - result.size();
+            size_t remainingBudget = config.maximumReplyCharacters - currentTotalChars;
+            std::vector<std::string> parts = SplitReplyLinesStructured(
+                raw,
+                speakerName,
+                remainingBudget,
+                remainingLines,
+                config.sentenceAwareSplitting);
+
+            for (std::string& p : parts)
+            {
+                currentTotalChars += p.size();
+                result.push_back(std::move(p));
+                if (result.size() >= config.maximumReplyLines || currentTotalChars >= config.maximumReplyCharacters)
+                    break;
+            }
         }
         return result;
     }

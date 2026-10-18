@@ -1084,5 +1084,479 @@ namespace AzerothVoices
 
         return value;
     }
+
+    namespace
+    {
+        bool IsSentenceAbbreviation(std::string const& word)
+        {
+            if (word.empty())
+                return false;
+
+            std::string lower;
+            lower.reserve(word.size());
+            for (char c : word)
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+
+            static const char* const abbreviations[] = {
+                "etc", "eg", "e.g", "ie", "i.e", "vs", "mr", "mrs", "ms", "dr", "prof",
+                "st", "co", "inc", "ltd", "gen", "col", "capt", "sgt", "cpl", "pvt",
+                "approx", "dept", "min", "max", "sec", "lvl", "no", "nr", "rep", "sen",
+                nullptr
+            };
+
+            for (size_t i = 0; abbreviations[i] != nullptr; ++i)
+            {
+                if (lower == abbreviations[i])
+                    return true;
+            }
+            return false;
+        }
+
+        std::string CleanDialogueText(std::string value)
+        {
+            auto replaceSub = [](std::string& str, std::string const& from, std::string const& to) {
+                if (from.empty()) return;
+                size_t pos = 0;
+                while ((pos = str.find(from, pos)) != std::string::npos)
+                {
+                    str.replace(pos, from.size(), to);
+                    pos += to.size();
+                }
+            };
+
+            replaceSub(value, "```json", "");
+            replaceSub(value, "```", "");
+            replaceSub(value, "\r", "");
+            value.erase(std::remove_if(value.begin(), value.end(), [](unsigned char c) {
+                return c < 0x20 && c != '\n' && c != '\t';
+            }), value.end());
+
+            auto trimStr = [](std::string const& s) -> std::string {
+                size_t start = 0;
+                while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
+                    ++start;
+                size_t end = s.size();
+                while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
+                    --end;
+                return s.substr(start, end - start);
+            };
+
+            value = trimStr(value);
+            if (value.size() >= 2 && ((value.front() == '"' && value.back() == '"') ||
+                                      (value.front() == '\'' && value.back() == '\'')))
+            {
+                value = trimStr(value.substr(1, value.size() - 2));
+            }
+            return value;
+        }
+
+        std::vector<std::string> SplitSingleSentence(std::string const& s, size_t limit)
+        {
+            auto trimStr = [](std::string const& str) -> std::string {
+                size_t start = 0;
+                while (start < str.size() && std::isspace(static_cast<unsigned char>(str[start])))
+                    ++start;
+                size_t end = str.size();
+                while (end > start && std::isspace(static_cast<unsigned char>(str[end - 1])))
+                    --end;
+                return str.substr(start, end - start);
+            };
+
+            std::vector<std::string> chunks;
+            std::string rem = trimStr(s);
+
+            while (rem.size() > limit)
+            {
+                size_t const minBound = std::max<size_t>(10, limit / 3);
+                size_t bestSplit = std::string::npos;
+
+                // 1. Look for clause punctuation (, ; : -) followed by space
+                for (size_t p = limit; p >= minBound; --p)
+                {
+                    char c = rem[p - 1];
+                    char nextC = (p < rem.size()) ? rem[p] : ' ';
+
+                    if ((c == ',' || c == ';' || c == ':' || c == '-') &&
+                        std::isspace(static_cast<unsigned char>(nextC)))
+                    {
+                        bestSplit = p;
+                        break;
+                    }
+                }
+
+                // 2. If no clause punctuation, look for word boundary (space)
+                if (bestSplit == std::string::npos)
+                {
+                    size_t space = rem.rfind(' ', limit);
+                    if (space != std::string::npos && space >= minBound / 2)
+                        bestSplit = space;
+                }
+
+                // 3. Fallback: hard break at limit
+                if (bestSplit == std::string::npos || bestSplit == 0)
+                    bestSplit = limit;
+
+                std::string chunk = trimStr(rem.substr(0, bestSplit));
+                if (!chunk.empty())
+                    chunks.push_back(chunk);
+
+                rem = trimStr(rem.substr(bestSplit));
+            }
+
+            if (!rem.empty())
+                chunks.push_back(rem);
+
+            return chunks;
+        }
+    }
+
+    std::vector<std::string> SplitIntoSentences(std::string const& text)
+    {
+        auto trimStr = [](std::string const& s) -> std::string {
+            size_t start = 0;
+            while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
+                ++start;
+            size_t end = s.size();
+            while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
+                --end;
+            return s.substr(start, end - start);
+        };
+
+        std::vector<std::string> sentences;
+        if (text.empty())
+            return sentences;
+
+        size_t start = 0;
+        size_t const n = text.size();
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            char c = text[i];
+            if (c != '.' && c != '!' && c != '?' && c != ';')
+                continue;
+
+            // Advance through repeated punctuation (e.g. "...", "!!", "!?", "?!")
+            size_t endPunct = i;
+            while (endPunct + 1 < n && (text[endPunct + 1] == '.' || text[endPunct + 1] == '!' ||
+                                        text[endPunct + 1] == '?' || text[endPunct + 1] == '~'))
+            {
+                ++endPunct;
+            }
+
+            // Include any closing quotes, brackets or parentheses
+            size_t endQuote = endPunct + 1;
+            while (endQuote < n && (text[endQuote] == '"' || text[endQuote] == '\'' ||
+                                    text[endQuote] == ')' || text[endQuote] == ']' ||
+                                    text[endQuote] == '>' || text[endQuote] == '}' ||
+                                    static_cast<unsigned char>(text[endQuote]) == 0x9d ||
+                                    static_cast<unsigned char>(text[endQuote]) == 0x99))
+            {
+                ++endQuote;
+            }
+
+            // If we reached the end of string, this is the final sentence
+            if (endQuote >= n)
+            {
+                std::string s = trimStr(text.substr(start));
+                if (!s.empty())
+                    sentences.push_back(s);
+                start = n;
+                break;
+            }
+
+            // Must be followed by whitespace or newline to be a sentence break
+            if (!std::isspace(static_cast<unsigned char>(text[endQuote])))
+            {
+                // Not followed by whitespace (e.g., 3.14, domain.com, etc.)
+                i = endPunct;
+                continue;
+            }
+
+            // Find next non-whitespace character
+            size_t nextCharPos = endQuote;
+            while (nextCharPos < n && std::isspace(static_cast<unsigned char>(text[nextCharPos])))
+                ++nextCharPos;
+
+            if (nextCharPos >= n)
+            {
+                // Trailing whitespace at end of string
+                std::string s = trimStr(text.substr(start));
+                if (!s.empty())
+                    sentences.push_back(s);
+                start = n;
+                break;
+            }
+
+            // For period '.', check abbreviation, initial, numbers, and lowercase follow-up:
+            if (c == '.' && endPunct == i)
+            {
+                // Find previous word token before the period:
+                size_t wordEnd = i;
+                size_t wordStart = i;
+                while (wordStart > 0 && (std::isalnum(static_cast<unsigned char>(text[wordStart - 1])) ||
+                                         text[wordStart - 1] == '.' || text[wordStart - 1] == '-'))
+                {
+                    --wordStart;
+                }
+                std::string const prevWord = text.substr(wordStart, wordEnd - wordStart);
+
+                // 1. Single-letter initial/acronym (e.g. "U. S.", "John D. Rockefeller"):
+                if (prevWord.size() == 1 && std::isalpha(static_cast<unsigned char>(prevWord[0])))
+                {
+                    i = endPunct;
+                    continue;
+                }
+
+                // 2. All digits (e.g. "1. First" or "42. Item"):
+                bool allDigits = !prevWord.empty();
+                for (char pc : prevWord)
+                {
+                    if (!std::isdigit(static_cast<unsigned char>(pc)))
+                    {
+                        allDigits = false;
+                        break;
+                    }
+                }
+                if (allDigits)
+                {
+                    i = endPunct;
+                    continue;
+                }
+
+                // 3. Known abbreviation (e.g. "etc.", "e.g.", "dr.", "lvl."):
+                if (IsSentenceAbbreviation(prevWord))
+                {
+                    i = endPunct;
+                    continue;
+                }
+
+                // 4. Followed by lowercase ASCII letter (e.g. "etc. in a convenient..."):
+                if (std::islower(static_cast<unsigned char>(text[nextCharPos])))
+                {
+                    i = endPunct;
+                    continue;
+                }
+            }
+
+            // Genuine sentence boundary:
+            std::string s = trimStr(text.substr(start, endQuote - start));
+            if (!s.empty())
+                sentences.push_back(s);
+            start = nextCharPos;
+            i = nextCharPos - 1;
+        }
+
+        if (start < n)
+        {
+            std::string s = trimStr(text.substr(start));
+            if (!s.empty())
+                sentences.push_back(s);
+        }
+
+        return sentences;
+    }
+
+    std::vector<std::string> SplitReplyLinesStructured(
+        std::string const& text,
+        std::string const& speakerName,
+        size_t maximumCharacters,
+        size_t maximumLines,
+        bool sentenceAware)
+    {
+        auto trimStr = [](std::string const& s) -> std::string {
+            size_t start = 0;
+            while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
+                ++start;
+            size_t end = s.size();
+            while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
+                --end;
+            return s.substr(start, end - start);
+        };
+
+        if (maximumLines == 0 || maximumCharacters == 0)
+            return {};
+
+        std::string cleaned = StripSpeakerPrefix(text, speakerName);
+        cleaned = CleanDialogueText(cleaned);
+        cleaned = StripSpeakerPrefix(cleaned, speakerName);
+        if (cleaned.empty())
+            return {};
+
+        size_t const totalBudget = maximumCharacters;
+        size_t const maxLinePacketLimit = std::min<size_t>(totalBudget, 240);
+
+        if (!sentenceAware)
+        {
+            // Legacy greedy space-splitting behavior bounded by totalBudget
+            std::stringstream stream(cleaned);
+            std::string line;
+            std::vector<std::string> rawLines;
+            while (std::getline(stream, line))
+                rawLines.push_back(line);
+
+            std::vector<std::string> result;
+            size_t totalCharacters = 0;
+            for (std::string l : rawLines)
+            {
+                l = StripSpeakerPrefix(l, speakerName);
+                while (!l.empty() && result.size() < maximumLines && totalCharacters < totalBudget)
+                {
+                    size_t const remaining = totalBudget - totalCharacters;
+                    size_t const chunkLimit = std::min<size_t>(remaining, maxLinePacketLimit);
+                    if (chunkLimit == 0)
+                        break;
+
+                    if (l.size() <= chunkLimit)
+                    {
+                        totalCharacters += l.size();
+                        result.push_back(l);
+                        break;
+                    }
+                    size_t split = l.rfind(' ', chunkLimit);
+                    if (split == std::string::npos || split < chunkLimit / 2)
+                        split = chunkLimit;
+                    std::string chunk = trimStr(l.substr(0, split));
+                    if (!chunk.empty())
+                    {
+                        totalCharacters += chunk.size();
+                        result.push_back(chunk);
+                    }
+                    l = trimStr(l.substr(split));
+                    l = StripSpeakerPrefix(l, speakerName);
+                }
+                if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                    break;
+            }
+            return result;
+        }
+
+        // Sentence-aware structured splitting respecting cumulative total budget
+        std::stringstream stream(cleaned);
+        std::string paragraph;
+        std::vector<std::string> paragraphs;
+        while (std::getline(stream, paragraph))
+        {
+            paragraph = trimStr(paragraph);
+            if (!paragraph.empty())
+                paragraphs.push_back(paragraph);
+        }
+
+        std::vector<std::string> result;
+        size_t totalCharacters = 0;
+        std::string currentLine;
+
+        for (std::string const& para : paragraphs)
+        {
+            if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                break;
+
+            std::vector<std::string> sentences = SplitIntoSentences(para);
+            for (std::string const& s : sentences)
+            {
+                if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                    break;
+
+                if (s.empty())
+                    continue;
+
+                if (currentLine.empty())
+                {
+                    size_t const remaining = (totalBudget > totalCharacters) ? (totalBudget - totalCharacters) : 0;
+                    if (remaining == 0)
+                        break;
+
+                    size_t const lineLimit = std::min<size_t>(remaining, maxLinePacketLimit);
+                    if (s.size() <= lineLimit)
+                    {
+                        currentLine = s;
+                    }
+                    else if (result.empty())
+                    {
+                        // First line must fit what it can into the budget
+                        std::vector<std::string> chunks = SplitSingleSentence(s, lineLimit);
+                        for (size_t k = 0; k < chunks.size(); ++k)
+                        {
+                            if (k + 1 < chunks.size())
+                            {
+                                if (result.size() < maximumLines && totalCharacters + chunks[k].size() <= totalBudget)
+                                {
+                                    totalCharacters += chunks[k].size();
+                                    result.push_back(chunks[k]);
+                                    if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                                        break;
+                                }
+                            }
+                            else
+                            {
+                                if (totalCharacters + chunks[k].size() <= totalBudget)
+                                    currentLine = chunks[k];
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Clean stop at sentence boundary if previous complete lines exist
+                        break;
+                    }
+                }
+                else
+                {
+                    size_t const committed = totalCharacters + currentLine.size();
+                    size_t const remaining = (totalBudget > committed) ? (totalBudget - committed) : 0;
+
+                    // Check if appending s fits in line limit and remaining budget
+                    if (1 + s.size() <= remaining && currentLine.size() + 1 + s.size() <= maxLinePacketLimit)
+                    {
+                        currentLine += " " + s;
+                    }
+                    else
+                    {
+                        // Current line ends cleanly at sentence boundary!
+                        result.push_back(currentLine);
+                        totalCharacters += currentLine.size();
+                        currentLine.clear();
+
+                        if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                            break;
+
+                        size_t const newRemaining = (totalBudget > totalCharacters) ? (totalBudget - totalCharacters) : 0;
+                        if (newRemaining == 0)
+                            break;
+
+                        size_t const newLineLimit = std::min<size_t>(newRemaining, maxLinePacketLimit);
+                        if (s.size() <= newLineLimit)
+                        {
+                            currentLine = s;
+                        }
+                        else
+                        {
+                            // Clean stop at complete sentence boundary already committed
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Paragraph boundary: flush currentLine
+            if (!currentLine.empty())
+            {
+                result.push_back(currentLine);
+                totalCharacters += currentLine.size();
+                currentLine.clear();
+            }
+        }
+
+        if (!currentLine.empty() && result.size() < maximumLines && totalCharacters + currentLine.size() <= totalBudget)
+        {
+            result.push_back(currentLine);
+            totalCharacters += currentLine.size();
+            currentLine.clear();
+        }
+
+        for (std::string& resLine : result)
+            resLine = StripSpeakerPrefix(resLine, speakerName);
+
+        return result;
+    }
 }
 

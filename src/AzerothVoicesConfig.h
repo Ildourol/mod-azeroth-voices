@@ -155,7 +155,16 @@ namespace AzerothVoices
         bool npcReplyObserverEnabled = true;
         uint32_t npcReplyObserverChance = 25;
         uint32_t npcReplyObserverCooldownSeconds = 30;
+        bool targetedBotObserverEnabled = true;
+        uint32_t targetedBotCommentOnPlayerChance = 70;
+        uint32_t targetedBotCommentOnReplyChance = 30;
+        uint32_t targetedBotObserverCooldownSeconds = 30;
         bool exclusiveNameMentionResponder = true;
+        int32_t candidateScoreDirectTarget = 100;
+        int32_t candidateScoreNameMention = 80;
+        int32_t candidateScoreUntargeted = 25;
+        bool targetActiveSuppressionEnabled = true;
+        uint32_t targetActiveChance = 60;
         uint32_t directAddressChance = 100;
         uint32_t nameMentionChance = 70;
         uint32_t overhearChance = 8;
@@ -394,7 +403,8 @@ namespace AzerothVoices
         TypingDelayRange typingDelayPerCharacterMilliseconds;
         bool subtractGenerationTime = true;
         uint32_t maximumReplyCharacters = 140;
-        uint32_t maximumReplyLines = 6;
+        uint32_t maximumReplyLines = 2;
+        bool sentenceAwareSplitting = true;
 
         uint32_t historyStorageMode = 2;
         uint32_t historyRamMaximumTurns = 6;

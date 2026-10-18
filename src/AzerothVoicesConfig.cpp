@@ -317,8 +317,24 @@ namespace AzerothVoices
             "AzerothVoices.NPC.ReplyObserver.Chance", 25);
         c.npcReplyObserverCooldownSeconds = Positive(
             "AzerothVoices.NPC.ReplyObserver.CooldownSeconds", 30);
+        c.targetedBotObserverEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.TargetedBot.Observer.Enable", true);
+        c.targetedBotCommentOnPlayerChance = Percent(
+            "AzerothVoices.TargetedBot.CommentOnPlayerChance", 70);
+        c.targetedBotCommentOnReplyChance = Percent(
+            "AzerothVoices.TargetedBot.CommentOnReplyChance", 30);
+        c.targetedBotObserverCooldownSeconds = Positive(
+            "AzerothVoices.TargetedBot.ObserverCooldownSeconds", 30);
         c.exclusiveNameMentionResponder = Bounded(
             "AzerothVoices.NameMention.ExclusiveResponder", 1, 0, 1) != 0;
+        c.candidateScoreDirectTarget = Bounded("AzerothVoices.CandidateScore.DirectTarget",
+            Bounded("AzerothVoices.CandidateScore.Targeted", 100, 0, 200), 0, 200);
+        c.candidateScoreNameMention = Bounded("AzerothVoices.CandidateScore.NameMention", 80, 0, 100);
+        c.candidateScoreUntargeted = Bounded("AzerothVoices.CandidateScore.Untargeted", 25, 0, 100);
+        c.targetActiveSuppressionEnabled = sConfig.GetBoolDefault(
+            "AzerothVoices.PlayerReplyChance.TargetActive.Enable", true);
+        c.targetActiveChance = Percent(
+            "AzerothVoices.PlayerReplyChance.TargetActive.Chance", 60);
         c.directAddressChance = Percent("AzerothVoices.Chance.DirectAddress", 100);
         c.nameMentionChance = Percent("AzerothVoices.Chance.NameMention", 70);
         c.overhearChance = Percent("AzerothVoices.Chance.Overhear", 8);
@@ -612,7 +628,8 @@ namespace AzerothVoices
         c.typingDelayPerCharacterMilliseconds = Positive("AzerothVoices.Typing.DelayPerCharacterMilliseconds", 200);
         c.subtractGenerationTime = sConfig.GetBoolDefault("AzerothVoices.Typing.SubtractGenerationTime", true);
         c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 140, 1);
-        c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 6, 1);
+        c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 2, 1);
+        c.sentenceAwareSplitting = sConfig.GetBoolDefault("AzerothVoices.Reply.SentenceAwareSplitting", true);
 
         bool const legacyHistoryEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);
         c.historyStorageMode = std::min<uint32_t>(2, Positive(

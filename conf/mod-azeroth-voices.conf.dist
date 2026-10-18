@@ -292,6 +292,12 @@ AzerothVoices.YellDistance = 100
 
 # When 1, any full online PlayerBot name explicitly mentioned in Say, Yell, Party, Raid, Guild, Officer, World, or custom-channel chat makes only explicitly named PlayerBots eligible; unmentioned PlayerBots and NPCs are suppressed, while the existing NameMention chance still decides whether a named bot replies. Whisper is already single-target. (Accepted 0/1; default 1.)
 AzerothVoices.NameMention.ExclusiveResponder = 1
+# Candidate priority base score for an actor directly targeted by the speaking player or whispered. (Score, 0-200; default 100.)
+AzerothVoices.CandidateScore.DirectTarget = 100
+# Candidate priority base score for an actor whose name is explicitly mentioned in the message. (Score, 0-100; default 80.)
+AzerothVoices.CandidateScore.NameMention = 80
+# Candidate priority base score for an untargeted and unmentioned actor in group or local chat. (Score, 0-100; default 25.)
+AzerothVoices.CandidateScore.Untargeted = 25
 # Chance a selected or directly whispered actor answers. (Percentage; default 100.)
 AzerothVoices.Chance.DirectAddress = 100
 # Chance an actor named in the message answers. (Percentage; default 70.)
@@ -317,6 +323,12 @@ AzerothVoices.PlayerReplyChance.Channel = 60
 AzerothVoices.BotReplyChance.Channel = 3
 # Bot response chance to a real player in party/raid. (Percentage; default 90.)
 AzerothVoices.PlayerReplyChance.Party = 90
+# When enabled, if a human player has an active target in Say, Yell, Party, or Raid chat,
+# untargeted companion bots suppress their reply probability to TargetActive.Chance instead of
+# full ambient channel rates. Global channels (Guild, Officer, World) skip target suppression. (Default 1.)
+AzerothVoices.PlayerReplyChance.TargetActive.Enable = 1
+# Bot response chance when the speaking player has an active target (applies to untargeted bots in Say, Yell, Party, Raid). (Percentage, 0-100; default 60.)
+AzerothVoices.PlayerReplyChance.TargetActive.Chance = 60
 # Bot response chance to another bot in party/raid. Bot-originated replies also require a real member in the party subgroup or raid. (Percentage; default 10.)
 AzerothVoices.BotReplyChance.Party = 10
 # Bot response chance to a real player in guild/officer chat. (Percentage; default 70.)
@@ -395,6 +407,19 @@ AzerothVoices.NPC.ReplyObserver.Chance = 25
 
 # Cooldown between bot observer comments reacting to NPC interactions. (Seconds, 0-86400; default 30.)
 AzerothVoices.NPC.ReplyObserver.CooldownSeconds = 30
+
+# Enables observer commentary from companion PlayerBots when a real player speaks to or interacts
+# with a targeted companion PlayerBot. Allows other party members to chime in or react. (Default 1.)
+AzerothVoices.TargetedBot.Observer.Enable = 1
+
+# Chance that an untargeted companion PlayerBot comments on what the real player said to the targeted bot. (Percentage, 0-100; default 70.)
+AzerothVoices.TargetedBot.CommentOnPlayerChance = 70
+
+# Chance that an untargeted companion PlayerBot reacts to the reply delivered by the targeted bot. (Percentage, 0-100; default 30.)
+AzerothVoices.TargetedBot.CommentOnReplyChance = 30
+
+# Cooldown between companion bot observer comments reacting to targeted bot interactions. (Seconds, 0-86400; default 30.)
+AzerothVoices.TargetedBot.ObserverCooldownSeconds = 30
 
 ###################################################################################################
 # Dedicated proximity chatter (ordinary Say)
@@ -936,13 +961,15 @@ AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
 # Legacy compatibility: if both range keys above are absent, AzerothVoices.Typing.DelayPerCharacterMilliseconds is still accepted as one fixed per-character delay.
 # Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
 AzerothVoices.Typing.SubtractGenerationTime = 1
-# Chunk size for delivered in-game output. A standard WoW chat frame wraps at ~45-55 characters,
-# so ~160 characters produces natural ~3-line messages instead of chopping replies into multiple 2-line fragments.
-# Messages are cleanly split on sentence and clause boundaries where possible. (Characters, minimum 1; default 160.)
-AzerothVoices.Reply.MaximumCharacters = 160
-# Maximum delivered lines/parts per request. Allows longer responses to be split into more
-# bite-sized pieces without being prematurely truncated. (Lines, minimum 1; default 3.)
+# Cumulative total character budget across all delivered reply lines for a single request.
+# Messages are cleanly split on sentence and clause boundaries up to this cumulative character budget.
+# (Characters, minimum 1; default 140.)
+AzerothVoices.Reply.MaximumCharacters = 140
+# Maximum delivered lines/parts per request. Limits the number of separate chat messages a bot
+# can send per response turn. (Lines, minimum 1; default 2.)
 AzerothVoices.Reply.MaximumLines = 2
+# Enables structured, sentence-aware line breaking for delivered dialogue. When enabled, replies are cleanly split on natural sentence boundaries (.!?) and clause punctuation (,;-) instead of greedily packing characters and breaking in the middle of sentences across messages. (Default 1.)
+AzerothVoices.Reply.SentenceAwareSplitting = 1
 
 ###################################################################################################
 # Bounded conversation and surrounding-chat history

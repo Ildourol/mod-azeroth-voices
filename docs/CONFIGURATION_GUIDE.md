@@ -727,6 +727,9 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 | [`AzerothVoices.SayDistance`](#azerothvoicessaydistance) | Decimal Yards (Decimal yards, minimum 1; default 25.) | `25` | Local Say listener/responder and real-human observer distance for PlayerBot... |
 | [`AzerothVoices.YellDistance`](#azerothvoicesyelldistance) | Decimal Yards (Decimal yards, minimum SayDistance; default 100.) | `100` | Local yell listener/responder distance. Bot-originated yell can trigger AI ... |
 | [`AzerothVoices.NameMention.ExclusiveResponder`](#azerothvoicesnamementionexclusiveresponder) | Boolean (`0` or `1`) | `1` | When 1, any full online PlayerBot name explicitly mentioned in Say, Yell, P... |
+| [`AzerothVoices.CandidateScore.DirectTarget`](#azerothvoicescandidatescoredirecttarget) | Integer (`0` - `200`) | `100` | Candidate priority base score for an actor directly targeted by the player or whispered. (Score, 0-200; default 100.) |
+| [`AzerothVoices.CandidateScore.NameMention`](#azerothvoicescandidatescorenamemention) | Integer (`0` - `100`) | `80` | Candidate priority base score for an actor whose name is explicitly mentioned in the message. (Score, 0-100; default 80.) |
+| [`AzerothVoices.CandidateScore.Untargeted`](#azerothvoicescandidatescoreuntargeted) | Integer (`0` - `100`) | `25` | Candidate priority base score for an untargeted and unmentioned actor in group or local chat. (Score, 0-100; default 25.) |
 | [`AzerothVoices.Chance.DirectAddress`](#azerothvoiceschancedirectaddress) | Percentage (`0` - `100`) | `100` | Chance a selected or directly whispered actor answers. (Percentage; default... |
 | [`AzerothVoices.Chance.NameMention`](#azerothvoiceschancenamemention) | Percentage (`0` - `100`) | `70` | Chance an actor named in the message answers. (Percentage; default 70.) |
 | [`AzerothVoices.Chance.Overhear`](#azerothvoiceschanceoverhear) | Percentage (`0` - `100`) | `8` | Chance an otherwise eligible nearby actor joins in. (Percentage; default 8.... |
@@ -738,6 +741,8 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 | [`AzerothVoices.PlayerReplyChance.Channel`](#azerothvoicesplayerreplychancechannel) | Percentage (`0` - `100`) | `60` | Bot response chance to a real player in world/custom chat. (Percentage; def... |
 | [`AzerothVoices.BotReplyChance.Channel`](#azerothvoicesbotreplychancechannel) | Percentage (`0` - `100`) | `3` | Bot response chance to another bot in world/custom chat. Bot-originated cha... |
 | [`AzerothVoices.PlayerReplyChance.Party`](#azerothvoicesplayerreplychanceparty) | Percentage (`0` - `100`) | `90` | Bot response chance to a real player in party/raid. (Percentage; default 90... |
+| [`AzerothVoices.PlayerReplyChance.TargetActive.Enable`](#azerothvoicesplayerreplychancetargetactiveenable) | Boolean (`0` or `1`) | `1` | When enabled, if a human player has an active target in Say, Yell, Party, or Raid chat, untargeted companion bots suppress reply probability to TargetActive.Chance instead of full ambient rates. |
+| [`AzerothVoices.PlayerReplyChance.TargetActive.Chance`](#azerothvoicesplayerreplychancetargetactivechance) | Percentage (`0` - `100`) | `60` | Bot response chance when the speaking player has an active target (applies to untargeted bots in Say, Yell, Party, Raid). (Percentage, 0-100; default 60.) |
 | [`AzerothVoices.BotReplyChance.Party`](#azerothvoicesbotreplychanceparty) | Percentage (`0` - `100`) | `10` | Bot response chance to another bot in party/raid. Bot-originated replies al... |
 | [`AzerothVoices.PlayerReplyChance.Guild`](#azerothvoicesplayerreplychanceguild) | Percentage (`0` - `100`) | `70` | Bot response chance to a real player in guild/officer chat. (Percentage; de... |
 | [`AzerothVoices.BotReplyChance.Guild`](#azerothvoicesbotreplychanceguild) | Percentage (`0` - `100`) | `5` | Bot response chance to another bot in guild/officer chat. Bot-originated re... |
@@ -873,6 +878,27 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 - **Description**: When 1, any full online PlayerBot name explicitly mentioned in Say, Yell, Party, Raid, Guild, Officer, World, or custom-channel chat makes only explicitly named PlayerBots eligible; unmentioned PlayerBots and NPCs are suppressed, while the existing NameMention chance still decides whether a named bot replies. Whisper is already single-target. (Accepted 0/1; default 1.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
+### <a id="azerothvoicescandidatescoredirecttarget"></a>`AzerothVoices.CandidateScore.DirectTarget`
+
+- **Data Type**: Integer (`0` - `200`)
+- **Default Value**: `100`
+- **Description**: Candidate priority base score for an actor directly targeted by the speaking player or directly whispered. (Score, 0-200; default 100.)
+- **Operator Guidance & Impact**: Sets the scoring baseline for direct-addressed candidates. Keeping this at `100` ensures targeted actors reliably take priority over name-mentioned (`80`) and untargeted (`25`) candidates.
+
+### <a id="azerothvoicescandidatescorenamemention"></a>`AzerothVoices.CandidateScore.NameMention`
+
+- **Data Type**: Integer (`0` - `100`)
+- **Default Value**: `80`
+- **Description**: Candidate priority base score for an actor whose name is explicitly mentioned in the message. (Score, 0-100; default 80.)
+- **Operator Guidance & Impact**: Sets the scoring baseline for name-addressed bots below direct-target (100) but well above untargeted companions. Lowering this value diminishes the priority advantage of name-mentioned bots when multiple candidates compete.
+
+### <a id="azerothvoicescandidatescoreuntargeted"></a>`AzerothVoices.CandidateScore.Untargeted`
+
+- **Data Type**: Integer (`0` - `100`)
+- **Default Value**: `25`
+- **Description**: Candidate priority base score for an untargeted and unmentioned actor in group or local chat. (Score, 0-100; default 25.)
+- **Operator Guidance & Impact**: Sets the scoring baseline for ambient companion bots when no specific entity is targeted or named. Keeping this at 25 preserves deterministic hierarchy (Direct Target 100 > Name-Mentioned 80 > Untargeted 25).
+
 ### <a id="azerothvoiceschancedirectaddress"></a>`AzerothVoices.Chance.DirectAddress`
 
 - **Data Type**: Percentage (`0` - `100`)
@@ -950,6 +976,20 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 - **Description**: Bot response chance to a real player in party/raid. (Percentage; default 90.)
 - **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
 
+### <a id="azerothvoicesplayerreplychancetargetactiveenable"></a>`AzerothVoices.PlayerReplyChance.TargetActive.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: When enabled, if a human player has an active target in Say, Yell, Party, or Raid chat, untargeted companion bots suppress their reply probability to `TargetActive.Chance` instead of full ambient channel rates. Global channels (Guild, Officer, World) skip target suppression. (Default 1.)
+- **Operator Guidance & Impact**: Keep enabled (`1`) to allow the speaking player to focus conversations on their selected target while still giving companion bots a moderate chance (e.g. 60%) to participate. Set to `0` to always evaluate untargeted bots at normal channel reply rates.
+
+### <a id="azerothvoicesplayerreplychancetargetactivechance"></a>`AzerothVoices.PlayerReplyChance.TargetActive.Chance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `60`
+- **Description**: Bot response chance when the speaking player has an active target (applies to untargeted bots in Say, Yell, Party, Raid). (Percentage, 0-100; default 60.)
+- **Operator Guidance & Impact**: Calibrates untargeted bot chatter when an active target exists. Set lower (e.g. `20` - `40`) if you prefer companion bots to mostly stay quiet when you have a target, or higher (e.g. `80` - `90`) for more proactive party commentary.
+
 ### <a id="azerothvoicesbotreplychanceparty"></a>`AzerothVoices.BotReplyChance.Party`
 
 - **Data Type**: Percentage (`0` - `100`)
@@ -1023,6 +1063,10 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 | [`AzerothVoices.NPC.ReplyObserver.Enable`](#azerothvoicesnpcreplyobserverenable) | Boolean (`0` or `1`) | `1` | Enables observer comments from nearby PlayerBots when an NPC delivers a rep... |
 | [`AzerothVoices.NPC.ReplyObserver.Chance`](#azerothvoicesnpcreplyobserverchance) | Percentage (`0` - `100`) | `25` | Chance that nearby PlayerBots generate an observer reaction to the NPC's an... |
 | [`AzerothVoices.NPC.ReplyObserver.CooldownSeconds`](#azerothvoicesnpcreplyobservercooldownseconds) | Integer (Seconds, 0-86400; default 30.) | `30` | Cooldown between bot observer comments reacting to NPC interactions. (Secon... |
+| [`AzerothVoices.TargetedBot.Observer.Enable`](#azerothvoicestargetedbotobserverenable) | Boolean (`0` or `1`) | `1` | Enables observer commentary from companion PlayerBots when a real player speaks to or interacts with a targeted companion PlayerBot. |
+| [`AzerothVoices.TargetedBot.CommentOnPlayerChance`](#azerothvoicestargetedbotcommentonplayerchance) | Percentage (`0` - `100`) | `70` | Chance that an untargeted companion PlayerBot comments on what the real player said to the targeted bot. (Percentage, 0-100; default 70.) |
+| [`AzerothVoices.TargetedBot.CommentOnReplyChance`](#azerothvoicestargetedbotcommentonreplychance) | Percentage (`0` - `100`) | `30` | Chance that an untargeted companion PlayerBot reacts to the reply delivered by the targeted bot. (Percentage, 0-100; default 30.) |
+| [`AzerothVoices.TargetedBot.ObserverCooldownSeconds`](#azerothvoicestargetedbotobservercooldownseconds) | Integer (Seconds, 0-86400; default 30.) | `30` | Cooldown between companion bot observer comments reacting to targeted bot interactions. (Seconds, 0-86400; default 30.) |
 
 
 ### <a id="azerothvoicesnpcenable"></a>`AzerothVoices.NPC.Enable`
@@ -1150,6 +1194,34 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 - **Default Value**: `30`
 - **Description**: Cooldown between bot observer comments reacting to NPC interactions. (Seconds, 0-86400; default 30.)
 - **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
+
+### <a id="azerothvoicestargetedbotobserverenable"></a>`AzerothVoices.TargetedBot.Observer.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables observer commentary from companion PlayerBots when a real player speaks to or interacts with a targeted companion PlayerBot. Allows other party members to chime in or react. (Default 1.)
+- **Operator Guidance & Impact**: Keep enabled (`1`) for lively party interactions where bots react to each other and player conversations. Set to `0` to disable companion bot side-commentary.
+
+### <a id="azerothvoicestargetedbotcommentonplayerchance"></a>`AzerothVoices.TargetedBot.CommentOnPlayerChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `70`
+- **Description**: Chance that an untargeted companion PlayerBot comments on what the real player said to the targeted bot. (Percentage, 0-100; default 70.)
+- **Operator Guidance & Impact**: Sets the probability for an untargeted party bot to chime in immediately on the player's message directed at another bot. Adjust downwards to keep discussions strictly one-on-one.
+
+### <a id="azerothvoicestargetedbotcommentonreplychance"></a>`AzerothVoices.TargetedBot.CommentOnReplyChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `30`
+- **Description**: Chance that an untargeted companion PlayerBot reacts to the reply delivered by the targeted bot. (Percentage, 0-100; default 30.)
+- **Operator Guidance & Impact**: Sets the probability for an untargeted bot to react after the targeted bot has finished answering the player. Creates natural multi-turn bot banter.
+
+### <a id="azerothvoicestargetedbotobservercooldownseconds"></a>`AzerothVoices.TargetedBot.ObserverCooldownSeconds`
+
+- **Data Type**: Integer (Seconds, 0-86400; default 30.)
+- **Default Value**: `30`
+- **Description**: Cooldown between companion bot observer comments reacting to targeted bot interactions. (Seconds, 0-86400; default 30.)
+- **Operator Guidance & Impact**: Prevents companion bots from spamming commentary on every single exchange. Setting to `0` removes the per-bot observer cooldown.
 
 ---
 
@@ -3010,8 +3082,9 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds`](#azerothvoicestypingminimumdelaypercharactermilliseconds) | Integer | `100` | Minimum natural typing delay; one speed is randomly selected between the mi... |
 | [`AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds`](#azerothvoicestypingmaximumdelaypercharactermilliseconds) | Integer | `200` | Maximum natural typing delay; values below the minimum are swapped safely. ... |
 | [`AzerothVoices.Typing.SubtractGenerationTime`](#azerothvoicestypingsubtractgenerationtime) | Boolean (`0` or `1`) | `1` | Legacy compatibility: if both range keys above are absent, AzerothVoices.Ty... |
-| [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 160.) | `160` | Chunk size for delivered in-game output. A standard WoW chat frame wraps at... |
-| [`AzerothVoices.Reply.MaximumLines`](#azerothvoicesreplymaximumlines) | Integer | `2` | Maximum delivered lines/parts per request. Allows longer responses to be sp... |
+| [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 140.) | `140` | Cumulative total character budget across all delivered reply lines for a... |
+| [`AzerothVoices.Reply.MaximumLines`](#azerothvoicesreplymaximumlines) | Integer | `2` | Maximum delivered lines/parts per request. Limits the number of separate... |
+| [`AzerothVoices.Reply.SentenceAwareSplitting`](#azerothvoicesreplysentenceawaresplitting) | Boolean (`0` or `1`) | `1` | Enables structured, sentence-aware line breaking for delivered dialogue. Wh... |
 
 
 ### <a id="azerothvoicestypingenable"></a>`AzerothVoices.Typing.Enable`
@@ -3051,17 +3124,24 @@ human within SayDistance; Party actors require a real human in the same party su
 
 ### <a id="azerothvoicesreplymaximumcharacters"></a>`AzerothVoices.Reply.MaximumCharacters`
 
-- **Data Type**: Integer (Characters, minimum 1; default 160.)
-- **Default Value**: `160`
-- **Description**: Chunk size for delivered in-game output. A standard WoW chat frame wraps at ~45-55 characters, so ~160 characters produces natural ~3-line messages instead of chopping replies into multiple 2-line fragments. Messages are cleanly split on sentence and clause boundaries where possible. (Characters, minimum 1; default 160.)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: Integer (Characters, minimum 1; default 140.)
+- **Default Value**: `140`
+- **Description**: Cumulative total character budget across all delivered reply lines for a single request. Messages are cleanly split on sentence and clause boundaries up to this cumulative character budget. (Characters, minimum 1; default 140.)
+- **Operator Guidance & Impact**: Enforces the maximum combined character length of a bot's delivered response across all lines. Lower values keep bot replies short, punchy, and non-spammy; higher values allow longer multi-sentence thoughts.
 
 ### <a id="azerothvoicesreplymaximumlines"></a>`AzerothVoices.Reply.MaximumLines`
 
 - **Data Type**: Integer
 - **Default Value**: `2`
-- **Description**: Maximum delivered lines/parts per request. Allows longer responses to be split into more bite-sized pieces without being prematurely truncated. (Lines, minimum 1; default 3.)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Maximum delivered lines/parts per request. Limits the number of separate chat messages a bot can send per response turn. (Lines, minimum 1; default 2.)
+- **Operator Guidance & Impact**: Caps how many separate in-game chat messages/bubbles a bot can send for a single dialogue turn. Setting to 1 ensures single-line responses; setting to 2 allows short two-line responses when dialogue warrants it.
+
+### <a id="azerothvoicesreplysentenceawaresplitting"></a>`AzerothVoices.Reply.SentenceAwareSplitting`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables structured, sentence-aware line breaking for delivered dialogue. When enabled, replies are cleanly split on natural sentence boundaries (.!?) and clause punctuation (,;-) instead of greedily packing characters and breaking in the middle of sentences across messages. (Default 1.)
+- **Operator Guidance & Impact**: Keep enabled (`1`) to prevent fragmented replies where the start of the next sentence is chopped across messages. Set to `0` only if you need legacy character-greedy splitting.
 
 ---
 

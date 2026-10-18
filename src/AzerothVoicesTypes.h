@@ -151,6 +151,9 @@ namespace AzerothVoices
         uint32_t groupId = 0;
         uint32_t guildId = 0;
         bool isBot = false;
+        uint64_t targetGuid = 0;
+        std::string targetName;
+        bool targetIsNpc = false;
 
         SpeakerKind ResolvedKind() const
         {
@@ -233,6 +236,9 @@ namespace AzerothVoices
         // Targeted NPC conversation observer.
         bool targetedNpcObserver = false;
         ActorSnapshot targetedNpc;
+        // Targeted PlayerBot conversation observer.
+        bool targetedBotObserver = false;
+        ActorSnapshot targetedBot;
         // Guild player-reply controls
         bool guildPlayerReply = false;
         bool guildAddressByName = false;

@@ -376,14 +376,25 @@ namespace AzerothVoices
                            bool bossDirected = false,
                            GroupConversation const* groupScene = nullptr,
                            ActorSnapshot const* targetedNpc = nullptr,
-                           std::string const& customContext = "");
+                           std::string const& customContext = "",
+                           ActorSnapshot const* targetedBot = nullptr);
         void MaybeQueueTargetedNpcObserverComment(Player* speaker, Creature* targetedNpc,
                                                   std::string const& message,
                                                   std::string const& channelName);
         void MaybeQueueNpcReplyObserverComment(Player* originalPlayer,
-                                              ActorSnapshot const& npcActor,
-                                              std::string const& playerMessage,
-                                              std::string const& npcReply);
+                                               ActorSnapshot const& npcActor,
+                                               std::string const& playerMessage,
+                                               std::string const& npcReply);
+        void MaybeQueueTargetedBotObserverComment(Player* speaker, Player* targetedBot,
+                                                  ChatScope scope,
+                                                  std::string const& message,
+                                                  std::string const& channelName);
+        void MaybeQueueBotReplyObserverComment(Player* originalPlayer,
+                                               ActorSnapshot const& botActor,
+                                               ChatScope scope,
+                                               std::string const& channelName,
+                                               std::string const& playerMessage,
+                                               std::string const& botReply);
         Creature* FindMentionedNpc(Player* speaker, std::string const& message);
         bool PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
                                ChatScope scope, std::string const& channelName,
@@ -471,7 +482,8 @@ namespace AzerothVoices
                                  bool bossDirected = false,
                                  GroupConversation const* groupScene = nullptr,
                                  ActorSnapshot const* targetedNpc = nullptr,
-                                 std::string const& customContext = "");
+                                 std::string const& customContext = "",
+                                 ActorSnapshot const* targetedBot = nullptr);
         std::vector<Candidate> CollectCandidates(Player* speaker, ChatScope scope,
                                                   std::string const& targetName,
                                                   std::string const& message,
@@ -564,6 +576,8 @@ namespace AzerothVoices
         std::map<uint64_t, ActiveSayConversation> m_activeSayConversations;
         std::map<uint64_t, std::chrono::steady_clock::time_point> m_npcReplyObserverCooldowns;
         std::map<uint64_t, std::chrono::steady_clock::time_point> m_npcLastInteractionCommentTime;
+        std::map<uint64_t, std::chrono::steady_clock::time_point> m_botReplyObserverCooldowns;
+        std::map<uint64_t, std::chrono::steady_clock::time_point> m_botLastInteractionCommentTime;
         std::map<GuildSessionKey, GuildSessionHistoryRing> m_guildSessionHistory;
         std::map<uint64_t, PendingGuildGreeting> m_pendingGuildGreetings;
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;

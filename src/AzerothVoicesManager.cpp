@@ -931,6 +931,23 @@ namespace AzerothVoices
             result.groupId = player->GetGroup() ? player->GetGroup()->GetId() : 0;
             result.guildId = player->GetGuildId();
             result.isBot = Script_IsAIControlled(player);
+            ObjectGuid const targetGuid = player->GetSelectionGuid();
+            if (!targetGuid.IsEmpty())
+            {
+                result.targetGuid = targetGuid.GetRawValue();
+                if (targetGuid.IsCreature())
+                {
+                    result.targetIsNpc = true;
+                    if (Creature* c = GetCreatureFromAnchor(*player, targetGuid))
+                        result.targetName = c->GetName();
+                }
+                else if (targetGuid.IsPlayer())
+                {
+                    result.targetIsNpc = false;
+                    if (Player* p = ObjectAccessor::FindPlayer(targetGuid))
+                        result.targetName = p->GetName();
+                }
+            }
             return result;
         }
 
@@ -1766,13 +1783,14 @@ namespace AzerothVoices
                                 BossPresence const* boss, bool bossDirected,
                                 GroupConversation const* groupScene,
                                 ActorSnapshot const* targetedNpc,
-                                std::string const& customContext)
+                                std::string const& customContext,
+                                ActorSnapshot const* targetedBot)
     {
         if (!PreflightDialogue(actor, speaker, scope, channelName, trigger, priority, ambient))
             return false;
 
         ChatRequest request = BuildRequest(actor, speaker, scope, channelName, trigger,
-            message, priority, ambient, allowFollowup, scene, boss, bossDirected, groupScene, targetedNpc, customContext);
+            message, priority, ambient, allowFollowup, scene, boss, bossDirected, groupScene, targetedNpc, customContext, targetedBot);
         request.conversationDepth = conversationDepth;
         if (Enqueue(std::move(request)))
             return true;
@@ -1928,7 +1946,8 @@ namespace AzerothVoices
                                       ProximityScene const* scene, BossPresence const* boss,
                                       bool bossDirected, GroupConversation const* groupScene,
                                       ActorSnapshot const* targetedNpc,
-                                      std::string const& customContext)
+                                      std::string const& customContext,
+                                      ActorSnapshot const* targetedBot)
     {
         ChatRequest request;
         request.id = m_nextRequestId++;
@@ -1938,6 +1957,11 @@ namespace AzerothVoices
         {
             request.targetedNpcObserver = true;
             request.targetedNpc = *targetedNpc;
+        }
+        if (targetedBot)
+        {
+            request.targetedBotObserver = true;
+            request.targetedBot = *targetedBot;
         }
         bool const eventTrigger = trigger.compare(0, 6, "event:") == 0;
         bool const usePersonality = m_config->personalityEnabled &&
@@ -2023,11 +2047,11 @@ namespace AzerothVoices
             Player* sentimentActor = ObjectAccessor::FindPlayer(ObjectGuid(actor.guid));
             Player* target = ObjectAccessor::FindPlayer(ObjectGuid(speaker.guid));
             bool const directConversation = !ambient && !eventTrigger && !speaker.isBot &&
-                (trigger != "targeted-npc-observer") && (trigger != "npc-reply-observer") &&
+                (trigger != "targeted-npc-observer") && (trigger != "npc-reply-observer") && (trigger != "targeted-bot-observer") && (trigger != "bot-reply-observer") &&
                 IsDirectSentimentConversation(sentimentActor, target, scope, message);
             bool const readOnlyContext = (ambient && m_config->sentimentUseInRandom) ||
                 (eventTrigger && m_config->sentimentUseInEvents) ||
-                (trigger == "targeted-npc-observer") || (trigger == "npc-reply-observer");
+                (trigger == "targeted-npc-observer") || (trigger == "npc-reply-observer") || (trigger == "targeted-bot-observer") || (trigger == "bot-reply-observer");
             if (IsOnlineRealPlayer(target) && (directConversation || readOnlyContext))
             {
                 SentimentKey const key { actor.guid, target->GetObjectGuid().GetRawValue() };
@@ -2163,6 +2187,24 @@ namespace AzerothVoices
             request.systemPrompt += "\n" + observerPrompt.systemPromptExtension;
             request.userPrompt = observerPrompt.userPrompt;
         }
+        else if (trigger == "targeted-bot-observer")
+        {
+            request.systemPrompt += "\nYou are observing a dialogue. " + speaker.name +
+                " is directly addressing companion bot " + request.targetedBot.name + " (" +
+                request.targetedBot.className + ").";
+            request.userPrompt = speaker.name + " told " + request.targetedBot.name + ": \"" +
+                message + "\". Chime in with a short, natural remark or reaction to what " +
+                speaker.name + " said.";
+        }
+        else if (trigger == "bot-reply-observer")
+        {
+            request.systemPrompt += "\nYou are observing a dialogue. " + speaker.name +
+                " spoke to companion bot " + request.targetedBot.name + ", and " +
+                request.targetedBot.name + " answered.";
+            request.userPrompt = speaker.name + " said: \"" + customContext + "\"\n" +
+                request.targetedBot.name + " replied: \"" + message + "\"\n" +
+                "React briefly to " + request.targetedBot.name + "'s answer.";
+        }
         else if (trigger == "guild:player-reply")
             request.userPrompt = "Respond naturally in guild chat to what your guildmate said: " + message;
         else if (trigger == "guild:login-greeting")
@@ -2171,8 +2213,19 @@ namespace AzerothVoices
             request.userPrompt = "Continue the conversation naturally in character with this player: " + message;
         else
             request.userPrompt = m_config->prompt;
-        if (!m_config->postPrompt.empty() && trigger != "targeted-npc-observer" && trigger != "npc-reply-observer")
+        if (!m_config->postPrompt.empty() && trigger != "targeted-npc-observer" && trigger != "npc-reply-observer" && trigger != "targeted-bot-observer" && trigger != "bot-reply-observer")
             request.userPrompt += "\n" + m_config->postPrompt;
+
+        if (!request.speaker.targetName.empty() &&
+            trigger != "targeted-npc-observer" && trigger != "npc-reply-observer" &&
+            trigger != "targeted-bot-observer" && trigger != "bot-reply-observer")
+        {
+            if (Lower(request.speaker.targetName) == Lower(actor.name))
+                request.systemPrompt += "\nNote: " + speaker.name + " is currently targeting you directly.";
+            else
+                request.systemPrompt += "\nNote: " + speaker.name + " is currently targeting " +
+                    request.speaker.targetName + (request.speaker.targetIsNpc ? " (an NPC)." : ".");
+        }
 
         request.systemPrompt = Expand(request.systemPrompt, request);
         request.userPrompt = Expand(request.userPrompt, request);
@@ -2269,6 +2322,10 @@ namespace AzerothVoices
             dispositionTarget->GetMapId() == speaker->GetMapId()
                 ? dispositionTarget : static_cast<WorldObject const*>(speaker);
 
+        bool const targetActiveInLocalScope = !speakerIsBot && !selected.IsEmpty() &&
+            (scope == ChatScope::Say || scope == ChatScope::Yell ||
+             scope == ChatScope::Party || scope == ChatScope::Raid);
+
         auto chanceFor = [&](std::string const& actorName, ObjectGuid actorGuid, bool npc) -> std::pair<uint32_t, int>
         {
             bool const direct = scope == ChatScope::Whisper || (!selected.IsEmpty() && selected == actorGuid);
@@ -2277,16 +2334,16 @@ namespace AzerothVoices
                 return { 100, 10 };
 
             uint32_t chance = m_config->overhearChance;
-            int score = 10;
+            int score = m_config->candidateScoreUntargeted;
             if (direct)
             {
                 chance = m_config->directAddressChance;
-                score = 100;
+                score = m_config->candidateScoreDirectTarget;
             }
             else if (mentioned)
             {
                 chance = m_config->nameMentionChance;
-                score = 80;
+                score = m_config->candidateScoreNameMention;
             }
             else if (npc)
             {
@@ -2294,27 +2351,34 @@ namespace AzerothVoices
             }
             else
             {
-                switch (scope)
+                if (targetActiveInLocalScope && m_config->targetActiveSuppressionEnabled)
                 {
-                    case ChatScope::Say:
-                    case ChatScope::Yell:
-                        chance = speakerIsBot ? m_config->botReplyChanceSay : m_config->playerReplyChanceSay;
-                        break;
-                    case ChatScope::Party:
-                    case ChatScope::Raid:
-                        chance = speakerIsBot ? m_config->botReplyChanceParty : m_config->playerReplyChanceParty;
-                        break;
-                    case ChatScope::Guild:
-                    case ChatScope::Officer:
-                        chance = speakerIsBot ? m_config->botReplyChanceGuild : m_config->playerReplyChanceGuild;
-                        break;
-                    case ChatScope::Channel:
-                    case ChatScope::World:
-                        chance = speakerIsBot ? m_config->botReplyChanceChannel : m_config->playerReplyChanceChannel;
-                        break;
-                    case ChatScope::Whisper:
-                        chance = 100;
-                        break;
+                    chance = m_config->targetActiveChance;
+                }
+                else
+                {
+                    switch (scope)
+                    {
+                        case ChatScope::Say:
+                        case ChatScope::Yell:
+                            chance = speakerIsBot ? m_config->botReplyChanceSay : m_config->playerReplyChanceSay;
+                            break;
+                        case ChatScope::Party:
+                        case ChatScope::Raid:
+                            chance = speakerIsBot ? m_config->botReplyChanceParty : m_config->playerReplyChanceParty;
+                            break;
+                        case ChatScope::Guild:
+                        case ChatScope::Officer:
+                            chance = speakerIsBot ? m_config->botReplyChanceGuild : m_config->playerReplyChanceGuild;
+                            break;
+                        case ChatScope::Channel:
+                        case ChatScope::World:
+                            chance = speakerIsBot ? m_config->botReplyChanceChannel : m_config->playerReplyChanceChannel;
+                            break;
+                        case ChatScope::Whisper:
+                            chance = 100;
+                            break;
+                    }
                 }
             }
 
@@ -2935,6 +2999,7 @@ namespace AzerothVoices
                             RecordSayConversationTurn(speaker->GetObjectGuid().GetRawValue(),
                                 selectedBot->GetObjectGuid().GetRawValue(), selectedBot->GetName(),
                                 false, speaker->GetMapId(), CurrentInstanceId(speaker), message, "");
+                            MaybeQueueTargetedBotObserverComment(speaker, selectedBot, ChatScope::Say, message, channelName);
                             return;
                         }
                     }
@@ -3029,6 +3094,13 @@ namespace AzerothVoices
                 acceptedActorGuid = candidate.actor.guid;
                 responderAccepted = true;
                 ++acceptedResponders;
+                if (!speakerIsBot && !selected.IsEmpty() && selected.IsPlayer() &&
+                    acceptedActorGuid == selected.GetRawValue())
+                {
+                    Player* targetedBot = ObjectAccessor::FindPlayer(selected);
+                    if (targetedBot)
+                        MaybeQueueTargetedBotObserverComment(speaker, targetedBot, scope, message, channelName);
+                }
                 break;
             }
 
@@ -4495,7 +4567,9 @@ namespace AzerothVoices
             uint64_t cumulativeDelay = m_config->typingSimulationEnabled
                 ? m_config->typingBaseDelayMilliseconds : 0;
             if (completion.request.trigger == "targeted-npc-observer" ||
-                completion.request.trigger == "npc-reply-observer")
+                completion.request.trigger == "npc-reply-observer" ||
+                completion.request.trigger == "targeted-bot-observer" ||
+                completion.request.trigger == "bot-reply-observer")
                 cumulativeDelay += 2000;
             if (completion.request.guildInitialDelaySeconds > 0)
                 cumulativeDelay += static_cast<uint64_t>(completion.request.guildInitialDelaySeconds) * 1000;
@@ -4745,8 +4819,16 @@ namespace AzerothVoices
                 {
                     Player* observer = ObjectAccessor::FindPlayer(ObjectGuid(it->request.speaker.guid));
                     if (IsOnlineRealPlayer(observer))
+                    {
                         RecordAddonContact(observer->GetObjectGuid().GetRawValue(),
                             it->request.actor.guid, it->request.actor.name);
+                        if (it->request.trigger == "targeted-bot-selected" || it->request.priority == RequestPriority::Direct)
+                        {
+                            MaybeQueueBotReplyObserverComment(observer, it->request.actor,
+                                it->request.scope, it->request.channelName,
+                                it->request.incomingMessage, it->text);
+                        }
+                    }
                 }
             }
             if (!delivered && m_config->debug)
@@ -5127,6 +5209,12 @@ namespace AzerothVoices
                         line << ", fighting";
                         if (member->GetVictim())
                             line << ' ' << member->GetVictim()->GetName();
+                    }
+                    if (!member->GetSelectionGuid().IsEmpty())
+                    {
+                        Unit* memTarget = ObjectAccessor::GetUnit(*member, member->GetSelectionGuid());
+                        if (memTarget)
+                            line << ", targeting " << memTarget->GetName();
                     }
                     appendSectionLine(group, "Nearby group members", line.str());
                     ++count;
@@ -9155,6 +9243,193 @@ namespace AzerothVoices
         {
             sLog.outDebug("[AzerothVoices] Queued npc-reply-observer comment for bot %s reacting to NPC %s's reply to %s",
                 botActor.name.c_str(), npcActor.name.c_str(), originalPlayer->GetName());
+        }
+    }
+
+    void Manager::MaybeQueueTargetedBotObserverComment(Player* speaker, Player* targetedBot,
+                                                      ChatScope scope,
+                                                      std::string const& message,
+                                                      std::string const& channelName)
+    {
+        if (!m_started || !m_config || !m_config->enabled || m_paused || !speaker || !targetedBot)
+            return;
+        if (!m_config->targetedBotObserverEnabled)
+            return;
+
+        if (!Roll(m_config->targetedBotCommentOnPlayerChance))
+            return;
+
+        auto const now = Clock::now();
+        uint64_t const targetedGuid = targetedBot->GetObjectGuid().GetRawValue();
+
+        auto lastComment = m_botLastInteractionCommentTime.find(targetedGuid);
+        if (lastComment != m_botLastInteractionCommentTime.end() &&
+            now - lastComment->second < std::chrono::seconds(m_config->targetedBotObserverCooldownSeconds))
+            return;
+
+        std::vector<Player*> eligibleBots;
+        float const distLimit = (scope == ChatScope::Yell) ? m_config->yellDistance : m_config->sayDistance;
+
+        if (scope == ChatScope::Party || scope == ChatScope::Raid)
+        {
+            if (Group* grp = speaker->GetGroup())
+            {
+                for (GroupReference* ref = grp->GetFirstMember(); ref; ref = ref->next())
+                {
+                    Player* member = ref->getSource();
+                    if (!member || member == speaker || member == targetedBot ||
+                        !member->IsInWorld() || !member->IsAlive() || !Script_IsAIControlled(member))
+                        continue;
+                    if (m_config->disableRepliesInCombat && member->IsInCombat())
+                        continue;
+                    auto cd = m_botReplyObserverCooldowns.find(member->GetObjectGuid().GetRawValue());
+                    if (cd != m_botReplyObserverCooldowns.end() && cd->second > now)
+                        continue;
+                    eligibleBots.push_back(member);
+                }
+            }
+        }
+        else
+        {
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+            {
+                Player* bot = entry.second;
+                if (!bot || bot == speaker || bot == targetedBot || !bot->IsInWorld() || !bot->IsAlive() ||
+                    !Script_IsAIControlled(bot))
+                    continue;
+                if (bot->GetMapId() != speaker->GetMapId() ||
+                    CurrentInstanceId(bot) != CurrentInstanceId(speaker))
+                    continue;
+                if (m_config->disableRepliesInCombat && bot->IsInCombat())
+                    continue;
+                if (!bot->IsWithinDist(speaker, distLimit, false))
+                    continue;
+                if (!bot->IsWithinLOSInMap(speaker))
+                    continue;
+                auto cd = m_botReplyObserverCooldowns.find(bot->GetObjectGuid().GetRawValue());
+                if (cd != m_botReplyObserverCooldowns.end() && cd->second > now)
+                    continue;
+                if (!HasNearbyRealPlayer(bot, distLimit))
+                    continue;
+                eligibleBots.push_back(bot);
+            }
+        }
+
+        if (eligibleBots.empty())
+            return;
+
+        Player* chosen = eligibleBots[RandomUInt(0, static_cast<uint32_t>(eligibleBots.size() - 1))];
+        m_botLastInteractionCommentTime[targetedGuid] = now;
+        m_botReplyObserverCooldowns[chosen->GetObjectGuid().GetRawValue()] =
+            now + std::chrono::seconds(m_config->targetedBotObserverCooldownSeconds);
+
+        ActorSnapshot botActor = SnapshotBot(chosen);
+        ActorSnapshot targetedBotSnapshot = SnapshotBot(targetedBot);
+        SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(speaker);
+
+        QueueDialogue(botActor, speakerSnapshot, scope, channelName,
+            "targeted-bot-observer", message, RequestPriority::Nearby,
+            false, false, 0, nullptr, nullptr, false, nullptr, "", &targetedBotSnapshot);
+
+        if (m_config->debug)
+        {
+            sLog.outDebug("[AzerothVoices] Queued targeted-bot-observer comment for bot %s observing %s speaking to %s",
+                botActor.name.c_str(), speaker->GetName(), targetedBotSnapshot.name.c_str());
+        }
+    }
+
+    void Manager::MaybeQueueBotReplyObserverComment(Player* originalPlayer,
+                                                   ActorSnapshot const& botActor,
+                                                   ChatScope scope,
+                                                   std::string const& channelName,
+                                                   std::string const& playerMessage,
+                                                   std::string const& botReply)
+    {
+        if (!m_started || !m_config || !m_config->enabled || m_paused || !originalPlayer)
+            return;
+        if (!m_config->targetedBotObserverEnabled)
+            return;
+
+        if (!Roll(m_config->targetedBotCommentOnReplyChance))
+            return;
+
+        auto const now = Clock::now();
+        uint64_t const targetedGuid = botActor.guid;
+
+        auto lastComment = m_botLastInteractionCommentTime.find(targetedGuid);
+        if (lastComment != m_botLastInteractionCommentTime.end() &&
+            now - lastComment->second < std::chrono::seconds(m_config->targetedBotObserverCooldownSeconds))
+            return;
+
+        std::vector<Player*> eligibleBots;
+        float const distLimit = (scope == ChatScope::Yell) ? m_config->yellDistance : m_config->sayDistance;
+
+        if (scope == ChatScope::Party || scope == ChatScope::Raid)
+        {
+            if (Group* grp = originalPlayer->GetGroup())
+            {
+                for (GroupReference* ref = grp->GetFirstMember(); ref; ref = ref->next())
+                {
+                    Player* member = ref->getSource();
+                    if (!member || member == originalPlayer || member->GetObjectGuid().GetRawValue() == targetedGuid ||
+                        !member->IsInWorld() || !member->IsAlive() || !Script_IsAIControlled(member))
+                        continue;
+                    if (m_config->disableRepliesInCombat && member->IsInCombat())
+                        continue;
+                    auto cd = m_botReplyObserverCooldowns.find(member->GetObjectGuid().GetRawValue());
+                    if (cd != m_botReplyObserverCooldowns.end() && cd->second > now)
+                        continue;
+                    eligibleBots.push_back(member);
+                }
+            }
+        }
+        else
+        {
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+            {
+                Player* bot = entry.second;
+                if (!bot || bot == originalPlayer || bot->GetObjectGuid().GetRawValue() == targetedGuid ||
+                    !bot->IsInWorld() || !bot->IsAlive() || !Script_IsAIControlled(bot))
+                    continue;
+                if (bot->GetMapId() != originalPlayer->GetMapId() ||
+                    CurrentInstanceId(bot) != CurrentInstanceId(originalPlayer))
+                    continue;
+                if (m_config->disableRepliesInCombat && bot->IsInCombat())
+                    continue;
+                if (!bot->IsWithinDist(originalPlayer, distLimit, false))
+                    continue;
+                if (!bot->IsWithinLOSInMap(originalPlayer))
+                    continue;
+                auto cd = m_botReplyObserverCooldowns.find(bot->GetObjectGuid().GetRawValue());
+                if (cd != m_botReplyObserverCooldowns.end() && cd->second > now)
+                    continue;
+                if (!HasNearbyRealPlayer(bot, distLimit))
+                    continue;
+                eligibleBots.push_back(bot);
+            }
+        }
+
+        if (eligibleBots.empty())
+            return;
+
+        Player* chosen = eligibleBots[RandomUInt(0, static_cast<uint32_t>(eligibleBots.size() - 1))];
+        m_botLastInteractionCommentTime[targetedGuid] = now;
+        m_botReplyObserverCooldowns[chosen->GetObjectGuid().GetRawValue()] =
+            now + std::chrono::seconds(m_config->targetedBotObserverCooldownSeconds);
+
+        ActorSnapshot observerActor = SnapshotBot(chosen);
+        SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(originalPlayer);
+
+        QueueDialogue(observerActor, speakerSnapshot, scope, channelName,
+            "bot-reply-observer", botReply, RequestPriority::Nearby,
+            false, false, 0, nullptr, nullptr, false, nullptr, playerMessage, &botActor);
+
+        if (m_config->debug)
+        {
+            sLog.outDebug("[AzerothVoices] Queued bot-reply-observer comment for bot %s reacting to bot %s's reply to %s",
+                observerActor.name.c_str(), botActor.name.c_str(), originalPlayer->GetName());
         }
     }
 

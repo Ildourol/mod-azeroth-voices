@@ -356,5 +356,18 @@ namespace AzerothVoices
     // Strips redundant speaker prefixes (e.g. "Runebane: Hi", "[Runebane] whispers: Hi",
     // "Runebane says: Hi", or generic "Bot:/NPC:") that LLMs frequently output in replies.
     std::string StripSpeakerPrefix(std::string value, std::string const& speakerName = "");
+
+    // Splits text into natural sentences, respecting abbreviations (e.g. etc., e.g., i.e., vs., lvl.),
+    // initials, numeric decimals, list numbers, and quotation marks.
+    std::vector<std::string> SplitIntoSentences(std::string const& text);
+
+    // Splits reply dialogue into structured lines respecting sentence and clause boundaries
+    // up to a cumulative total of maximumCharacters across all delivered lines and maximumLines in total.
+    std::vector<std::string> SplitReplyLinesStructured(
+        std::string const& text,
+        std::string const& speakerName,
+        size_t maximumCharacters,
+        size_t maximumLines,
+        bool sentenceAware = true);
 }
 
