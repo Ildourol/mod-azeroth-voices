@@ -689,8 +689,8 @@ AzerothVoices.Chance.Overhear = 8
 #     Description: Time window in seconds where an active /say conversation partner (NPC
 #                  or PlayerBot) remains locked for subsequent turns when the player
 #                  speaks again without naming another actor. (Seconds, minimum 5.)
-#     Default:     30
-AzerothVoices.Say.ConversationReplyWindowSeconds = 30
+#     Default:     45
+AzerothVoices.Say.ConversationReplyWindowSeconds = 45
 
 # AzerothVoices.Say.ConversationMaxTurns
 #     Description: Maximum consecutive reply turns an active /say conversation partner
@@ -1049,8 +1049,8 @@ AzerothVoices.Proximity.MaximumLines = 4
 # AzerothVoices.Proximity.TurnGapSeconds
 #     Description: Minimum gap between delivered lines of one conversation. (Seconds,
 #                  0-600.)
-#     Default:     6
-AzerothVoices.Proximity.TurnGapSeconds = 6
+#     Default:     3
+AzerothVoices.Proximity.TurnGapSeconds = 3
 
 # AzerothVoices.Proximity.ReplyWindowSeconds
 #     Description: Window in which a conversation may continue after its first line.
@@ -1460,19 +1460,19 @@ AzerothVoices.GroupChatter.BotQuestionCooldownSeconds = 300
 # AzerothVoices.GroupChatter.PlayerFollowupChance
 #     Description: Chance one other grouped bot adds a second line after a bot's reply
 #                  to a real player's group message. (Percentage.)
-#     Default:     5
-AzerothVoices.GroupChatter.PlayerFollowupChance = 5
+#     Default:     25
+AzerothVoices.GroupChatter.PlayerFollowupChance = 25
 
 # AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds
 #     Description: Cooldown after such a second line. (Seconds, 0-86400.)
-#     Default:     120
-AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds = 120
+#     Default:     30
+AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds = 30
 
 # AzerothVoices.GroupChatter.ConversationChance
 #     Description: Chance a group line becomes a short multi-line conversation instead
 #                  of one line. (Percentage.)
-#     Default:     10
-AzerothVoices.GroupChatter.ConversationChance = 10
+#     Default:     25
+AzerothVoices.GroupChatter.ConversationChance = 25
 
 # AzerothVoices.GroupChatter.ConversationMaximumLines
 #     Description: Lines a group conversation may deliver. (Lines, 1-12.)
@@ -1488,8 +1488,8 @@ AzerothVoices.GroupChatter.ConversationMaximumParticipants = 2
 # AzerothVoices.GroupChatter.ConversationTurnGapSeconds
 #     Description: Minimum gap between delivered lines of one group conversation.
 #                  (Seconds, 0-600.)
-#     Default:     12
-AzerothVoices.GroupChatter.ConversationTurnGapSeconds = 12
+#     Default:     4
+AzerothVoices.GroupChatter.ConversationTurnGapSeconds = 4
 
 # AzerothVoices.GroupChatter.ConversationReplyWindowSeconds
 #     Description: Window in which a group conversation may continue after its first
@@ -2045,14 +2045,14 @@ AzerothVoices.PartyGate.FillerMinGapSeconds = 12
 # AzerothVoices.PartyGate.ContextualMinGapSeconds
 #     Description: Minimum gap between contextual event chatter messages in the same
 #                  party. (Seconds, 0-300.)
-#     Default:     10
-AzerothVoices.PartyGate.ContextualMinGapSeconds = 10
+#     Default:     8
+AzerothVoices.PartyGate.ContextualMinGapSeconds = 8
 
 # AzerothVoices.PartyGate.ResponsiveMinGapSeconds
 #     Description: Minimum gap between direct/responsive chatter messages in the same
 #                  party. (Seconds, 0-300.)
-#     Default:     3
-AzerothVoices.PartyGate.ResponsiveMinGapSeconds = 3
+#     Default:     2
+AzerothVoices.PartyGate.ResponsiveMinGapSeconds = 2
 
 # AzerothVoices.PartyGate.UrgentMinGapSeconds
 #     Description: Minimum gap between urgent callout messages in the same party.
@@ -2305,13 +2305,13 @@ AzerothVoices.Typing.BaseDelayMilliseconds = 0
 #     - 250ms per char = 4 chars/sec (average human)
 #     - 150ms per char = 6.7 chars/sec (proficient)
 #     - 100ms per char = 10 chars/sec (professional)
-AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 100
+AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 150
 
 # AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds
 #     Description: Maximum natural typing delay; values below the minimum are swapped
 #                  safely. (Ms/character, minimum 0.)
 #     Default:     200
-AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
+AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 250
 
 # AzerothVoices.Typing.SubtractGenerationTime
 #     Description: Legacy compatibility: if both range keys above are absent,
