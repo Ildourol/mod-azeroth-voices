@@ -164,9 +164,6 @@ namespace AzerothVoices
         c.retryMaximum = Positive("AzerothVoices.RetryMaximum", 1);
         c.retryBackoffMilliseconds = Positive("AzerothVoices.RetryBackoffMilliseconds", 500);
         c.globalRequestsPerMinute = Positive("AzerothVoices.GlobalRequestsPerMinute", 60, 1);
-        c.speakerCoalesceEnabled = sConfig.GetBoolDefault("AzerothVoices.SpeakerCoalesce.Enable", true);
-        c.speakerCoalesceDelayMilliseconds = Positive("AzerothVoices.SpeakerCoalesce.DelayMilliseconds", 2000, 500);
-        c.speakerCoalesceMaxLines = Positive("AzerothVoices.SpeakerCoalesce.MaxLines", 3, 2);
 
         std::string globalMode = Trim(sConfig.GetStringDefault("AzerothVoices.GlobalMode", "Normal"));
         std::transform(globalMode.begin(), globalMode.end(), globalMode.begin(), [](unsigned char value) {
@@ -182,8 +179,6 @@ namespace AzerothVoices
             c.globalMode = GlobalMode::Normal;
         }
 
-        std::string const legacyGlobalPrompt = Trim(
-            sConfig.GetStringDefault("AzerothVoices.GlobalPrompt", ""));
         std::string const defaultRoleplayPrompt =
             "You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth "
             "and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real "
@@ -202,14 +197,12 @@ namespace AzerothVoices
             "stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Never prefix "
             "your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). "
             "Return only what the speaker says.";
-        std::string const roleplayFallback = legacyGlobalPrompt.empty()
-            ? defaultRoleplayPrompt : legacyGlobalPrompt;
         c.globalPromptRoleplay = Trim(sConfig.GetStringDefault(
-            "AzerothVoices.GlobalPrompt.Roleplay", roleplayFallback.c_str()));
+            "AzerothVoices.GlobalPrompt.Roleplay", defaultRoleplayPrompt.c_str()));
         c.globalPromptNormal = Trim(sConfig.GetStringDefault(
             "AzerothVoices.GlobalPrompt.Normal", defaultNormalPrompt.c_str()));
         if (c.globalPromptRoleplay.empty())
-            c.globalPromptRoleplay = roleplayFallback;
+            c.globalPromptRoleplay = defaultRoleplayPrompt;
         if (c.globalPromptNormal.empty())
             c.globalPromptNormal = defaultNormalPrompt;
         c.globalPrompt = c.globalMode == GlobalMode::Normal
@@ -248,6 +241,52 @@ namespace AzerothVoices
             "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
         c.personalityMaxPromptCharacters = Bounded(
             "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
+
+        std::string const defaultPersonalityRoleplayPrompt =
+            "Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "
+            "Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived "
+            "experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, "
+            "culture, and tone consistent with race, class, and faction without later-expansion assumptions. "
+            "Return only the backstory text.";
+
+        std::string const defaultPersonalityNormalPrompt =
+            "Write a concise, realistic backstory for a fictional person who plays World of Warcraft. "
+            "Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, "
+            "everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction "
+            "enthusiasts, lore fans, or nostalgic veterans). "
+            "Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. "
+            "Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity. "
+            "Return only the backstory text.";
+
+        c.personalityPromptRoleplay = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.Personality.Prompt.Roleplay", defaultPersonalityRoleplayPrompt.c_str()));
+        c.personalityPromptNormal = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.Personality.Prompt.Normal", defaultPersonalityNormalPrompt.c_str()));
+        if (c.personalityPromptRoleplay.empty())
+            c.personalityPromptRoleplay = defaultPersonalityRoleplayPrompt;
+        if (c.personalityPromptNormal.empty())
+            c.personalityPromptNormal = defaultPersonalityNormalPrompt;
+
+        std::string const defaultPersonalityTraitsPrompt =
+            "traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels "
+            "specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', "
+            "or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, "
+            "boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). "
+            "Do not use a fixed checklist, and do not merely restate race or class.";
+
+        std::string const defaultPersonalityTonePrompt =
+            "tone must be a concise speaking-style description derived from the traits. Avoid clichés like 'passion for storytelling' "
+            "or 'thoughtful and articulate'. Focus on concrete vocal habits (e.g. blunt and dry, energetic fast-talker, deadpan sarcasm, "
+            "gruff veteran brevity, cheerful banter, or hesitant caution).";
+
+        c.personalityPromptTraits = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.Personality.Prompt.Traits", defaultPersonalityTraitsPrompt.c_str()));
+        c.personalityPromptTone = Trim(sConfig.GetStringDefault(
+            "AzerothVoices.Personality.Prompt.Tone", defaultPersonalityTonePrompt.c_str()));
+        if (c.personalityPromptTraits.empty())
+            c.personalityPromptTraits = defaultPersonalityTraitsPrompt;
+        if (c.personalityPromptTone.empty())
+            c.personalityPromptTone = defaultPersonalityTonePrompt;
 
         c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 0, 0, 1) != 0;
         c.sentimentUseInRandom = Bounded(
@@ -627,7 +666,7 @@ namespace AzerothVoices
         c.typingBaseDelayMilliseconds = Positive("AzerothVoices.Typing.BaseDelayMilliseconds", 0);
         c.typingDelayPerCharacterMilliseconds = Positive("AzerothVoices.Typing.DelayPerCharacterMilliseconds", 200);
         c.subtractGenerationTime = sConfig.GetBoolDefault("AzerothVoices.Typing.SubtractGenerationTime", true);
-        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 140, 1);
+        c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 80, 1);
         c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 2, 1);
         c.sentenceAwareSplitting = sConfig.GetBoolDefault("AzerothVoices.Reply.SentenceAwareSplitting", true);
 

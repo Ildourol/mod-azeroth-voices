@@ -11,7 +11,8 @@
 - **Native Zero-Bridge Engine**: Asynchronous in-process HTTP/HTTPS requests to any OpenAI-compatible or Gemini LLM endpoint.
 - **Dynamic Dialogue**: Responds across Whisper, Say, Yell, Party, Raid, Guild, and World channels.
 - **Persistent Personalities & Memory**: 3 distinct traits, speaking tones, background stories, and shared-adventure memories stored in SQL.
-- **Player Message Coalescing**: Automatically combines rapid multi-line player messages (`"hi"`, `"ready?"`) into a single prompt turn.
+- **Instant Zero-Lag Ingress**: Player messages dispatch directly to the AI worker pool with 0ms pre-request lag.
+- **Per-Line Sentence Splitting**: Independent per-line character budgeting (80 chars/line) cleanly separates replies across multiple messages on punctuation boundaries without sentence starvation.
 - **Ambient World & Proximity**: Organic NPC Say chatter, pre-aggro boss dialogue, and natural conversation flow.
 - **Companion In-Game Addon**: Client UI for managing bot contacts, viewing traits, and triggering personality regenerations.
 

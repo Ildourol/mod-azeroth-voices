@@ -1,8 +1,9 @@
-###################################################################################################
-# Azeroth Voices - provider-neutral LLM chat for TortoiseWoW/vMaNGOS
-###################################################################################################
-
 [worldserver]
+
+###################################################################################################
+# mod-azeroth-voices configuration
+# Provider-neutral LLM chat for TortoiseWoW/vMaNGOS (Turtle WoW 1.18.1 / 1.12.1)
+###################################################################################################
 
 #
 # This is a TortoiseWoW/vMaNGOS worldserver module configuration.
@@ -10,213 +11,439 @@
 # The module does not read etc/aiplayerbot.conf automatically: copy wanted compatible values here.
 # Percentages use 0 (never) through 100 (always) and are clamped to that range.
 #
-# Sections, in file order:
-#   1. Module ownership and diagnostics
-#   2. Provider and HTTPS
-#   3. Worker pool, queue, limits, and cooldowns
-#   4. Shared prompts and PlayerBots-compatible prompt names
-#   5. Persistent PlayerBot personalities
-#   6. PlayerBot-to-real-player sentiment
-#   7. PlayerBot delivery scopes, response selection, and distances
-#   8. NPC dialogue: reactions, combat-start, and the ordered /say reply chain
-#   9. Dedicated proximity chatter (ordinary Say)
-#  10. Boss and miniboss pre-aggro dialogue (dungeons and raids only)
-#  11. Party and raid chatter
-#  12. Guild chatter
-#  13. Deterministic bot memory ledger
-#  14. Random nearby, guild, and world chatter
-#  15. Automated World/custom-channel pacing
-#  16. Lightweight live environment context
-#  17. Event chatter
-#  18. Reply length and PlayerBots-compatible typing delay
-#  19. Bounded conversation and surrounding-chat history
-#  20. SNAPSHOT SYSTEM
-#  21. Structured local RAG
-#  22. Chatter Companion addon compatibility
 
-###################################################################################################
-# Module ownership and diagnostics
-###################################################################################################
+# --------------------------------------------
+# 1. MODULE OWNERSHIP AND DIAGNOSTICS
+# --------------------------------------------
 
-# Master switch for every module feature and HTTP request. (Default 1.)
+# AzerothVoices.Enable
+#     Description: Master switch for every module feature and HTTP request.
+#     Default:     1
 AzerothVoices.Enable = 1
-# Enables lightweight Azeroth Voices activity messages for administrators; 0 = disabled, 1 = enabled. (Default 0.)
+
+# AzerothVoices.Debug
+#     Description: Enables lightweight Azeroth Voices activity messages for
+#                  administrators; 0 = disabled, 1 = enabled.
+#     Default:     0
 AzerothVoices.Debug = 0
-# Logs each cleaned reply with request ID, actor, actor kind, scope, trigger, speaker, HTTP status, generation time, and text; this may expose private chat in server logs. (Default 0.)
+
+# AzerothVoices.Console.GeneratedMessages
+#     Description: Logs each cleaned reply with request ID, actor, actor kind, scope,
+#                  trigger, speaker, HTTP status, generation time, and text; this may
+#                  expose private chat in server logs.
+#     Default:     0
 AzerothVoices.Console.GeneratedMessages = 0
-# Logs HTTP-attempt, success, failure, generated-message, and preflight-rejection totals every configured interval; each retry counts as another API call. It never repeats generated text. (Default 0.)
+
+# AzerothVoices.Console.ApiCallStats
+#     Description: Logs HTTP-attempt, success, failure, generated-message, and
+#                  preflight-rejection totals every configured interval; each retry
+#                  counts as another API call. It never repeats generated text.
+#     Default:     0
 AzerothVoices.Console.ApiCallStats = 0
-# Length of each terminal reporting window. (Seconds, minimum 5; default 60.)
+
+# AzerothVoices.Console.ApiCallStatsIntervalSeconds
+#     Description: Length of each terminal reporting window. (Seconds, minimum 5.)
+#     Default:     60
 AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
 
-###################################################################################################
-# Provider and HTTPS
-###################################################################################################
+# --------------------------------------------
+# 2. PROVIDER AND HTTPS
+# --------------------------------------------
 
-# ChatCompletions supports OpenAI, Gemini's OpenAI-compatible endpoint, OpenRouter, and compatible gateways; Responses uses OpenAI's /v1/responses request shape. (Enum ChatCompletions/Responses; default ChatCompletions.)
+# AzerothVoices.ProviderMode
+#     Description: ChatCompletions supports OpenAI, Gemini's OpenAI-compatible endpoint,
+#                  OpenRouter, and compatible gateways; Responses uses OpenAI's
+#                  /v1/responses request shape. (Enum ChatCompletions/Responses.)
+#     Default:     ChatCompletions
 AzerothVoices.ProviderMode = ChatCompletions
-# Full provider endpoint. Remote plain HTTP is rejected. (URL; default OpenAI chat/completions.)
+
+# AiPlayerbot.LLMApiEndpoint
+#     Description: Full provider endpoint. Remote plain HTTP is rejected. (URL.)
+#     Default:     OpenAI chat/completions
 AiPlayerbot.LLMApiEndpoint = https://api.openai.com/v1/chat/completions
-# Supplies the Bearer API token. (Secret or env:VARIABLE; default env:OPENAI_API_KEY.)
+
+# AiPlayerbot.LLMApiKey
+#     Description: Supplies the Bearer API token. (Secret or env:VARIABLE.)
+#     Default:     env:OPENAI_API_KEY
 AiPlayerbot.LLMApiKey = env:OPENAI_API_KEY
-# Exact model identifier accepted by the selected endpoint. (String; default gpt-4o-mini.)
+
+# AzerothVoices.Model
+#     Description: Exact model identifier accepted by the selected endpoint. (String.)
+#     Default:     gpt-4o-mini
 AzerothVoices.Model = gpt-4o-mini
-# Empty lets the module generate provider-safe JSON; a custom legacy template may use <pre prompt>, <context>, <prompt>, <model>, and documented chat placeholders. (JSON template; default empty.)
-AiPlayerbot.LLMApiJson =
-# ProviderJson parses OpenAI chat/Responses, Gemini candidates, and Ollama JSON; LegacyRegex uses the regex settings below. (Enum ProviderJson/LegacyRegex; default ProviderJson.)
+
+# AiPlayerbot.LLMApiJson
+#     Description: Empty lets the module generate provider-safe JSON; a custom legacy
+#                  template may use <pre prompt>, <context>, <prompt>, <model>, and
+#                  documented chat placeholders. (JSON template.)
+#     Default:     empty
+AiPlayerbot.LLMApiJson = 
+
+# AzerothVoices.ParserMode
+#     Description: ProviderJson parses OpenAI chat/Responses, Gemini candidates, and
+#                  Ollama JSON; LegacyRegex uses the regex settings below. (Enum
+#                  ProviderJson/LegacyRegex.)
+#     Default:     ProviderJson
 AzerothVoices.ParserMode = ProviderJson
-# Empty uses system CAs; otherwise uses this custom CA bundle. (File path; default empty.)
-AzerothVoices.CACertFile =
-# Allows plain HTTP only for local/loopback providers, never remote HTTP. (Default 1.)
+
+# AzerothVoices.CACertFile
+#     Description: Empty uses system CAs; otherwise uses this custom CA bundle. (File
+#                  path.)
+#     Default:     empty
+AzerothVoices.CACertFile = 
+
+# AzerothVoices.AllowLocalHttp
+#     Description: Allows plain HTTP only for local/loopback providers, never remote
+#                  HTTP.
+#     Default:     1
 AzerothVoices.AllowLocalHttp = 1
-# TCP/TLS connection timeout. (Seconds, minimum 1; default 10.)
+
+# AzerothVoices.ConnectTimeoutSeconds
+#     Description: TCP/TLS connection timeout. (Seconds, minimum 1.)
+#     Default:     10
 AzerothVoices.ConnectTimeoutSeconds = 10
-# Provider read/write generation timeout. (Seconds, minimum 1; default 60.)
+
+# AiPlayerbot.LLMGenerationTimeout
+#     Description: Provider read/write generation timeout. (Seconds, minimum 1.)
+#     Default:     60
 AiPlayerbot.LLMGenerationTimeout = 60
-# Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536.)
+
+# AzerothVoices.MaxResponseBytes
+#     Description: Rejects oversized HTTP responses. (Bytes, minimum 1024.)
+#     Default:     65536
 AzerothVoices.MaxResponseBytes = 65536
-# Requested output limit in generated provider JSON. (Tokens, minimum 1; default 512.)
-AzerothVoices.MaxTokens = 512
-# Official-endpoint Thinking policy. Only api.openai.com and generativelanguage.googleapis.com
-# receive Thinking fields; every proxy or other OpenAI-compatible provider stays a normal
-# non-thinking provider. The former AzerothVoices.ReasoningEffort key is retired and ignored.
-# Auto applies a control only for an officially recognised provider/model and an enabled AutoKind;
-# On applies it for any recognised provider/model; Off omits the optional control and, for models
-# whose reasoning cannot be disabled, sends the lowest documented level without pretending to
-# disable reasoning. (Enum Auto/On/Off; default Auto.)
+
+# AzerothVoices.MaxTokens
+#     Description: Requested output limit in generated provider JSON. (Tokens, minimum
+#                  1.)
+#     Default:     50
+#
+#     IMPORTANT: this cap covers reasoning AND the reply. On a reasoning model
+#     (gpt-oss, deepseek-r1, qwen3 thinking builds) the reasoning is emitted
+#     first, so a low cap is spent before the reply starts and the bot returns
+#     nothing. Those models reason even with think mode off -- 'think': false
+#     is a request, not a guarantee. See AzerothVoices.Thinking.TokenReserve.
+#
+#     | MaxTokens  | Approx. Words | Use Case                         |
+#     |:----------:|:-------------:|:---------------------------------|
+#     |     20     |   ~13–15      | Very short/emote/chat            |
+#     |     30     |     ~20       | Short reply                      |
+#     |     40     |   ~27–30      | Standard WoW reply (recommended) |
+#     |     50     |   ~35–38      | Slightly longer reply            |
+#     |     75     |   ~50–60      | Long quest/lore text             |
+#     |    100+    |   70–80+      | Multi-paragraph (not typical)    |
+AzerothVoices.MaxTokens = 50
+
+# AzerothVoices.Thinking.Mode
+#     Description: Official-endpoint Thinking policy. Only api.openai.com and
+#                  generativelanguage.googleapis.com receive Thinking fields; every
+#                  proxy or other OpenAI-compatible provider stays a normal non-thinking
+#                  provider. The former AzerothVoices.ReasoningEffort key is retired and
+#                  ignored. Auto applies a control only for an officially recognised
+#                  provider/model and an enabled AutoKind; On applies it for any
+#                  recognised provider/model; Off omits the optional control and, for
+#                  models whose reasoning cannot be disabled, sends the lowest
+#                  documented level without pretending to disable reasoning. (Enum
+#                  Auto/On/Off.)
+#     Default:     Auto
 AzerothVoices.Thinking.Mode = Auto
-# Recognises the provider and model capability from the endpoint and model name without probing the
-# provider. With 0 only an explicit Thinking.Mode = On applies a control; the module never guesses
-# for an unrecognised model. (Accepted 0/1; default 1.)
+
+# AzerothVoices.Thinking.AutoDetect
+#     Description: Recognises the provider and model capability from the endpoint and
+#                  model name without probing the provider. With 0 only an explicit
+#                  Thinking.Mode = On applies a control; the module never guesses for an
+#                  unrecognised model. (Accepted 0/1.)
+#     Default:     1
 AzerothVoices.Thinking.AutoDetect = 1
-# Requested reasoning level. Minimal collapses to Low on the Responses API and on Gemini and
-# always-on models. (Enum Minimal/Low/Medium/High; default Low.)
+
+# AzerothVoices.Thinking.Effort
+#     Description: Requested reasoning level. Minimal collapses to Low on the Responses
+#                  API and on Gemini and always-on models. (Enum
+#                  Minimal/Low/Medium/High.)
+#     Default:     Low
 AzerothVoices.Thinking.Effort = Low
-# Added to the active output-token field only when a Thinking control is actually applied, so a
-# reasoning budget never truncates the visible reply. (Tokens, 0-100000; default 1024.)
+
+# AzerothVoices.Thinking.TokenReserve
+#     Description: Added to the active output-token field only when a Thinking control
+#                  is actually applied, so a reasoning budget never truncates the
+#                  visible reply. (Tokens, 0-100000.)
+#     Default:     1024
+#
+#     Extra token headroom added when reasoning tokens are expected.
+#     Added to the active output-token field only when a Thinking control
+#     is actually applied, so a reasoning budget never truncates the visible reply.
+#     Has no effect when MaxTokens is not constrained or model is non-reasoning.
 AzerothVoices.Thinking.TokenReserve = 1024
-# Request purposes that Auto mode may control. PersonalityGeneration covers identity generation;
-# DirectChat covers PlayerBot direct replies, TargetedNpc the named/selected/scene NPC triggers,
-# EventChat event reactions, AmbientChat random chatter, FollowupChat generated follow-ups.
-# Overheard chat, GM tests, boss, proximity, group and guild triggers stay non-reasoning in Auto.
-# (Comma-separated kinds, case-insensitive, duplicates ignored; default PersonalityGeneration,EventChat.)
+
+# AzerothVoices.Thinking.AutoKinds
+#     Description: Request purposes that Auto mode may control. PersonalityGeneration
+#                  covers identity generation; DirectChat covers PlayerBot direct
+#                  replies, TargetedNpc the named/selected/scene NPC triggers, EventChat
+#                  event reactions, AmbientChat random chatter, FollowupChat generated
+#                  follow-ups. Overheard chat, GM tests, boss, proximity, group and
+#                  guild triggers stay non-reasoning in Auto. (Comma-separated kinds,
+#                  case-insensitive, duplicates ignored.)
+#     Default:     PersonalityGeneration,EventChat
 AzerothVoices.Thinking.AutoKinds = PersonalityGeneration,EventChat
-# Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default 0.8.)
+
+# AzerothVoices.Temperature
+#     Description: Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0.)
+#     Default:     0.8
 AzerothVoices.Temperature = 0.8
-# Nucleus sampling; invalid values are clamped. (Decimal 0.0-1.0; default 0.95.)
+
+# AzerothVoices.TopP
+#     Description: Nucleus sampling; invalid values are clamped. (Decimal 0.0-1.0.)
+#     Default:     0.95
 AzerothVoices.TopP = 0.95
 
-###################################################################################################
-# Worker pool, queue, limits, and cooldowns
-###################################################################################################
+# --------------------------------------------
+# 3. WORKER POOL, QUEUE, LIMITS, AND COOLDOWNS
+# --------------------------------------------
 
-# Fixed background HTTP workers; core objects stay on world thread. (1-32; default 8.)
+# AzerothVoices.WorkerThreads
+#     Description: Fixed background HTTP workers; core objects stay on world thread.
+#                  (1-32.)
+#     Default:     8
 AzerothVoices.WorkerThreads = 8
-# Legacy misspelled fallback used only if WorkerThreads is absent. (1-32; default 8.)
+
+# AiPlayerbot.LLMMaxSimultaniousGenerations
+#     Description: Legacy misspelled fallback used only if WorkerThreads is absent.
+#                  (1-32.)
+#     Default:     8
 AiPlayerbot.LLMMaxSimultaniousGenerations = 8
-# Hard pending-queue memory bound. (Requests, minimum 1; default 128.)
+
+# AzerothVoices.QueueMaximum
+#     Description: Hard pending-queue memory bound. (Requests, minimum 1.)
+#     Default:     128
 AzerothVoices.QueueMaximum = 128
-# Queue capacity reserved for direct/group replies. (0-QueueMaximum; default 32.)
+
+# AzerothVoices.HighPriorityReserve
+#     Description: Queue capacity reserved for direct/group replies. (0-QueueMaximum.)
+#     Default:     32
 AzerothVoices.HighPriorityReserve = 32
-# Global budget shared by all workers. (Requests/minute, minimum 1; default 60.)
+
+# AzerothVoices.GlobalRequestsPerMinute
+#     Description: Global budget shared by all workers. (Requests/minute, minimum 1.)
+#     Default:     60
 AzerothVoices.GlobalRequestsPerMinute = 60
-# Drops queued requests that are no longer timely. (Seconds, minimum 1; default 90.)
+
+# AzerothVoices.RequestTTLSeconds
+#     Description: Drops queued requests that are no longer timely. (Seconds, minimum
+#                  1.)
+#     Default:     90
 AzerothVoices.RequestTTLSeconds = 90
-# Longer per-actor random-chatter cooldown. (Seconds, minimum 0; default 120.)
+
+# AzerothVoices.AmbientActorCooldownSeconds
+#     Description: Longer per-actor random-chatter cooldown. (Seconds, minimum 0.)
+#     Default:     120
 AzerothVoices.AmbientActorCooldownSeconds = 120
 
-# Per-bot cooldown (seconds) for General channel speech.
-# After a bot speaks in General, it cannot speak again
-# until this cooldown expires. Spreads voices across
-# different bots so the same one doesn't dominate.
-# Does NOT affect party chat or event reactions.
-# Default: 900 (15 minutes)
+# AzerothVoices.BotSpeakerCooldownSeconds
+#     Description: Per-bot cooldown (seconds) for General channel speech. After a bot
+#                  speaks in General, it cannot speak again until this cooldown expires.
+#                  Spreads voices across different bots so the same one doesn't
+#                  dominate. Does NOT affect party chat or event reactions. Default: 900
+#                  (15 minutes)
+#     Default:     900 (15 minutes)
 AzerothVoices.BotSpeakerCooldownSeconds = 900
 
-
-# Enables merging rapid consecutive messages from a real human player into a single prompt
-# for bots and NPCs. For example, typing "hi" followed by "ready for deadmines?" within the
-# window is combined into "hi ready for deadmines?" before calling the LLM.
-# Recommended: 1. (Boolean, default 1.)
-AzerothVoices.SpeakerCoalesce.Enable = 1
-
-# Time window in milliseconds to wait for additional follow-up lines from the player before
-# dispatching the combined message to the LLM. (Milliseconds, minimum 500, default 2000.)
-AzerothVoices.SpeakerCoalesce.DelayMilliseconds = 2000
-
-# Maximum number of consecutive lines to merge before forcing dispatch. (Count, minimum 2, default 3.)
-AzerothVoices.SpeakerCoalesce.MaxLines = 3
-# Retries transient connection, 429, and 5xx failures. (Retries, minimum 0; default 1.)
+# AzerothVoices.RetryMaximum
+#     Description: Retries transient connection, 429, and 5xx failures. (Retries,
+#                  minimum 0.)
+#     Default:     1
 AzerothVoices.RetryMaximum = 1
-# Base increasing delay between retries. (Milliseconds, minimum 0; default 500.)
+
+# AzerothVoices.RetryBackoffMilliseconds
+#     Description: Base increasing delay between retries. (Milliseconds, minimum 0.)
+#     Default:     500
 AzerothVoices.RetryBackoffMilliseconds = 500
 
-###################################################################################################
-# Shared prompts and PlayerBots-compatible prompt names
-###################################################################################################
+# --------------------------------------------
+# 4. SHARED PROMPTS AND PLAYERBOTS-COMPATIBLE PROMPT NAMES
+# --------------------------------------------
 
-# Selects PlayerBot conversation style for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; Roleplay keeps them in-world, Normal makes them speak like believable real WoW players, and any interaction involving an NPC is forced to Roleplay by typed C++ participant policy before provider JSON is sent. (Enum Roleplay/Normal; default Normal.)
+# AzerothVoices.GlobalMode
+#     Description: Selects PlayerBot conversation style for PlayerBot-to-real-player and
+#                  PlayerBot-to-PlayerBot dialogue; Roleplay keeps them in-world, Normal
+#                  makes them speak like believable real WoW players, and any
+#                  interaction involving an NPC is forced to Roleplay by typed C++
+#                  participant policy before provider JSON is sent. (Enum
+#                  Roleplay/Normal.)
+#     Default:     Normal
 AzerothVoices.GlobalMode = Normal
-# System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text.)
-AzerothVoices.GlobalPrompt.Roleplay = You create short, natural in-world dialogue for Vanilla/Turtle WoW. The speaker lives in Azeroth and treats its places, factions, quests, creatures, dungeons, travel, danger, and events as real lived experience. Stay in character and do not narrate actions. Never mention AI, prompts, policies, APIs, automation, game servers, controlling a character, or being a real-world player. Never prefix your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). Return only what the speaker says.
-# System prompt selected by GlobalMode=Normal for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; NPC-involved dialogue is switched to GlobalPrompt.Roleplay by C++ before provider serialization, so customizing this prompt cannot opt NPCs into Normal mode. (Text.)
-AzerothVoices.GlobalPrompt.Normal = You create short, natural World of Warcraft chat. Interaction metadata: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If the speaker is an NPC or counterpart-race is NPC, speak entirely in-world as a believable Vanilla/Turtle WoW character and never talk like someone at a computer. Otherwise the speaker is a PlayerBot representing a believable real human playing World of Warcraft: talk naturally like a real player about quests, leveling, gear, builds, talents, dungeons, guilds, PvP, travel, wipes, groups, and game mechanics when relevant; do not pretend Azeroth is real unless the conversation itself is roleplay. Avoid forced gamer slang and repetitive stereotypes. Never mention AI, prompts, policies, APIs, automation, or being a narrator. Never prefix your response with your name, character name, or dialogue tags (such as 'Name:' or '[Name] whispers:'). Return only what the speaker says.
-# Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is absent; existing installations may keep this value during migration. (Text.)
-AzerothVoices.GlobalPrompt = You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.
-# Describes a PlayerBot before a normal response. (Text template.)
+
+# AzerothVoices.GlobalPrompt.Roleplay
+#     Description: System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots
+#                  and NPCs inside Azeroth and forbids real-world player/meta framing.
+#                  (Text.)
+AzerothVoices.GlobalPrompt.Roleplay = You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.
+
+# AzerothVoices.GlobalPrompt.Normal
+#     Description: System prompt selected by GlobalMode=Normal for PlayerBot-to-real-
+#                  player and PlayerBot-to-PlayerBot dialogue; NPC-involved dialogue is
+#                  switched to GlobalPrompt.Roleplay by C++ before provider
+#                  serialization, so customizing this prompt cannot opt NPCs into Normal
+#                  mode. (Text.)
+AzerothVoices.GlobalPrompt.Normal = You write short, natural WoW chat. Context: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If speaker or counterpart is NPC, speak strictly in-world as a fantasy character. Otherwise, speak casually as a real human playing WoW without forced slang. Never add name prefixes or dialogue tags. Return only the spoken chat.
+
+# AiPlayerbot.LLMPrePrompt
+#     Description: Describes a PlayerBot before a normal response. (Text template.)
 AiPlayerbot.LLMPrePrompt = You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. <bot personality block>
-# Formats incoming chat for the provider using the actual incoming speaker name. (Text template.)
+
+# AiPlayerbot.LLMPrompt
+#     Description: Formats incoming chat for the provider using the actual incoming
+#                  speaker name. (Text template.)
 AiPlayerbot.LLMPrompt = <sender name>: <initial message>
-# Optional response cue appended after incoming chat; empty by default because the system/pre-prompt already identifies the responding actor. (Text template; default empty.)
-AiPlayerbot.LLMPostPrompt =
-# Shared prompt for a nearby NPC speaker. (Text template.)
+
+# AiPlayerbot.LLMPostPrompt
+#     Description: Optional response cue appended after incoming chat; empty by default
+#                  because the system/pre-prompt already identifies the responding
+#                  actor. (Text template.)
+#     Default:     empty
+AiPlayerbot.LLMPostPrompt = 
+
+# AiPlayerbot.LLMRpgPrompt
+#     Description: Shared prompt for a nearby NPC speaker. (Text template.)
 AiPlayerbot.LLMRpgPrompt = You are <bot name>, an NPC in <bot subzone>, <bot zone>. Reply briefly in character.
-# Caps the combined personality, live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Characters, minimum 0; default 4096.)
+
+# AiPlayerbot.LLMContextLength
+#     Description: Caps the combined personality, live environment, current/older
+#                  snapshots, histories, surrounding chat, and RAG context added to a
+#                  request. (Characters, minimum 0.)
+#     Default:     4096
 AiPlayerbot.LLMContextLength = 4096
-# 0 isolates history by speaker/scope; 1 shares actor-wide history. (Default 0.)
+
+# AiPlayerbot.LLMGlobalContext
+#     Description: 0 isolates history by speaker/scope; 1 shares actor-wide history.
+#     Default:     0
 AiPlayerbot.LLMGlobalContext = 0
-# LegacyRegex-only response start matcher. (ECMAScript regex.)
+
+# AiPlayerbot.LLMResponseStartPattern
+#     Description: LegacyRegex-only response start matcher. (ECMAScript regex.)
 AiPlayerbot.LLMResponseStartPattern = ("content":\s*")
-# LegacyRegex-only response end matcher. (ECMAScript regex.)
+
+# AiPlayerbot.LLMResponseEndPattern
+#     Description: LegacyRegex-only response end matcher. (ECMAScript regex.)
 AiPlayerbot.LLMResponseEndPattern = ("|\b(?!<sender name>\b)(\w+):)
-# LegacyRegex-only unwanted-fragment remover. (ECMAScript regex.)
+
+# AiPlayerbot.LLMResponseDeletePattern
+#     Description: LegacyRegex-only unwanted-fragment remover. (ECMAScript regex.)
 AiPlayerbot.LLMResponseDeletePattern = (\\n|<sender name>:|\\[^ ]+)
-# Optional LegacyRegex multi-line split matcher. (ECMAScript regex; default empty.)
-AiPlayerbot.LLMResponseSplitPattern =
-# Blocks matching replies, ignoring case. (Comma-separated scope/channel names; default empty.)
-AiPlayerbot.LLMBlockedReplyChannels =
 
-###################################################################################################
-# Persistent PlayerBot personalities
-###################################################################################################
+# AiPlayerbot.LLMResponseSplitPattern
+#     Description: Optional LegacyRegex multi-line split matcher. (ECMAScript regex.)
+#     Default:     empty
+AiPlayerbot.LLMResponseSplitPattern = 
 
-# Enables persistent PlayerBot personalities and backgrounds; accepted values 0/1; default 1; disabling preserves stored data and previous chat behavior.
+# AiPlayerbot.LLMBlockedReplyChannels
+#     Description: Blocks matching replies, ignoring case. (Comma-separated
+#                  scope/channel names.)
+#     Default:     empty
+AiPlayerbot.LLMBlockedReplyChannels = 
+
+# --------------------------------------------
+# 5. PERSISTENT PLAYERBOT PERSONALITIES
+# --------------------------------------------
+
+# AzerothVoices.Personality.Enable
+#     Description: Enables persistent PlayerBot personalities and backgrounds; accepted
+#                  values 0/1; default 1; disabling preserves stored data and previous
+#                  chat behavior.
+#     Default:     1
 AzerothVoices.Personality.Enable = 1
-# Selects background style; 0 = roleplay Azeroth character, 1 = fictional real-world WoW player persona with a randomly generated adult age (18-60) included in the story; default 1.
+
+# AzerothVoices.Personality.BackgroundMode
+#     Description: Selects background style; 0 = roleplay Azeroth character (guided by
+#                  Personality.Prompt.Roleplay), 1 = fictional real-world WoW player persona
+#                  (guided by Personality.Prompt.Normal) with a uniformly distributed adult
+#                  age (19-58) randomized by C++; default 1.
+#     Default:     1
 AzerothVoices.Personality.BackgroundMode = 1
-# Generates and persists a background story for missing personalities; accepted values 0/1; default 1; disabling preserves stored backgrounds.
+
+# AzerothVoices.Personality.GenerateBackground
+#     Description: Generates and persists a background story for missing personalities;
+#                  accepted values 0/1; default 1; disabling preserves stored
+#                  backgrounds.
+#     Default:     1
 AzerothVoices.Personality.GenerateBackground = 1
-# Traits are compile-time fixed at exactly three. The former
-# AzerothVoices.Personality.TraitCount option was removed; stored rows with any
-# other trait count are treated as stale and regenerated lazily.
-# Generates a persistent speaking tone derived from traits and background; accepted values 0/1; default 1.
+
+# AzerothVoices.Personality.GenerateTone
+#     Description: Traits are compile-time fixed at exactly three. The former
+#                  AzerothVoices.Personality.TraitCount option was removed; stored rows
+#                  with any other trait count are treated as stale and regenerated
+#                  lazily. Generates a persistent speaking tone derived from traits and
+#                  background; accepted values 0/1; default 1.
+#     Default:     1
 AzerothVoices.Personality.GenerateTone = 1
-# Generates missing personalities when a PlayerBot first enters an accepted dialogue request; accepted values 0/1; default 1.
+
+# AzerothVoices.Personality.GenerateOnDemand
+#     Description: Generates missing personalities when a PlayerBot first enters an
+#                  accepted dialogue request; accepted values 0/1; default 1.
+#     Default:     1
 AzerothVoices.Personality.GenerateOnDemand = 1
-# Uses the persistent PlayerBot personality in random/ambient and generated-follow-up prompts; accepted values 0/1; default 1.
+
+# AzerothVoices.Personality.UseInRandom
+#     Description: Uses the persistent PlayerBot personality in random/ambient and
+#                  generated-follow-up prompts; accepted values 0/1; default 1.
+#     Default:     1
 AzerothVoices.Personality.UseInRandom = 1
-# Uses the persistent PlayerBot personality in automatic and adapter event prompts; accepted values 0/1; default 1.
+
+# AzerothVoices.Personality.UseInEvents
+#     Description: Uses the persistent PlayerBot personality in automatic and adapter
+#                  event prompts; accepted values 0/1; default 1.
+#     Default:     1
 AzerothVoices.Personality.UseInEvents = 1
-# Sets the minimum delay after failed generation before the same bot can retry; accepted range 10-86400 seconds; default 300.
+
+# AzerothVoices.Personality.GenerationRetrySeconds
+#     Description: Sets the minimum delay after failed generation before the same bot
+#                  can retry; accepted range 10-86400 seconds; default 300.
+#     Default:     300
 AzerothVoices.Personality.GenerationRetrySeconds = 300
-# Bounds a generated stored background; accepted range 100-1500 characters; default 500.
+
+# AzerothVoices.Personality.MaxBackgroundChars
+#     Description: Bounds a generated stored background; accepted range 100-1500
+#                  characters; default 500.
+#     Default:     500
 AzerothVoices.Personality.MaxBackgroundChars = 500
-# Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 700.
+
+# AzerothVoices.Personality.MaxPromptChars
+#     Description: Bounds personality and background text inserted into each prompt;
+#                  accepted range 100-2000 characters; default 700.
+#     Default:     700
 AzerothVoices.Personality.MaxPromptChars = 700
 
-###################################################################################################
-# PlayerBot-to-real-player sentiment
-###################################################################################################
+# AzerothVoices.Personality.Prompt.Roleplay
+#     Description: System guidance prompt used when generating backstories in Roleplay
+#                  mode (BackgroundMode=0). Instructs the model to create authentic,
+#                  in-world Vanilla/Turtle WoW lore-appropriate character biographies
+#                  without cliché tropes. (Text.)
+#     Default:     Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions. Return only the backstory text.
+AzerothVoices.Personality.Prompt.Roleplay = Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions. Return only the backstory text.
+
+# AzerothVoices.Personality.Prompt.Normal
+#     Description: System guidance prompt used when generating backstories in Normal
+#                  mode (BackgroundMode=1). Instructs the model to create varied, realistic
+#                  fictional real-world player personas behind the bot avatars, strictly
+#                  forbidding repetitive trauma/divorce/escapism tropes. (Text.)
+#     Default:     Write a concise, realistic backstory for a fictional person who plays World of Warcraft. Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction enthusiasts, lore fans, or nostalgic veterans). Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity. Return only the backstory text.
+AzerothVoices.Personality.Prompt.Normal = Write a concise, realistic backstory for a fictional person who plays World of Warcraft. Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction enthusiasts, lore fans, or nostalgic veterans). Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity. Return only the backstory text.
+
+# AzerothVoices.Personality.Prompt.Traits
+#     Description: System guidance prompt used when generating a bot's 3 personality traits.
+#                  Instructs the model to select diverse, distinctive quirks and flaws rather
+#                  than repetitive generic adjectives. (Text.)
+#     Default:     traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). Do not use a fixed checklist, and do not merely restate race or class.
+AzerothVoices.Personality.Prompt.Traits = traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). Do not use a fixed checklist, and do not merely restate race or class.
+
+# AzerothVoices.Personality.Prompt.Tone
+#     Description: System guidance prompt used when generating a bot's persistent speaking style.
+#                  Instructs the model to produce varied, natural speech rhythms. (Text.)
+#     Default:     tone must be a concise speaking-style description derived from the traits. Avoid clichés like 'passion for storytelling' or 'thoughtful and articulate'. Focus on concrete vocal habits (e.g. blunt and dry, energetic fast-talker, deadpan sarcasm, gruff veteran brevity, cheerful banter, or hesitant caution).
+AzerothVoices.Personality.Prompt.Tone = tone must be a concise speaking-style description derived from the traits. Avoid clichés like 'passion for storytelling' or 'thoughtful and articulate'. Focus on concrete vocal habits (e.g. blunt and dry, energetic fast-talker, deadpan sarcasm, gruff veteran brevity, cheerful banter, or hesitant caution).
+
+# --------------------------------------------
+# 6. PLAYERBOT-TO-REAL-PLAYER SENTIMENT
+# --------------------------------------------
 #
 # Sentiment is one directional: an AI-controlled PlayerBot actor toward one online real-player
 # target. NPC actors, NPC targets, PlayerBot targets, and PlayerBot-to-PlayerBot pairs are rejected.
@@ -227,659 +454,1670 @@ AzerothVoices.Personality.MaxPromptChars = 700
 # subgroup, named Party when several PlayerBots share the subgroup, or named Say/World message.
 # Event and Random requests can read the tier when enabled below but never change it. Neutral SQL
 # rows older than 90 days are removed by the existing hourly database cleanup.
+# --------------------------------------------
 
-# Enables bounded sentiment context, updates, lazy decay, cache, and persistence; accepted values 0/1; default 0.
+# AzerothVoices.Sentiment.Enable
+#     Description: Enables bounded sentiment context, updates, lazy decay, cache, and
+#                  persistence; accepted values 0/1; default 0.
+#     Default:     0
 AzerothVoices.Sentiment.Enable = 0
-# Uses the anchor real player's relationship tier in random/ambient prompts without changing the score; accepted values 0/1; default 0.
+
+# AzerothVoices.Sentiment.UseInRandom
+#     Description: Uses the anchor real player's relationship tier in random/ambient
+#                  prompts without changing the score; accepted values 0/1; default 0.
+#     Default:     0
 AzerothVoices.Sentiment.UseInRandom = 0
-# Uses the real event subject's relationship tier in event prompts without changing the score; accepted values 0/1; default 0.
+
+# AzerothVoices.Sentiment.UseInEvents
+#     Description: Uses the real event subject's relationship tier in event prompts
+#                  without changing the score; accepted values 0/1; default 0.
+#     Default:     0
 AzerothVoices.Sentiment.UseInEvents = 0
-# Hard maximum magnitude for a model-reported qualifying direct player-chat change; accepted range 0-2; default 2. Zero keeps tier context but disables dialogue changes.
+
+# AzerothVoices.Sentiment.ConversationMaximumDelta
+#     Description: Hard maximum magnitude for a model-reported qualifying direct player-
+#                  chat change; accepted range 0-2; default 2. Zero keeps tier context
+#                  but disables dialogue changes.
+#     Default:     2
 AzerothVoices.Sentiment.ConversationMaximumDelta = 2
-# Full inactive days before lazy decay can begin; accepted range 0-365; default 7. No background sweep is performed.
+
+# AzerothVoices.Sentiment.InactivityGraceDays
+#     Description: Full inactive days before lazy decay can begin; accepted range 0-365;
+#                  default 7. No background sweep is performed.
+#     Default:     7
 AzerothVoices.Sentiment.InactivityGraceDays = 7
-# Positive points removed per full inactive day after the grace period; accepted range 0-100; default 1.
+
+# AzerothVoices.Sentiment.PositiveDecayPerDay
+#     Description: Positive points removed per full inactive day after the grace period;
+#                  accepted range 0-100; default 1.
+#     Default:     1
 AzerothVoices.Sentiment.PositiveDecayPerDay = 1
-# Negative points moved toward neutral per full inactive day after the grace period; accepted range 0-100; default 2, so grudges fade faster than friendship.
+
+# AzerothVoices.Sentiment.NegativeDecayPerDay
+#     Description: Negative points moved toward neutral per full inactive day after the
+#                  grace period; accepted range 0-100; default 2, so grudges fade faster
+#                  than friendship.
+#     Default:     2
 AzerothVoices.Sentiment.NegativeDecayPerDay = 2
-# Maximum lazily loaded relationship pairs in the world-thread RAM hot cache; accepted range 1-100000; default 4096.
+
+# AzerothVoices.Sentiment.CacheMaximumEntries
+#     Description: Maximum lazily loaded relationship pairs in the world-thread RAM hot
+#                  cache; accepted range 1-100000; default 4096.
+#     Default:     4096
 AzerothVoices.Sentiment.CacheMaximumEntries = 4096
-# Maximum distinct dirty relationship pairs waiting for SQL; accepted range 1-100000; default 1024. Repeated changes to one pair are coalesced.
+
+# AzerothVoices.Sentiment.PendingWriteMaximum
+#     Description: Maximum distinct dirty relationship pairs waiting for SQL; accepted
+#                  range 1-100000; default 1024. Repeated changes to one pair are
+#                  coalesced.
+#     Default:     1024
 AzerothVoices.Sentiment.PendingWriteMaximum = 1024
-# Maximum delay before dirty sentiment upserts are queued; accepted range 1-3600 seconds; default 5.
+
+# AzerothVoices.Sentiment.DatabaseFlushSeconds
+#     Description: Maximum delay before dirty sentiment upserts are queued; accepted
+#                  range 1-3600 seconds; default 5.
+#     Default:     5
 AzerothVoices.Sentiment.DatabaseFlushSeconds = 5
-# Distinct dirty pairs queued per normal flush; accepted range 1-PendingWriteMaximum; default 50, clamped to PendingWriteMaximum when that cap is lower.
+
+# AzerothVoices.Sentiment.DatabaseFlushBatchSize
+#     Description: Distinct dirty pairs queued per normal flush; accepted range
+#                  1-PendingWriteMaximum; default 50, clamped to PendingWriteMaximum
+#                  when that cap is lower.
+#     Default:     50
 AzerothVoices.Sentiment.DatabaseFlushBatchSize = 50
 
-###################################################################################################
-# PlayerBot delivery scopes, response selection, and distances
-###################################################################################################
+# --------------------------------------------
+# 7. PLAYERBOT DELIVERY SCOPES, RESPONSE SELECTION, AND DISTANCES
+# --------------------------------------------
 
-# Enables direct PlayerBot whisper replies. (Default 1.)
+# AzerothVoices.Replies.Whisper
+#     Description: Enables direct PlayerBot whisper replies.
+#     Default:     1
 AzerothVoices.Replies.Whisper = 1
-# Enables PlayerBot Say replies plus eligible NPC ambient/event/combat-start Say and NPC reactions to human or PlayerBot Say. (Default 1.)
+
+# AzerothVoices.Replies.Say
+#     Description: Enables PlayerBot Say replies plus eligible NPC ambient/event/combat-
+#                  start Say and NPC reactions to human or PlayerBot Say.
+#     Default:     1
 AzerothVoices.Replies.Say = 1
-# Enables PlayerBot Yell replies. Azeroth Voices NPCs never use Yell. (Default 1.)
+
+# AzerothVoices.Replies.Yell
+#     Description: Enables PlayerBot Yell replies. Azeroth Voices NPCs never use Yell.
+#     Default:     1
 AzerothVoices.Replies.Yell = 1
-# Enables PlayerBot party-subgroup replies. (Default 1.)
+
+# AzerothVoices.Replies.Party
+#     Description: Enables PlayerBot party-subgroup replies.
+#     Default:     1
 AzerothVoices.Replies.Party = 1
-# Enables PlayerBot raid replies. (Default 1.)
+
+# AzerothVoices.Replies.Raid
+#     Description: Enables PlayerBot raid replies.
+#     Default:     1
 AzerothVoices.Replies.Raid = 1
-# Enables guild replies, guild ambient chatter, and guild-scoped event chatter. (Default 1.)
+
+# AzerothVoices.Replies.Guild
+#     Description: Enables guild replies, guild ambient chatter, and guild-scoped event
+#                  chatter.
+#     Default:     1
 AzerothVoices.Replies.Guild = 1
-# Enables officer-channel replies for suitably ranked bots. (Default 0.)
+
+# AzerothVoices.Replies.Officer
+#     Description: Enables officer-channel replies for suitably ranked bots.
+#     Default:     0
 AzerothVoices.Replies.Officer = 0
-# Enables cross-faction replies and ambient lines in WorldChannelName when the core's two-side channel interaction is enabled. Bot-originated and random World chatter requires one online real player anywhere on the server; it does not require channel-membership proof or proximity. (Default 1.)
+
+# AzerothVoices.Replies.World
+#     Description: Enables cross-faction replies and ambient lines in WorldChannelName
+#                  when the core's two-side channel interaction is enabled. Bot-
+#                  originated and random World chatter requires one online real player
+#                  anywhere on the server; it does not require channel-membership proof
+#                  or proximity.
+#     Default:     1
 AzerothVoices.Replies.World = 1
-# Enables cross-faction replies in channels other than WorldChannelName when the core's two-side channel interaction is enabled. When set to 1, bot-originated replies retain the conservative public-count gate because exact individual channel membership is private in this core. (Default 0.)
+
+# AzerothVoices.Replies.CustomChannels
+#     Description: Enables cross-faction replies in channels other than WorldChannelName
+#                  when the core's two-side channel interaction is enabled. When set to
+#                  1, bot-originated replies retain the conservative public-count gate
+#                  because exact individual channel membership is private in this core.
+#     Default:     0
 AzerothVoices.Replies.CustomChannels = 0
-# Used to classify and deliver world-chat messages. (Channel name; default World.)
+
+# AzerothVoices.WorldChannelName
+#     Description: Used to classify and deliver world-chat messages. (Channel name.)
+#     Default:     World
 AzerothVoices.WorldChannelName = World
-# Prevents actors currently in combat from being selected when set to 1. Combat replies, including the dedicated combat-start reaction, are enabled by default. (Default 0.)
+
+# AzerothVoices.DisableRepliesInCombat
+#     Description: Prevents actors currently in combat from being selected when set to
+#                  1. Combat replies, including the dedicated combat-start reaction, are
+#                  enabled by default.
+#     Default:     0
 AzerothVoices.DisableRepliesInCombat = 0
-# Maximum responders to one incoming message. (Actors, minimum 1; default 2.)
+
+# AzerothVoices.MaxResponders
+#     Description: Maximum responders to one incoming message. (Actors, minimum 1.)
+#     Default:     2
 AzerothVoices.MaxResponders = 2
-# Enables progressive falloff only for responders to one normal non-whisper incoming chat message; 1 always permits the first successfully queued responder, then rolls each later responder slot, while 0 uses only AzerothVoices.MaxResponders. Generated follow-ups and event responders keep their separate existing settings. Direct selection/name targeting keeps its existing priority. (Accepted 0/1; default 1.)
+
+# AzerothVoices.ResponderFalloff.Enable
+#     Description: Enables progressive falloff only for responders to one normal non-
+#                  whisper incoming chat message; 1 always permits the first
+#                  successfully queued responder, then rolls each later responder slot,
+#                  while 0 uses only AzerothVoices.MaxResponders. Generated follow-ups
+#                  and event responders keep their separate existing settings. Direct
+#                  selection/name targeting keeps its existing priority. (Accepted 0/1.)
+#     Default:     1
 AzerothVoices.ResponderFalloff.Enable = 1
-# Chance to open the second responder slot after one responder was successfully queued; if the roll passes, candidates are tried until one queues successfully or none remain. Existing scope, direct-address, name-mention, NPC, audience, cooldown, and eligibility gates still apply. (Percentage 0-100; default 50.)
+
+# AzerothVoices.ResponderFalloff.SecondChance
+#     Description: Chance to open the second responder slot after one responder was
+#                  successfully queued; if the roll passes, candidates are tried until
+#                  one queues successfully or none remain. Existing scope, direct-
+#                  address, name-mention, NPC, audience, cooldown, and eligibility gates
+#                  still apply. (Percentage 0-100.)
+#     Default:     50
 AzerothVoices.ResponderFalloff.SecondChance = 50
-# Percentage points removed from each later successfully queued responder slot: third = SecondChance - Delta, fourth = SecondChance - 2*Delta, floored at 0. (Percentage points 0-100; default 20.)
+
+# AzerothVoices.ResponderFalloff.Delta
+#     Description: Percentage points removed from each later successfully queued
+#                  responder slot: third = SecondChance - Delta, fourth = SecondChance -
+#                  2*Delta, floored at 0. (Percentage points 0-100.)
+#     Default:     20
 AzerothVoices.ResponderFalloff.Delta = 20
-# Local Say listener/responder and real-human observer distance for PlayerBots and NPCs. PlayerBots never count as observers. Combat-start reactions require the opening real player to be within this distance. (Decimal yards, minimum 1; default 25.)
+
+# AzerothVoices.SayDistance
+#     Description: Local Say listener/responder and real-human observer distance for
+#                  PlayerBots and NPCs. PlayerBots never count as observers. Combat-
+#                  start reactions require the opening real player to be within this
+#                  distance. (Decimal yards, minimum 1.)
+#     Default:     25
 AzerothVoices.SayDistance = 25
-# Local yell listener/responder distance. Bot-originated yell can trigger AI replies only when a real player is also within this distance. (Decimal yards, minimum SayDistance; default 100.)
+
+# AzerothVoices.YellDistance
+#     Description: Local yell listener/responder distance. Bot-originated yell can
+#                  trigger AI replies only when a real player is also within this
+#                  distance. (Decimal yards, minimum SayDistance.)
+#     Default:     100
 AzerothVoices.YellDistance = 100
 
-# When 1, any full online PlayerBot name explicitly mentioned in Say, Yell, Party, Raid, Guild, Officer, World, or custom-channel chat makes only explicitly named PlayerBots eligible; unmentioned PlayerBots and NPCs are suppressed, while the existing NameMention chance still decides whether a named bot replies. Whisper is already single-target. (Accepted 0/1; default 1.)
+# AzerothVoices.NameMention.ExclusiveResponder
+#     Description: When 1, any full online PlayerBot name explicitly mentioned in Say,
+#                  Yell, Party, Raid, Guild, Officer, World, or custom-channel chat
+#                  makes only explicitly named PlayerBots eligible; unmentioned
+#                  PlayerBots and NPCs are suppressed, while the existing NameMention
+#                  chance still decides whether a named bot replies. Whisper is already
+#                  single-target. (Accepted 0/1.)
+#     Default:     1
 AzerothVoices.NameMention.ExclusiveResponder = 1
-# Candidate priority base score for an actor directly targeted by the speaking player or whispered. (Score, 0-200; default 100.)
+
+# AzerothVoices.CandidateScore.DirectTarget
+#     Description: Candidate priority base score for an actor directly targeted by the
+#                  speaking player or whispered. (Score, 0-200.)
+#     Default:     100
 AzerothVoices.CandidateScore.DirectTarget = 100
-# Candidate priority base score for an actor whose name is explicitly mentioned in the message. (Score, 0-100; default 80.)
+
+# AzerothVoices.CandidateScore.NameMention
+#     Description: Candidate priority base score for an actor whose name is explicitly
+#                  mentioned in the message. (Score, 0-100.)
+#     Default:     80
 AzerothVoices.CandidateScore.NameMention = 80
-# Candidate priority base score for an untargeted and unmentioned actor in group or local chat. (Score, 0-100; default 25.)
+
+# AzerothVoices.CandidateScore.Untargeted
+#     Description: Candidate priority base score for an untargeted and unmentioned actor
+#                  in group or local chat. (Score, 0-100.)
+#     Default:     25
 AzerothVoices.CandidateScore.Untargeted = 25
-# Chance a selected or directly whispered actor answers. (Percentage; default 100.)
+
+# AzerothVoices.Chance.DirectAddress
+#     Description: Chance a selected or directly whispered actor answers. (Percentage.)
+#     Default:     100
 AzerothVoices.Chance.DirectAddress = 100
-# Chance an actor named in the message answers. (Percentage; default 70.)
+
+# AzerothVoices.Chance.NameMention
+#     Description: Chance an actor named in the message answers. (Percentage.)
+#     Default:     70
 AzerothVoices.Chance.NameMention = 70
-# Chance an otherwise eligible nearby actor joins in. (Percentage; default 8.)
+
+# AzerothVoices.Chance.Overhear
+#     Description: Chance an otherwise eligible nearby actor joins in. (Percentage.)
+#     Default:     8
 AzerothVoices.Chance.Overhear = 8
-# Time window in seconds where an active /say conversation partner (NPC or PlayerBot) remains
-# locked for subsequent turns when the player speaks again without naming another actor. (Seconds, minimum 5; default 30.)
+
+# AzerothVoices.Say.ConversationReplyWindowSeconds
+#     Description: Time window in seconds where an active /say conversation partner (NPC
+#                  or PlayerBot) remains locked for subsequent turns when the player
+#                  speaks again without naming another actor. (Seconds, minimum 5.)
+#     Default:     30
 AzerothVoices.Say.ConversationReplyWindowSeconds = 30
-# Maximum consecutive reply turns an active /say conversation partner will take before
-# requiring re-addressing. (Turns, minimum 1; default 5.)
+
+# AzerothVoices.Say.ConversationMaxTurns
+#     Description: Maximum consecutive reply turns an active /say conversation partner
+#                  will take before requiring re-addressing. (Turns, minimum 1.)
+#     Default:     5
 AzerothVoices.Say.ConversationMaxTurns = 5
-# Score penalty applied to the bot that spoke last in party or raid chat when multiple bots
-# are eligible and none was explicitly named, ensuring diverse cooperative replies. (Percentage, 0-100; default 40.)
+
+# AzerothVoices.Party.SpeakerRotationPenalty
+#     Description: Score penalty applied to the bot that spoke last in party or raid
+#                  chat when multiple bots are eligible and none was explicitly named,
+#                  ensuring diverse cooperative replies. (Percentage, 0-100.)
+#     Default:     40
 AzerothVoices.Party.SpeakerRotationPenalty = 40
-# Bot response chance to a real player's say/yell. (Percentage; default 90.)
+
+# AzerothVoices.PlayerReplyChance.Say
+#     Description: Bot response chance to a real player's say/yell. (Percentage.)
+#     Default:     90
 AzerothVoices.PlayerReplyChance.Say = 90
-# Bot response chance to another bot's say/yell. (Percentage; default 10.)
+
+# AzerothVoices.BotReplyChance.Say
+#     Description: Bot response chance to another bot's say/yell. (Percentage.)
+#     Default:     10
 AzerothVoices.BotReplyChance.Say = 10
-# Bot response chance to a real player in world/custom chat. (Percentage; default 60.)
+
+# AzerothVoices.PlayerReplyChance.Channel
+#     Description: Bot response chance to a real player in world/custom chat.
+#                  (Percentage.)
+#     Default:     60
 AzerothVoices.PlayerReplyChance.Channel = 60
-# Bot response chance to another bot in world/custom chat. Bot-originated channel replies also require the module to prove from public core counts that the channel has a real member. (Percentage; default 3.)
+
+# AzerothVoices.BotReplyChance.Channel
+#     Description: Bot response chance to another bot in world/custom chat. Bot-
+#                  originated channel replies also require the module to prove from
+#                  public core counts that the channel has a real member. (Percentage.)
+#     Default:     3
 AzerothVoices.BotReplyChance.Channel = 3
-# Bot response chance to a real player in party/raid. (Percentage; default 90.)
+
+# AzerothVoices.PlayerReplyChance.Party
+#     Description: Bot response chance to a real player in party/raid. (Percentage.)
+#     Default:     90
 AzerothVoices.PlayerReplyChance.Party = 90
-# When enabled, if a human player has an active target in Say, Yell, Party, or Raid chat,
-# untargeted companion bots suppress their reply probability to TargetActive.Chance instead of
-# full ambient channel rates. Global channels (Guild, Officer, World) skip target suppression. (Default 1.)
+
+# AzerothVoices.PlayerReplyChance.TargetActive.Enable
+#     Description: When enabled, if a human player has an active target in Say, Yell,
+#                  Party, or Raid chat, untargeted companion bots suppress their reply
+#                  probability to TargetActive.Chance instead of full ambient channel
+#                  rates. Global channels (Guild, Officer, World) skip target
+#                  suppression.
+#     Default:     1
 AzerothVoices.PlayerReplyChance.TargetActive.Enable = 1
-# Bot response chance when the speaking player has an active target (applies to untargeted bots in Say, Yell, Party, Raid). (Percentage, 0-100; default 60.)
+
+# AzerothVoices.PlayerReplyChance.TargetActive.Chance
+#     Description: Bot response chance when the speaking player has an active target
+#                  (applies to untargeted bots in Say, Yell, Party, Raid). (Percentage,
+#                  0-100.)
+#     Default:     60
 AzerothVoices.PlayerReplyChance.TargetActive.Chance = 60
-# Bot response chance to another bot in party/raid. Bot-originated replies also require a real member in the party subgroup or raid. (Percentage; default 10.)
+
+# AzerothVoices.BotReplyChance.Party
+#     Description: Bot response chance to another bot in party/raid. Bot-originated
+#                  replies also require a real member in the party subgroup or raid.
+#                  (Percentage.)
+#     Default:     10
 AzerothVoices.BotReplyChance.Party = 10
-# Bot response chance to a real player in guild/officer chat. (Percentage; default 70.)
+
+# AzerothVoices.PlayerReplyChance.Guild
+#     Description: Bot response chance to a real player in guild/officer chat.
+#                  (Percentage.)
+#     Default:     70
 AzerothVoices.PlayerReplyChance.Guild = 70
-# Bot response chance to another bot in guild/officer chat. Bot-originated replies also require a real member with listening rights. (Percentage; default 5.)
+
+# AzerothVoices.BotReplyChance.Guild
+#     Description: Bot response chance to another bot in guild/officer chat. Bot-
+#                  originated replies also require a real member with listening rights.
+#                  (Percentage.)
+#     Default:     5
 AzerothVoices.BotReplyChance.Guild = 5
-# Global upper cap for PlayerBot-to-PlayerBot replies. Bot-to-bot whisper is disabled; every other scope requires a real audience. (Percentage; default 10.)
+
+# AiPlayerbot.LLMBotToBotChatChance
+#     Description: Global upper cap for PlayerBot-to-PlayerBot replies. Bot-to-bot
+#                  whisper is disabled; every other scope requires a real audience.
+#                  (Percentage.)
+#     Default:     10
 AiPlayerbot.LLMBotToBotChatChance = 10
-# Upper cap for NPC reactions to PlayerBot Say and for generated follow-ups where either participant is an NPC. These interactions remain in Say and require a real human within SayDistance. (Percentage; default 30.)
+
+# AiPlayerbot.LLMRpgAIChatChance
+#     Description: Upper cap for NPC reactions to PlayerBot Say and for generated
+#                  follow-ups where either participant is an NPC. These interactions
+#                  remain in Say and require a real human within SayDistance.
+#                  (Percentage.)
+#     Default:     30
 AiPlayerbot.LLMRpgAIChatChance = 30
-# Messages beginning with any listed PlayerBots command or addon prefix are never sent to the provider; add local prefixes as needed. (Comma-separated case-insensitive prefixes.)
+
+# AzerothVoices.CommandBlacklist
+#     Description: Messages beginning with any listed PlayerBots command or addon prefix
+#                  are never sent to the provider; add local prefixes as needed. (Comma-
+#                  separated case-insensitive prefixes.)
 AzerothVoices.CommandBlacklist = .,!,/,#,$,autogear,talents,summon,release,revive,attack,follow,stay,cast,quest,trainer,teleport,addon,DBM,Recount,Questie
-# Additional list of ignored command tokens, strategy commands, or prefixes. (Comma-separated case-insensitive prefixes; default empty.)
+
+# AzerothVoices.CommandIgnoreList
+#     Description: Additional list of ignored command tokens, strategy commands, or
+#                  prefixes. (Comma-separated case-insensitive prefixes.)
+#     Default:     empty
 AzerothVoices.CommandIgnoreList = 
 
-###################################################################################################
-# NPC dialogue: reactions, combat-start, and the ordered /say reply chain
-###################################################################################################
+# --------------------------------------------
+# 8. NPC DIALOGUE: REACTIONS, COMBAT-START, AND THE ORDERED /SAY REPLY CHAIN
+# --------------------------------------------
 
-# Allows eligible static NPCs to react to human or PlayerBot Say, to nearby events, and to a fresh
-# combat opening. Ordinary ambient Say chatter is owned by the Proximity section below and
-# classified dungeon/raid bosses are owned by the Boss Dialogue section, so this switch does not
-# gate either of those. Neutral and hostile categories are enabled through the combined switch
-# below. Pet, summon, guardian, totem, charmed, trigger, critter, and temporary speakers remain
-# rejected. NPC output is Say only. (Default 1.)
+# AzerothVoices.NPC.Enable
+#     Description: Allows eligible static NPCs to react to human or PlayerBot Say, to
+#                  nearby events, and to a fresh combat opening. Ordinary ambient Say
+#                  chatter is owned by the Proximity section below and classified
+#                  dungeon/raid bosses are owned by the Boss Dialogue section, so this
+#                  switch does not gate either of those. Neutral and hostile categories
+#                  are enabled through the combined switch below. Pet, summon, guardian,
+#                  totem, charmed, trigger, critter, and temporary speakers remain
+#                  rejected. NPC output is Say only.
+#     Default:     1
 AzerothVoices.NPC.Enable = 1
-# NPC candidate search radius around the local event subject, human/PlayerBot speaker, or random real-player anchor. It is also the maximum actor-to-actor distance for every generated follow-up pair containing an NPC. Both follow-up actors must share one real-human observer within SayDistance. (Decimal yards, minimum 1; default 10.)
-AzerothVoices.NPC.Distance = 10
-# Creature types eligible for generated NPC speech. Defaults to Dragonkin, Demon, Elemental, Giant, Undead, Humanoid, and Mechanical; all NPC safety, faction, audience, distance, and combat checks still apply. The Proximity section below is stricter and accepts only humanoids unless an entry is listed in Proximity.Speaker.AllowNonHumanoidEntries. (Comma-separated creature_template.type values 0-11; default 2,3,4,5,6,7,9.)
-AzerothVoices.NPC.AllowedTypes = 2,3,4,5,6,7,9
-# Allows both neutral and hostile NPC categories through the faction gate. This does not bypass AllowedTypes or the existing ownership, temporary-creature, audience, distance, or combat rules. (Default 1.)
-AzerothVoices.NPC.AllowNeutralAndHostile = 1
-# The three disposition chances below are an additional probability gate alongside the direct-address, name-mention, overhear, event, random, and follow-up chances. They apply to those normal NPC-speaking paths and never bypass NPC safety, faction, distance, audience, or combat checks. The dedicated combat-start path uses its own chance below instead.
-# Chance that an otherwise selected NPC friendly toward the current conversational counterpart speaks. (Percentage; default 100.)
-AzerothVoices.NPC.ReplyChance.Friendly = 100
-# Chance that an otherwise selected NPC neutral toward the current conversational counterpart speaks. (Percentage; default 50.)
-AzerothVoices.NPC.ReplyChance.Neutral = 50
-# Chance that an otherwise selected NPC hostile or unfriendly toward the current conversational counterpart speaks. (Percentage; default 25.)
-AzerothVoices.NPC.ReplyChance.Hostile = 25
-# Enables one generated Say reaction from the exact creature a real player attacks when that attack opens a fresh combat. Attacking another creature while the player remains in the same combat never creates another combat-start reaction. Existing NPC safety/type/faction gates and DisableRepliesInCombat still apply. (Default 1.)
-AzerothVoices.NPC.CombatStart.Enable = 1
-# Chance that the exact opening creature produces its one combat-start reaction. The roll happens once per fresh combat. (Percentage; default 30.)
-AzerothVoices.NPC.CombatStart.Chance = 30
-# Minimum time between accepted combat-start creature reactions for the same real player; this is separate from the one-trigger-per-combat latch. (Seconds, minimum 0; default 60.)
-AzerothVoices.NPC.CombatStart.CooldownSeconds = 60
-# A real player who speaks in Say gets one ordered reply chain: an eligible named NPC (a full-name
-# match beats a unique first-token match, and an ambiguous name selects nothing), then the
-# explicitly selected target, then the last active proximity-scene participant, then a new
-# proximity scene. The chosen speaker answers directly and is not gated by a separate chance; the
-# usual eligibility, distance, line-of-sight, cooldown, and queue rules still apply. Every
-# participant keeps that real player as its SayDistance observer.
 
-# Enables observer comments from nearby PlayerBots when a real player speaks to a targeted NPC. (Default 1.)
+# AzerothVoices.NPC.Distance
+#     Description: NPC candidate search radius around the local event subject,
+#                  human/PlayerBot speaker, or random real-player anchor. It is also the
+#                  maximum actor-to-actor distance for every generated follow-up pair
+#                  containing an NPC. Both follow-up actors must share one real-human
+#                  observer within SayDistance. (Decimal yards, minimum 1.)
+#     Default:     10
+AzerothVoices.NPC.Distance = 10
+
+# AzerothVoices.NPC.AllowedTypes
+#     Description: Creature types eligible for generated NPC speech. Defaults to
+#                  Dragonkin, Demon, Elemental, Giant, Undead, Humanoid, and Mechanical;
+#                  all NPC safety, faction, audience, distance, and combat checks still
+#                  apply. The Proximity section below is stricter and accepts only
+#                  humanoids unless an entry is listed in
+#                  Proximity.Speaker.AllowNonHumanoidEntries. (Comma-separated
+#                  creature_template.type values 0-11.)
+#     Default:     2,3,4,5,6,7,9
+AzerothVoices.NPC.AllowedTypes = 2,3,4,5,6,7,9
+
+# AzerothVoices.NPC.AllowNeutralAndHostile
+#     Description: Allows both neutral and hostile NPC categories through the faction
+#                  gate. This does not bypass AllowedTypes or the existing ownership,
+#                  temporary-creature, audience, distance, or combat rules.
+#     Default:     1
+AzerothVoices.NPC.AllowNeutralAndHostile = 1
+
+# AzerothVoices.NPC.ReplyChance.Friendly
+#     Description: The three disposition chances below are an additional probability
+#                  gate alongside the direct-address, name-mention, overhear, event,
+#                  random, and follow-up chances. They apply to those normal NPC-
+#                  speaking paths and never bypass NPC safety, faction, distance,
+#                  audience, or combat checks. The dedicated combat-start path uses its
+#                  own chance below instead. Chance that an otherwise selected NPC
+#                  friendly toward the current conversational counterpart speaks.
+#                  (Percentage.)
+#     Default:     100
+AzerothVoices.NPC.ReplyChance.Friendly = 100
+
+# AzerothVoices.NPC.ReplyChance.Neutral
+#     Description: Chance that an otherwise selected NPC neutral toward the current
+#                  conversational counterpart speaks. (Percentage.)
+#     Default:     50
+AzerothVoices.NPC.ReplyChance.Neutral = 50
+
+# AzerothVoices.NPC.ReplyChance.Hostile
+#     Description: Chance that an otherwise selected NPC hostile or unfriendly toward
+#                  the current conversational counterpart speaks. (Percentage.)
+#     Default:     25
+AzerothVoices.NPC.ReplyChance.Hostile = 25
+
+# AzerothVoices.NPC.CombatStart.Enable
+#     Description: Enables one generated Say reaction from the exact creature a real
+#                  player attacks when that attack opens a fresh combat. Attacking
+#                  another creature while the player remains in the same combat never
+#                  creates another combat-start reaction. Existing NPC
+#                  safety/type/faction gates and DisableRepliesInCombat still apply.
+#     Default:     1
+AzerothVoices.NPC.CombatStart.Enable = 1
+
+# AzerothVoices.NPC.CombatStart.Chance
+#     Description: Chance that the exact opening creature produces its one combat-start
+#                  reaction. The roll happens once per fresh combat. (Percentage.)
+#     Default:     30
+AzerothVoices.NPC.CombatStart.Chance = 30
+
+# AzerothVoices.NPC.CombatStart.CooldownSeconds
+#     Description: Minimum time between accepted combat-start creature reactions for the
+#                  same real player; this is separate from the one-trigger-per-combat
+#                  latch. (Seconds, minimum 0.)
+#     Default:     60
+AzerothVoices.NPC.CombatStart.CooldownSeconds = 60
+
+# AzerothVoices.NPC.TargetedConversation.BotComments.Enable
+#     Description: A real player who speaks in Say gets one ordered reply chain: an
+#                  eligible named NPC (a full-name match beats a unique first-token
+#                  match, and an ambiguous name selects nothing), then the explicitly
+#                  selected target, then the last active proximity-scene participant,
+#                  then a new proximity scene. The chosen speaker answers directly and
+#                  is not gated by a separate chance; the usual eligibility, distance,
+#                  line-of-sight, cooldown, and queue rules still apply. Every
+#                  participant keeps that real player as its SayDistance observer.
+#                  Enables observer comments from nearby PlayerBots when a real player
+#                  speaks to a targeted NPC.
+#     Default:     1
 AzerothVoices.NPC.TargetedConversation.BotComments.Enable = 1
 
-# Chance that nearby PlayerBots generate an observer comment when a real player speaks to a targeted NPC. (Percentage; default 15.)
+# AzerothVoices.NPC.TargetedConversation.BotCommentChance
+#     Description: Chance that nearby PlayerBots generate an observer comment when a
+#                  real player speaks to a targeted NPC. (Percentage.)
+#     Default:     15
 AzerothVoices.NPC.TargetedConversation.BotCommentChance = 15
 
-# Maximum number of PlayerBots allowed to make an observer comment per player-to-NPC interaction. (Integer 0-10; default 1.)
+# AzerothVoices.NPC.TargetedConversation.MaxBotComments
+#     Description: Maximum number of PlayerBots allowed to make an observer comment per
+#                  player-to-NPC interaction. (Integer 0-10.)
+#     Default:     1
 AzerothVoices.NPC.TargetedConversation.MaxBotComments = 1
 
-# Suppresses direct PlayerBot replies in /say when a real player mentions or speaks to an NPC.
-# This prevents PlayerBots from answering questions intended for NPCs or impersonating vendors/questgivers. (Default 1.)
+# AzerothVoices.NPC.MentionSuppressesDirectBotReply
+#     Description: Suppresses direct PlayerBot replies in /say when a real player
+#                  mentions or speaks to an NPC. This prevents PlayerBots from answering
+#                  questions intended for NPCs or impersonating vendors/questgivers.
+#     Default:     1
 AzerothVoices.NPC.MentionSuppressesDirectBotReply = 1
 
-# If direct PlayerBot replies are not completely suppressed when speaking to an NPC, this sets
-# the chance (0-100%) that a bot is permitted to reply directly as addressee. (Percentage; default 0.)
+# AzerothVoices.NPC.MentionBotDirectReplyChance
+#     Description: If direct PlayerBot replies are not completely suppressed when
+#                  speaking to an NPC, this sets the chance (0-100%) that a bot is
+#                  permitted to reply directly as addressee. (Percentage.)
+#     Default:     0
 AzerothVoices.NPC.MentionBotDirectReplyChance = 0
 
-# Enables observer comments from nearby PlayerBots when an NPC delivers a reply to a real player.
-# Allows nearby bots to react in-character to what the NPC said. (Default 1.)
+# AzerothVoices.NPC.ReplyObserver.Enable
+#     Description: Enables observer comments from nearby PlayerBots when an NPC delivers
+#                  a reply to a real player. Allows nearby bots to react in-character to
+#                  what the NPC said.
+#     Default:     1
 AzerothVoices.NPC.ReplyObserver.Enable = 1
 
-# Chance that nearby PlayerBots generate an observer reaction to the NPC's answer. (Percentage; default 25.)
+# AzerothVoices.NPC.ReplyObserver.Chance
+#     Description: Chance that nearby PlayerBots generate an observer reaction to the
+#                  NPC's answer. (Percentage.)
+#     Default:     25
 AzerothVoices.NPC.ReplyObserver.Chance = 25
 
-# Cooldown between bot observer comments reacting to NPC interactions. (Seconds, 0-86400; default 30.)
+# AzerothVoices.NPC.ReplyObserver.CooldownSeconds
+#     Description: Cooldown between bot observer comments reacting to NPC interactions.
+#                  (Seconds, 0-86400.)
+#     Default:     30
 AzerothVoices.NPC.ReplyObserver.CooldownSeconds = 30
 
-# Enables observer commentary from companion PlayerBots when a real player speaks to or interacts
-# with a targeted companion PlayerBot. Allows other party members to chime in or react. (Default 1.)
+# AzerothVoices.TargetedBot.Observer.Enable
+#     Description: Enables observer commentary from companion PlayerBots when a real
+#                  player speaks to or interacts with a targeted companion PlayerBot.
+#                  Allows other party members to chime in or react.
+#     Default:     1
 AzerothVoices.TargetedBot.Observer.Enable = 1
 
-# Chance that an untargeted companion PlayerBot comments on what the real player said to the targeted bot. (Percentage, 0-100; default 70.)
+# AzerothVoices.TargetedBot.CommentOnPlayerChance
+#     Description: Chance that an untargeted companion PlayerBot comments on what the
+#                  real player said to the targeted bot. (Percentage, 0-100.)
+#     Default:     70
 AzerothVoices.TargetedBot.CommentOnPlayerChance = 70
 
-# Chance that an untargeted companion PlayerBot reacts to the reply delivered by the targeted bot. (Percentage, 0-100; default 30.)
+# AzerothVoices.TargetedBot.CommentOnReplyChance
+#     Description: Chance that an untargeted companion PlayerBot reacts to the reply
+#                  delivered by the targeted bot. (Percentage, 0-100.)
+#     Default:     30
 AzerothVoices.TargetedBot.CommentOnReplyChance = 30
 
-# Cooldown between companion bot observer comments reacting to targeted bot interactions. (Seconds, 0-86400; default 30.)
+# AzerothVoices.TargetedBot.ObserverCooldownSeconds
+#     Description: Cooldown between companion bot observer comments reacting to targeted
+#                  bot interactions. (Seconds, 0-86400.)
+#     Default:     30
 AzerothVoices.TargetedBot.ObserverCooldownSeconds = 30
 
-###################################################################################################
-# Dedicated proximity chatter (ordinary Say)
-###################################################################################################
+# --------------------------------------------
+# 9. DEDICATED PROXIMITY CHATTER (ORDINARY SAY)
+# --------------------------------------------
 
-# Enables the proximity subsystem, which owns ordinary nearby NPC Say chatter. Battlegrounds and
-# arenas are always excluded. (Default 1.)
+# AzerothVoices.Proximity.Enable
+#     Description: Enables the proximity subsystem, which owns ordinary nearby NPC Say
+#                  chatter. Battlegrounds and arenas are always excluded.
+#     Default:     1
 AzerothVoices.Proximity.Enable = 1
-# Delay between outdoor proximity scans. (Seconds, 5-3600; default 30.)
+
+# AzerothVoices.Proximity.ScanSecondsOutdoor
+#     Description: Delay between outdoor proximity scans. (Seconds, 5-3600.)
+#     Default:     30
 AzerothVoices.Proximity.ScanSecondsOutdoor = 30
-# Delay between dungeon/raid proximity scans. (Seconds, 5-3600; default 30.)
+
+# AzerothVoices.Proximity.ScanSecondsInstance
+#     Description: Delay between dungeon/raid proximity scans. (Seconds, 5-3600.)
+#     Default:     30
 AzerothVoices.Proximity.ScanSecondsInstance = 30
-# Trigger chance per outdoor scan, before zone fatigue. (Percentage; default 15.)
+
+# AzerothVoices.Proximity.OutdoorChance
+#     Description: Trigger chance per outdoor scan, before zone fatigue. (Percentage.)
+#     Default:     15
 AzerothVoices.Proximity.OutdoorChance = 15
-# Trigger chance per dungeon/raid scan, before zone fatigue. (Percentage; default 75.)
+
+# AzerothVoices.Proximity.InstanceChance
+#     Description: Trigger chance per dungeon/raid scan, before zone fatigue.
+#                  (Percentage.)
+#     Default:     75
 AzerothVoices.Proximity.InstanceChance = 75
-# Includes dungeons and raids; they are never required for outdoor chatter. (Default 1.)
+
+# AzerothVoices.Proximity.IncludeInstances
+#     Description: Includes dungeons and raids; they are never required for outdoor
+#                  chatter.
+#     Default:     1
 AzerothVoices.Proximity.IncludeInstances = 1
-# Per-speaker cooldown after a delivered proximity line. (Seconds, 0-86400; default 60.)
+
+# AzerothVoices.Proximity.EntityCooldownSeconds
+#     Description: Per-speaker cooldown after a delivered proximity line. (Seconds,
+#                  0-86400.)
+#     Default:     60
 AzerothVoices.Proximity.EntityCooldownSeconds = 60
-# Scenes a zone may produce before its trigger chance starts decaying. (Scenes, 1-100; default 3.)
+
+# AzerothVoices.Proximity.ZoneFatigueScenes
+#     Description: Scenes a zone may produce before its trigger chance starts decaying.
+#                  (Scenes, 1-100.)
+#     Default:     3
 AzerothVoices.Proximity.ZoneFatigueScenes = 3
-# Decay applied per scene beyond ZoneFatigueScenes and per scene-free scan, floored at 1 percent. (Percentage; default 20.)
+
+# AzerothVoices.Proximity.ZoneFatigueDecayPercent
+#     Description: Decay applied per scene beyond ZoneFatigueScenes and per scene-free
+#                  scan, floored at 1 percent. (Percentage.)
+#     Default:     20
 AzerothVoices.Proximity.ZoneFatigueDecayPercent = 20
-# Minimum speakers selected per scene. (Speakers, 1-8; default 1.)
+
+# AzerothVoices.Proximity.MinimumSpeakers
+#     Description: Minimum speakers selected per scene. (Speakers, 1-8.)
+#     Default:     1
 AzerothVoices.Proximity.MinimumSpeakers = 1
-# Maximum speakers selected per scene; raised to MinimumSpeakers when set lower. (Speakers, 1-8; default 4.)
-AzerothVoices.Proximity.MaximumSpeakers = 4
-# Chance a scene becomes a multi-line conversation instead of one line. (Percentage; default 40.)
+
+# AzerothVoices.Proximity.MaximumSpeakers
+#     Description: Maximum speakers selected per scene; raised to MinimumSpeakers when
+#                  set lower. (Speakers, 1-8.)
+#     Default:     3
+AzerothVoices.Proximity.MaximumSpeakers = 3
+
+# AzerothVoices.Proximity.ConversationChance
+#     Description: Chance a scene becomes a multi-line conversation instead of one line.
+#                  (Percentage.)
+#     Default:     40
 AzerothVoices.Proximity.ConversationChance = 40
-# Lines a single scene may deliver. (Lines, 1-12; default 4.)
+
+# AzerothVoices.Proximity.MaximumLines
+#     Description: Lines a single scene may deliver. (Lines, 1-12.)
+#     Default:     4
 AzerothVoices.Proximity.MaximumLines = 4
-# Minimum gap between delivered lines of one conversation. (Seconds, 0-600; default 6.)
+
+# AzerothVoices.Proximity.TurnGapSeconds
+#     Description: Minimum gap between delivered lines of one conversation. (Seconds,
+#                  0-600.)
+#     Default:     6
 AzerothVoices.Proximity.TurnGapSeconds = 6
-# Window in which a conversation may continue after its first line. (Seconds, 1-600; default 30.)
+
+# AzerothVoices.Proximity.ReplyWindowSeconds
+#     Description: Window in which a conversation may continue after its first line.
+#                  (Seconds, 1-600.)
+#     Default:     30
 AzerothVoices.Proximity.ReplyWindowSeconds = 30
-# Generated reply turns allowed inside one scene. (Turns, 1-20; default 5.)
+
+# AzerothVoices.Proximity.MaximumReplyTurns
+#     Description: Generated reply turns allowed inside one scene. (Turns, 1-20.)
+#     Default:     5
 AzerothVoices.Proximity.MaximumReplyTurns = 5
-# Creature entries allowed to speak in proximity scenes; empty means no entry restriction. The
-# denylist below always wins. (Comma-separated creature entries; default empty.)
-AzerothVoices.Proximity.Speaker.AllowEntries =
-# Creature entries that may never speak in proximity scenes, whatever else qualifies them. (Comma-separated creature entries; default empty.)
-AzerothVoices.Proximity.Speaker.DenyEntries =
-# Non-humanoid creature entries explicitly allowed to speak; humanoids never need to be listed. (Comma-separated creature entries; default empty.)
-AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries =
 
-###################################################################################################
-# Boss and miniboss pre-aggro dialogue (dungeons and raids only)
-###################################################################################################
+# AzerothVoices.Proximity.Speaker.AllowEntries
+#     Description: Creature entries allowed to speak in proximity scenes; empty means no
+#                  entry restriction. The denylist below always wins. (Comma-separated
+#                  creature entries.)
+#     Default:     empty
+AzerothVoices.Proximity.Speaker.AllowEntries = 
 
-# Enables pre-aggro boss dialogue. Bosses are classified from the built-in curated registry plus
-# the world-boss rank and instance-bind fallbacks, and are excluded from ordinary proximity,
-# event, and combat-start NPC generation so boss speech has exactly one owner. (Default 1.)
+# AzerothVoices.Proximity.Speaker.DenyEntries
+#     Description: Creature entries that may never speak in proximity scenes, whatever
+#                  else qualifies them. (Comma-separated creature entries.)
+#     Default:     empty
+AzerothVoices.Proximity.Speaker.DenyEntries = 
+
+# AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries
+#     Description: Non-humanoid creature entries explicitly allowed to speak; humanoids
+#                  never need to be listed. (Comma-separated creature entries.)
+#     Default:     empty
+AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries = 
+
+# --------------------------------------------
+# 10. BOSS AND MINIBOSS PRE-AGGRO DIALOGUE (DUNGEONS AND RAIDS ONLY)
+# --------------------------------------------
+
+# AzerothVoices.BossDialogue.Enable
+#     Description: Enables pre-aggro boss dialogue. Bosses are classified from the
+#                  built-in curated registry plus the world-boss rank and instance-bind
+#                  fallbacks, and are excluded from ordinary proximity, event, and
+#                  combat-start NPC generation so boss speech has exactly one owner.
+#     Default:     1
 AzerothVoices.BossDialogue.Enable = 1
-# Delay between boss-presence scans. (Seconds, 1-300; default 2.)
-AzerothVoices.BossDialogue.ScanSeconds = 2
-# Maximum distance at which a boss may notice the approaching player. (Yards, 5-200; default 80.)
-AzerothVoices.BossDialogue.MaximumDistance = 80
-# Extra safety margin added to the boss's own attack distance; a boss never speaks inside this
-# radius. Nothing here alters threat, aggro, facing, or movement. (Yards, 0-50; default 5.)
-AzerothVoices.BossDialogue.AggroMargin = 5
-# Lower bound of the initial delay after a boss presence is first observed. (Seconds, 0-600; default 2.)
-AzerothVoices.BossDialogue.InitialDelayMinimumSeconds = 2
-# Upper bound of the initial delay; raised to the minimum when set lower. (Seconds, 0-600; default 6.)
-AzerothVoices.BossDialogue.InitialDelayMaximumSeconds = 6
-# Lower bound of the delay before the next automatic line. (Seconds, 1-3600; default 20.)
-AzerothVoices.BossDialogue.RepeatDelayMinimumSeconds = 20
-# Upper bound of that delay; raised to the minimum when set lower. (Seconds, 1-3600; default 60.)
-AzerothVoices.BossDialogue.RepeatDelayMaximumSeconds = 60
-# Chance an automatic opportunity produces a line. (Percentage; default 80.)
-AzerothVoices.BossDialogue.RepeatChance = 80
-# Decay applied to the repeat chance after each delivered automatic line. (Percentage; default 50.)
-AzerothVoices.BossDialogue.RepeatChanceDecayPercent = 50
-# Lowest repeat chance an ongoing presence decays to. (Percentage; default 10.)
-AzerothVoices.BossDialogue.RepeatChanceFloor = 10
-# Time without an observed eligible player after which a boss presence resets. (Seconds, 5-3600; default 90.)
-AzerothVoices.BossDialogue.PresenceResetSeconds = 90
-# Cooldown before the same boss answers another directed player line. (Seconds, 0-3600; default 15.)
-AzerothVoices.BossDialogue.DirectedReplyCooldownSeconds = 15
-# Lower word bound for an automatically generated boss line. (Words, 1-100; default 5.)
-AzerothVoices.BossDialogue.MinimumWords = 5
-# Upper word bound; a longer line is cut back to a word boundary and then rejected if it still
-# exceeds the bound. Raised to MinimumWords when set lower. (Words, 1-200; default 22.)
-AzerothVoices.BossDialogue.MaximumWords = 22
-# Hard character cap for one boss yell. (Characters, 20-1000; default 180.)
-AzerothVoices.BossDialogue.MaximumCharacters = 180
-# Extra creature entries treated as bosses; empty means registry and fallbacks only. (Comma-separated creature entries; default empty.)
-AzerothVoices.BossDialogue.AllowEntries =
-# Creature entries never treated as bosses; the denylist wins over registry, allow-list, and both fallbacks. (Comma-separated creature entries; default empty.)
-AzerothVoices.BossDialogue.DenyEntries =
 
-###################################################################################################
-# Party and raid chatter 
-###################################################################################################
+# AzerothVoices.BossDialogue.ScanSeconds
+#     Description: Delay between boss-presence scans. (Seconds, 1-300.)
+#     Default:     2
+AzerothVoices.BossDialogue.ScanSeconds = 2
+
+# AzerothVoices.BossDialogue.MaximumDistance
+#     Description: Maximum distance at which a boss may notice the approaching player.
+#                  (Yards, 5-200.)
+#     Default:     80
+AzerothVoices.BossDialogue.MaximumDistance = 80
+
+# AzerothVoices.BossDialogue.AggroMargin
+#     Description: Extra safety margin added to the boss's own attack distance; a boss
+#                  never speaks inside this radius. Nothing here alters threat, aggro,
+#                  facing, or movement. (Yards, 0-50.)
+#     Default:     5
+AzerothVoices.BossDialogue.AggroMargin = 5
+
+# AzerothVoices.BossDialogue.InitialDelayMinimumSeconds
+#     Description: Lower bound of the initial delay after a boss presence is first
+#                  observed. (Seconds, 0-600.)
+#     Default:     2
+AzerothVoices.BossDialogue.InitialDelayMinimumSeconds = 2
+
+# AzerothVoices.BossDialogue.InitialDelayMaximumSeconds
+#     Description: Upper bound of the initial delay; raised to the minimum when set
+#                  lower. (Seconds, 0-600.)
+#     Default:     6
+AzerothVoices.BossDialogue.InitialDelayMaximumSeconds = 6
+
+# AzerothVoices.BossDialogue.RepeatDelayMinimumSeconds
+#     Description: Lower bound of the delay before the next automatic line. (Seconds,
+#                  1-3600.)
+#     Default:     20
+AzerothVoices.BossDialogue.RepeatDelayMinimumSeconds = 20
+
+# AzerothVoices.BossDialogue.RepeatDelayMaximumSeconds
+#     Description: Upper bound of that delay; raised to the minimum when set lower.
+#                  (Seconds, 1-3600.)
+#     Default:     60
+AzerothVoices.BossDialogue.RepeatDelayMaximumSeconds = 60
+
+# AzerothVoices.BossDialogue.RepeatChance
+#     Description: Chance an automatic opportunity produces a line. (Percentage.)
+#     Default:     80
+AzerothVoices.BossDialogue.RepeatChance = 80
+
+# AzerothVoices.BossDialogue.RepeatChanceDecayPercent
+#     Description: Decay applied to the repeat chance after each delivered automatic
+#                  line. (Percentage.)
+#     Default:     50
+AzerothVoices.BossDialogue.RepeatChanceDecayPercent = 50
+
+# AzerothVoices.BossDialogue.RepeatChanceFloor
+#     Description: Lowest repeat chance an ongoing presence decays to. (Percentage.)
+#     Default:     10
+AzerothVoices.BossDialogue.RepeatChanceFloor = 10
+
+# AzerothVoices.BossDialogue.PresenceResetSeconds
+#     Description: Time without an observed eligible player after which a boss presence
+#                  resets. (Seconds, 5-3600.)
+#     Default:     90
+AzerothVoices.BossDialogue.PresenceResetSeconds = 90
+
+# AzerothVoices.BossDialogue.DirectedReplyCooldownSeconds
+#     Description: Cooldown before the same boss answers another directed player line.
+#                  (Seconds, 0-3600.)
+#     Default:     15
+AzerothVoices.BossDialogue.DirectedReplyCooldownSeconds = 15
+
+# AzerothVoices.BossDialogue.MinimumWords
+#     Description: Lower word bound for an automatically generated boss line. (Words,
+#                  1-100.)
+#     Default:     5
+AzerothVoices.BossDialogue.MinimumWords = 5
+
+# AzerothVoices.BossDialogue.MaximumWords
+#     Description: Upper word bound; a longer line is cut back to a word boundary and
+#                  then rejected if it still exceeds the bound. Raised to MinimumWords
+#                  when set lower. (Words, 1-200.)
+#     Default:     22
+AzerothVoices.BossDialogue.MaximumWords = 22
+
+# AzerothVoices.BossDialogue.MaximumCharacters
+#     Description: Hard character cap for one boss yell. (Characters, 20-1000.)
+#     Default:     140
+AzerothVoices.BossDialogue.MaximumCharacters = 140
+
+# AzerothVoices.BossDialogue.AllowEntries
+#     Description: Extra creature entries treated as bosses; empty means registry and
+#                  fallbacks only. (Comma-separated creature entries.)
+#     Default:     empty
+AzerothVoices.BossDialogue.AllowEntries = 
+
+# AzerothVoices.BossDialogue.DenyEntries
+#     Description: Creature entries never treated as bosses; the denylist wins over
+#                  registry, allow-list, and both fallbacks. (Comma-separated creature
+#                  entries.)
+#     Default:     empty
+AzerothVoices.BossDialogue.DenyEntries = 
+
+# --------------------------------------------
+# 11. PARTY AND RAID CHATTER
+# --------------------------------------------
 #
 # Group reactions run on top of the existing reply system: they need a real
 # player in the same party subgroup (or raid), obey the normal audience,
 # cooldown, queue and rate limits, and are exempt from DisableRepliesInCombat
 # because in-combat callouts are the point. Every trigger ships enabled with the
 # conservative defaults below; raise only the ones you want.
+# --------------------------------------------
 
-# Enables party chatter: idle, dungeon entry, zone change, kills, boss moments, wipes, deaths,
-# corpse runs, resurrects, loot, quests, spell casts, low health/mana, nearby objects, bot
-# questions and player-message follow-ups. (Default 1.)
+# AzerothVoices.GroupChatter.Enable
+#     Description: Enables party chatter: idle, dungeon entry, zone change, kills, boss
+#                  moments, wipes, deaths, corpse runs, resurrects, loot, quests, spell
+#                  casts, low health/mana, nearby objects, bot questions and player-
+#                  message follow-ups.
+#     Default:     1
 AzerothVoices.GroupChatter.Enable = 1
-# Delay between group scans that evaluate the periodic triggers. (Seconds, 5-3600; default 120.)
+
+# AzerothVoices.GroupChatter.ScanSeconds
+#     Description: Delay between group scans that evaluate the periodic triggers.
+#                  (Seconds, 5-3600.)
+#     Default:     120
 AzerothVoices.GroupChatter.ScanSeconds = 120
-# Chance a scan produces an ordinary casual group remark. (Percentage; default 2.)
+
+# AzerothVoices.GroupChatter.IdleChance
+#     Description: Chance a scan produces an ordinary casual group remark. (Percentage.)
+#     Default:     2
 AzerothVoices.GroupChatter.IdleChance = 2
-# Cooldown after an idle remark. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.IdleCooldownSeconds
+#     Description: Cooldown after an idle remark. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.IdleCooldownSeconds = 300
-# Chance the group comments when a real player enters a dungeon or raid. (Percentage; default 60.)
+
+# AzerothVoices.GroupChatter.DungeonEntryChance
+#     Description: Chance the group comments when a real player enters a dungeon or
+#                  raid. (Percentage.)
+#     Default:     60
 AzerothVoices.GroupChatter.DungeonEntryChance = 60
-# Cooldown after a dungeon-entry line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.DungeonEntryCooldownSeconds
+#     Description: Cooldown after a dungeon-entry line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.DungeonEntryCooldownSeconds = 300
-# Chance the group comments on an outdoor zone change. (Percentage; default 15.)
+
+# AzerothVoices.GroupChatter.ZoneChangeChance
+#     Description: Chance the group comments on an outdoor zone change. (Percentage.)
+#     Default:     15
 AzerothVoices.GroupChatter.ZoneChangeChance = 15
-# Cooldown after a zone-change line. (Seconds, 0-86400; default 180.)
+
+# AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds
+#     Description: Cooldown after a zone-change line. (Seconds, 0-86400.)
+#     Default:     180
 AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds = 180
-# Chance the group reacts to an ordinary creature kill. (Percentage; default 4.)
+
+# AzerothVoices.GroupChatter.KillChance
+#     Description: Chance the group reacts to an ordinary creature kill. (Percentage.)
+#     Default:     4
 AzerothVoices.GroupChatter.KillChance = 4
-# Cooldown after a trash-kill line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.KillCooldownSeconds
+#     Description: Cooldown after a trash-kill line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.KillCooldownSeconds = 300
-# Chance the group reacts when a classified dungeon/raid boss is engaged. (Percentage; default 50.)
+
+# AzerothVoices.GroupChatter.BossPullChance
+#     Description: Chance the group reacts when a classified dungeon/raid boss is
+#                  engaged. (Percentage.)
+#     Default:     50
 AzerothVoices.GroupChatter.BossPullChance = 50
-# Cooldown after a boss-pull line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.BossPullCooldownSeconds
+#     Description: Cooldown after a boss-pull line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.BossPullCooldownSeconds = 300
-# Chance the group reacts to a classified boss kill. (Percentage; default 80.)
+
+# AzerothVoices.GroupChatter.BossKillChance
+#     Description: Chance the group reacts to a classified boss kill. (Percentage.)
+#     Default:     80
 AzerothVoices.GroupChatter.BossKillChance = 80
-# Cooldown after a boss-kill line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.BossKillCooldownSeconds
+#     Description: Cooldown after a boss-kill line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.BossKillCooldownSeconds = 300
-# Chance the group comments on a wipe, detected once per wipe when every member is dead and out of combat. (Percentage; default 80.)
+
+# AzerothVoices.GroupChatter.WipeChance
+#     Description: Chance the group comments on a wipe, detected once per wipe when
+#                  every member is dead and out of combat. (Percentage.)
+#     Default:     80
 AzerothVoices.GroupChatter.WipeChance = 80
-# Cooldown after a wipe line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.WipeCooldownSeconds
+#     Description: Cooldown after a wipe line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.WipeCooldownSeconds = 300
-# Chance the group reacts to a member's death. (Percentage; default 25.)
+
+# AzerothVoices.GroupChatter.DeathChance
+#     Description: Chance the group reacts to a member's death. (Percentage.)
+#     Default:     25
 AzerothVoices.GroupChatter.DeathChance = 25
-# Cooldown after a death line. (Seconds, 0-86400; default 60.)
+
+# AzerothVoices.GroupChatter.DeathCooldownSeconds
+#     Description: Cooldown after a death line. (Seconds, 0-86400.)
+#     Default:     60
 AzerothVoices.GroupChatter.DeathCooldownSeconds = 60
-# Chance the group comments when a member releases their spirit. (Percentage; default 40.)
+
+# AzerothVoices.GroupChatter.CorpseRunChance
+#     Description: Chance the group comments when a member releases their spirit.
+#                  (Percentage.)
+#     Default:     40
 AzerothVoices.GroupChatter.CorpseRunChance = 40
-# Cooldown after a corpse-run line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.CorpseRunCooldownSeconds
+#     Description: Cooldown after a corpse-run line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.CorpseRunCooldownSeconds = 300
-# Chance the group welcomes a member back after an observed resurrection. (Percentage; default 50.)
+
+# AzerothVoices.GroupChatter.ResurrectChance
+#     Description: Chance the group welcomes a member back after an observed
+#                  resurrection. (Percentage.)
+#     Default:     50
 AzerothVoices.GroupChatter.ResurrectChance = 50
-# Cooldown after a resurrect line. (Seconds, 0-86400; default 120.)
+
+# AzerothVoices.GroupChatter.ResurrectCooldownSeconds
+#     Description: Cooldown after a resurrect line. (Seconds, 0-86400.)
+#     Default:     120
 AzerothVoices.GroupChatter.ResurrectCooldownSeconds = 120
-# Loot chatter chance by item quality; poor and common loot never triggers. (Percentage; default 10.)
-AzerothVoices.GroupChatter.LootChanceGreen = 10
-# Rare (blue) loot chatter chance. (Percentage; default 35.)
-AzerothVoices.GroupChatter.LootChanceBlue = 35
-# Epic (purple) loot chatter chance. (Percentage; default 70.)
-AzerothVoices.GroupChatter.LootChancePurple = 70
-# Legendary (orange) loot chatter chance. (Percentage; default 100.)
+
+# AzerothVoices.GroupChatter.LootChanceGreen
+#     Description: Loot chatter chance by item quality; poor and common loot never
+#                  triggers. (Percentage.)
+#     Default:     5
+AzerothVoices.GroupChatter.LootChanceGreen = 5
+
+# AzerothVoices.GroupChatter.LootChanceBlue
+#     Description: Rare (blue) loot chatter chance. (Percentage.)
+#     Default:     10
+AzerothVoices.GroupChatter.LootChanceBlue = 10
+
+# AzerothVoices.GroupChatter.LootChancePurple
+#     Description: Epic (purple) loot chatter chance. (Percentage.)
+#     Default:     20
+AzerothVoices.GroupChatter.LootChancePurple = 20
+
+# AzerothVoices.GroupChatter.LootChanceOrange
+#     Description: Legendary (orange) loot chatter chance. (Percentage.)
+#     Default:     100
 AzerothVoices.GroupChatter.LootChanceOrange = 100
-# Cooldown after a loot line. (Seconds, 0-86400; default 120.)
-AzerothVoices.GroupChatter.LootCooldownSeconds = 120
-# Chance the group comments when a member picks up a quest. (Percentage; default 25.)
-AzerothVoices.GroupChatter.QuestAcceptChance = 25
-# Chance the group comments when a quest objective advances. (Percentage; default 20.)
-AzerothVoices.GroupChatter.QuestObjectiveChance = 20
-# Chance the group comments when a member completes a quest. (Percentage; default 25.)
-AzerothVoices.GroupChatter.QuestCompleteChance = 25
-# Cooldown for quest accept/complete lines. (Seconds, 0-86400; default 60.)
-AzerothVoices.GroupChatter.QuestCooldownSeconds = 60
-# Minimum gap between objective-progress lines, which are otherwise the chattiest trigger. (Seconds, 0-3600; default 60.)
-AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds = 60
-# Chance the group comments on a member's spell cast. This hook fires very often, so keep the value low. (Percentage; default 2.)
+
+# AzerothVoices.GroupChatter.LootCooldownSeconds
+#     Description: Cooldown after a loot line. (Seconds, 0-86400.)
+#     Default:     600
+AzerothVoices.GroupChatter.LootCooldownSeconds = 600
+
+# AzerothVoices.GroupChatter.QuestAcceptChance
+#     Description: Chance the group comments when a member picks up a quest.
+#                  (Percentage.)
+#     Default:     10
+AzerothVoices.GroupChatter.QuestAcceptChance = 10
+
+# AzerothVoices.GroupChatter.QuestObjectiveChance
+#     Description: Chance the group comments when a quest objective advances.
+#                  (Percentage.)
+#     Default:     10
+AzerothVoices.GroupChatter.QuestObjectiveChance = 10
+
+# AzerothVoices.GroupChatter.QuestCompleteChance
+#     Description: Chance the group comments when a member completes a quest.
+#                  (Percentage.)
+#     Default:     20
+AzerothVoices.GroupChatter.QuestCompleteChance = 20
+
+# AzerothVoices.GroupChatter.QuestCooldownSeconds
+#     Description: Cooldown for quest accept/complete lines. (Seconds, 0-86400.)
+#     Default:     120
+AzerothVoices.GroupChatter.QuestCooldownSeconds = 120
+
+# AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds
+#     Description: Minimum gap between objective-progress lines, which are otherwise the
+#                  chattiest trigger. (Seconds, 0-3600.)
+#     Default:     120
+AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds = 120
+
+# AzerothVoices.GroupChatter.SpellCastChance
+#     Description: Chance the group comments on a member's spell cast. This hook fires
+#                  very often, so keep the value low. (Percentage.)
+#     Default:     2
 AzerothVoices.GroupChatter.SpellCastChance = 2
-# Cooldown after a spell-cast line. (Seconds, 0-86400; default 180.)
-AzerothVoices.GroupChatter.SpellCastCooldownSeconds = 180
-# Chance a member calls out low health, once per drop below the threshold. (Percentage; default 40.)
+
+# AzerothVoices.GroupChatter.SpellCastCooldownSeconds
+#     Description: Cooldown after a spell-cast line. (Seconds, 0-86400.)
+#     Default:     600
+AzerothVoices.GroupChatter.SpellCastCooldownSeconds = 600
+
+# AzerothVoices.GroupChatter.LowHealthChance
+#     Description: Chance a member calls out low health, once per drop below the
+#                  threshold. (Percentage.)
+#     Default:     40
 AzerothVoices.GroupChatter.LowHealthChance = 40
-# Health percentage that counts as low for the callout. (Percentage, 1-99; default 35.)
+
+# AzerothVoices.GroupChatter.LowHealthThresholdPercent
+#     Description: Health percentage that counts as low for the callout. (Percentage,
+#                  1-99.)
+#     Default:     35
 AzerothVoices.GroupChatter.LowHealthThresholdPercent = 35
-# Cooldown after a low-health callout. (Seconds, 0-86400; default 180.)
+
+# AzerothVoices.GroupChatter.LowHealthCooldownSeconds
+#     Description: Cooldown after a low-health callout. (Seconds, 0-86400.)
+#     Default:     180
 AzerothVoices.GroupChatter.LowHealthCooldownSeconds = 180
-# Chance a member calls out low mana, once per drop below the threshold. (Percentage; default 30.)
+
+# AzerothVoices.GroupChatter.LowManaChance
+#     Description: Chance a member calls out low mana, once per drop below the
+#                  threshold. (Percentage.)
+#     Default:     30
 AzerothVoices.GroupChatter.LowManaChance = 30
-# Mana percentage that counts as low for the callout. (Percentage, 1-99; default 20.)
+
+# AzerothVoices.GroupChatter.LowManaThresholdPercent
+#     Description: Mana percentage that counts as low for the callout. (Percentage,
+#                  1-99.)
+#     Default:     20
 AzerothVoices.GroupChatter.LowManaThresholdPercent = 20
-# Cooldown after a low-mana callout. (Seconds, 0-86400; default 180.)
+
+# AzerothVoices.GroupChatter.LowManaCooldownSeconds
+#     Description: Cooldown after a low-mana callout. (Seconds, 0-86400.)
+#     Default:     180
 AzerothVoices.GroupChatter.LowManaCooldownSeconds = 180
-# Chance the group comments on a nearby visible game object. (Percentage; default 3.)
+
+# AzerothVoices.GroupChatter.NearbyObjectChance
+#     Description: Chance the group comments on a nearby visible game object.
+#                  (Percentage.)
+#     Default:     3
 AzerothVoices.GroupChatter.NearbyObjectChance = 3
-# Delay between nearby-object checks. (Seconds, 5-3600; default 180.)
+
+# AzerothVoices.GroupChatter.NearbyObjectScanSeconds
+#     Description: Delay between nearby-object checks. (Seconds, 5-3600.)
+#     Default:     180
 AzerothVoices.GroupChatter.NearbyObjectScanSeconds = 180
-# Cooldown after a nearby-object line. (Seconds, 0-86400; default 600.)
+
+# AzerothVoices.GroupChatter.NearbyObjectCooldownSeconds
+#     Description: Cooldown after a nearby-object line. (Seconds, 0-86400.)
+#     Default:     600
 AzerothVoices.GroupChatter.NearbyObjectCooldownSeconds = 600
-# Chance a grouped bot asks the group a short practical question. (Percentage; default 1.)
+
+# AzerothVoices.GroupChatter.BotQuestionChance
+#     Description: Chance a grouped bot asks the group a short practical question.
+#                  (Percentage.)
+#     Default:     1
 AzerothVoices.GroupChatter.BotQuestionChance = 1
-# Delay between bot-question checks. (Seconds, 5-3600; default 60.)
+
+# AzerothVoices.GroupChatter.BotQuestionScanSeconds
+#     Description: Delay between bot-question checks. (Seconds, 5-3600.)
+#     Default:     60
 AzerothVoices.GroupChatter.BotQuestionScanSeconds = 60
-# Cooldown after a bot question. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.GroupChatter.BotQuestionCooldownSeconds
+#     Description: Cooldown after a bot question. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.GroupChatter.BotQuestionCooldownSeconds = 300
-# Chance one other grouped bot adds a second line after a bot's reply to a real player's group message. (Percentage; default 5.)
+
+# AzerothVoices.GroupChatter.PlayerFollowupChance
+#     Description: Chance one other grouped bot adds a second line after a bot's reply
+#                  to a real player's group message. (Percentage.)
+#     Default:     5
 AzerothVoices.GroupChatter.PlayerFollowupChance = 5
-# Cooldown after such a second line. (Seconds, 0-86400; default 120.)
+
+# AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds
+#     Description: Cooldown after such a second line. (Seconds, 0-86400.)
+#     Default:     120
 AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds = 120
-# Chance a group line becomes a short multi-line conversation instead of one line. (Percentage; default 10.)
+
+# AzerothVoices.GroupChatter.ConversationChance
+#     Description: Chance a group line becomes a short multi-line conversation instead
+#                  of one line. (Percentage.)
+#     Default:     10
 AzerothVoices.GroupChatter.ConversationChance = 10
-# Lines a group conversation may deliver. (Lines, 1-12; default 3.)
-AzerothVoices.GroupChatter.ConversationMaximumLines = 3
-# Participants a group conversation may use, capped by the number of grouped bots. (Participants, 1-8; default 2.)
+
+# AzerothVoices.GroupChatter.ConversationMaximumLines
+#     Description: Lines a group conversation may deliver. (Lines, 1-12.)
+#     Default:     2
+AzerothVoices.GroupChatter.ConversationMaximumLines = 2
+
+# AzerothVoices.GroupChatter.ConversationMaximumParticipants
+#     Description: Participants a group conversation may use, capped by the number of
+#                  grouped bots. (Participants, 1-8.)
+#     Default:     2
 AzerothVoices.GroupChatter.ConversationMaximumParticipants = 2
-# Minimum gap between delivered lines of one group conversation. (Seconds, 0-600; default 12.)
+
+# AzerothVoices.GroupChatter.ConversationTurnGapSeconds
+#     Description: Minimum gap between delivered lines of one group conversation.
+#                  (Seconds, 0-600.)
+#     Default:     12
 AzerothVoices.GroupChatter.ConversationTurnGapSeconds = 12
-# Window in which a group conversation may continue after its first line. (Seconds, 1-600; default 30.)
+
+# AzerothVoices.GroupChatter.ConversationReplyWindowSeconds
+#     Description: Window in which a group conversation may continue after its first
+#                  line. (Seconds, 1-600.)
+#     Default:     30
 AzerothVoices.GroupChatter.ConversationReplyWindowSeconds = 30
-# Generated reply turns allowed inside one group conversation. (Turns, 1-20; default 2.)
+
+# AzerothVoices.GroupChatter.ConversationMaximumReplyTurns
+#     Description: Generated reply turns allowed inside one group conversation. (Turns,
+#                  1-20.)
+#     Default:     2
 AzerothVoices.GroupChatter.ConversationMaximumReplyTurns = 2
 
-# Enables the raid-only extras below plus raid delivery of the shared boss moments. (Default 1.)
+# AzerothVoices.RaidChatter.Enable
+#     Description: Enables the raid-only extras below plus raid delivery of the shared
+#                  boss moments.
+#     Default:     1
 AzerothVoices.RaidChatter.Enable = 1
-# Chance the raid shouts a battle cry when a classified boss is engaged. (Percentage; default 40.)
+
+# AzerothVoices.RaidChatter.BattleCryChance
+#     Description: Chance the raid shouts a battle cry when a classified boss is
+#                  engaged. (Percentage.)
+#     Default:     40
 AzerothVoices.RaidChatter.BattleCryChance = 40
-# Cooldown after a battle cry. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.RaidChatter.BattleCryCooldownSeconds
+#     Description: Cooldown after a battle cry. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.RaidChatter.BattleCryCooldownSeconds = 300
-# Chance a raid line keeps morale up between pulls. (Percentage; default 15.)
+
+# AzerothVoices.RaidChatter.MoraleChance
+#     Description: Chance a raid line keeps morale up between pulls. (Percentage.)
+#     Default:     15
 AzerothVoices.RaidChatter.MoraleChance = 15
-# Delay between morale checks. (Seconds, 5-3600; default 120.)
+
+# AzerothVoices.RaidChatter.MoraleScanSeconds
+#     Description: Delay between morale checks. (Seconds, 5-3600.)
+#     Default:     120
 AzerothVoices.RaidChatter.MoraleScanSeconds = 120
-# Cooldown after a morale line. (Seconds, 0-86400; default 300.)
+
+# AzerothVoices.RaidChatter.MoraleCooldownSeconds
+#     Description: Cooldown after a morale line. (Seconds, 0-86400.)
+#     Default:     300
 AzerothVoices.RaidChatter.MoraleCooldownSeconds = 300
-# Chance a raid scan produces an ordinary casual remark, replacing the party idle value on raid maps. (Percentage; default 10.)
+
+# AzerothVoices.RaidChatter.IdleChance
+#     Description: Chance a raid scan produces an ordinary casual remark, replacing the
+#                  party idle value on raid maps. (Percentage.)
+#     Default:     10
 AzerothVoices.RaidChatter.IdleChance = 10
-# Delay between raid idle checks. (Seconds, 5-3600; default 60.)
+
+# AzerothVoices.RaidChatter.IdleScanSeconds
+#     Description: Delay between raid idle checks. (Seconds, 5-3600.)
+#     Default:     60
 AzerothVoices.RaidChatter.IdleScanSeconds = 60
-# Cooldown after a raid idle line. (Seconds, 0-86400; default 180.)
+
+# AzerothVoices.RaidChatter.IdleCooldownSeconds
+#     Description: Cooldown after a raid idle line. (Seconds, 0-86400.)
+#     Default:     180
 AzerothVoices.RaidChatter.IdleCooldownSeconds = 180
 
-###################################################################################################
-# Guild chatter 
-###################################################################################################
+# --------------------------------------------
+# 12. GUILD CHATTER
+# --------------------------------------------
 
-# Enables guild ambient conversation, login greetings and reply gating. Guild replies still require
-# an online real member with listening rights. (Default 1.)
+# AzerothVoices.GuildChatter.Enable
+#     Description: Enables guild ambient conversation, login greetings and reply gating.
+#                  Guild replies still require an online real member with listening
+#                  rights.
+#     Default:     1
 AzerothVoices.GuildChatter.Enable = 1
-# Delay between guild ambient scans. (Seconds, 5-3600; default 60.)
+
+# AzerothVoices.GuildChatter.ScanSeconds
+#     Description: Delay between guild ambient scans. (Seconds, 5-3600.)
+#     Default:     60
 AzerothVoices.GuildChatter.ScanSeconds = 60
-# Chance a scan starts a guild ambient line. (Percentage; default 8.)
+
+# AzerothVoices.GuildChatter.AmbientChance
+#     Description: Chance a scan starts a guild ambient line. (Percentage.)
+#     Default:     8
 AzerothVoices.GuildChatter.AmbientChance = 8
-# Cooldown between guild ambient lines. (Seconds, 0-86400; default 600.)
+
+# AzerothVoices.GuildChatter.AmbientCooldownSeconds
+#     Description: Cooldown between guild ambient lines. (Seconds, 0-86400.)
+#     Default:     600
 AzerothVoices.GuildChatter.AmbientCooldownSeconds = 600
-# Chance a guild ambient line becomes a short multi-line conversation. (Percentage; default 35.)
+
+# AzerothVoices.GuildChatter.ConversationChance
+#     Description: Chance a guild ambient line becomes a short multi-line conversation.
+#                  (Percentage.)
+#     Default:     35
 AzerothVoices.GuildChatter.ConversationChance = 35
-# Participants a guild conversation may use, capped by the number of online guilded bots. (Participants, 1-8; default 2.)
+
+# AzerothVoices.GuildChatter.MaximumParticipants
+#     Description: Participants a guild conversation may use, capped by the number of
+#                  online guilded bots. (Participants, 1-8.)
+#     Default:     2
 AzerothVoices.GuildChatter.MaximumParticipants = 2
-# Lines a guild conversation may deliver. (Lines, 1-12; default 3.)
+
+# AzerothVoices.GuildChatter.MaximumLines
+#     Description: Lines a guild conversation may deliver. (Lines, 1-12.)
+#     Default:     3
 AzerothVoices.GuildChatter.MaximumLines = 3
-# Chance the topic instruction mentions another online guild member. (Percentage; default 20.)
+
+# AzerothVoices.GuildChatter.ParticipantReferenceChance
+#     Description: Chance the topic instruction mentions another online guild member.
+#                  (Percentage.)
+#     Default:     20
 AzerothVoices.GuildChatter.ParticipantReferenceChance = 20
-# Chance the topic instruction refers to the current zone. (Percentage; default 15.)
+
+# AzerothVoices.GuildChatter.ZoneNameChance
+#     Description: Chance the topic instruction refers to the current zone.
+#                  (Percentage.)
+#     Default:     15
 AzerothVoices.GuildChatter.ZoneNameChance = 15
-# Chance the topic instruction asks for something the guild said recently. (Percentage; default 25.)
+
+# AzerothVoices.GuildChatter.HistoryContextChance
+#     Description: Chance the topic instruction asks for something the guild said
+#                  recently. (Percentage.)
+#     Default:     25
 AzerothVoices.GuildChatter.HistoryContextChance = 25
-# Minimum gap between accepted replies to one real guild speaker. (Seconds, 0-600; default 5.)
+
+# AzerothVoices.GuildChatter.ReplyDebounceSeconds
+#     Description: Minimum gap between accepted replies to one real guild speaker.
+#                  (Seconds, 0-600.)
+#     Default:     5
 AzerothVoices.GuildChatter.ReplyDebounceSeconds = 5
-# Window in which the bot that spoke most recently in a guild is skipped in favour of another. (Seconds, 0-3600; default 30.)
+
+# AzerothVoices.GuildChatter.RecentSpeakerSuppressionSeconds
+#     Description: Window in which the bot that spoke most recently in a guild is
+#                  skipped in favour of another. (Seconds, 0-3600.)
+#     Default:     30
 AzerothVoices.GuildChatter.RecentSpeakerSuppressionSeconds = 30
-# Enables the bounded one-line login greeting when a real guild member logs in and a guilded bot is online. (Default 1.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.Enable
+#     Description: Enables the bounded one-line login greeting when a real guild member
+#                  logs in and a guilded bot is online.
+#     Default:     1
 AzerothVoices.GuildChatter.LoginGreeting.Enable = 1
-# Chance the greeting is sent. (Percentage; default 50.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.Chance
+#     Description: Chance the greeting is sent. (Percentage.)
+#     Default:     50
 AzerothVoices.GuildChatter.LoginGreeting.Chance = 50
-# Per-recipient greeting cooldown; the default is 30 minutes. (Seconds, 0-86400; default 1800.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.CooldownSeconds
+#     Description: Per-recipient greeting cooldown; the default is 30 minutes. (Seconds,
+#                  0-86400.)
+#     Default:     1800
 AzerothVoices.GuildChatter.LoginGreeting.CooldownSeconds = 1800
-# Maximum candidate bots to evaluate for guild login greetings. (Candidates, 1-32; default 12.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.MaxCandidates
+#     Description: Maximum candidate bots to evaluate for guild login greetings.
+#                  (Candidates, 1-32.)
+#     Default:     12
 AzerothVoices.GuildChatter.LoginGreeting.MaxCandidates = 12
-# Chance that multiple bots greet the logging in player. (Percentage; default 20.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.MultiReplyChance
+#     Description: Chance that multiple bots greet the logging in player. (Percentage.)
+#     Default:     20
 AzerothVoices.GuildChatter.LoginGreeting.MultiReplyChance = 20
-# Maximum bots that greet the logging in player. (Responders, 1-8; default 3.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.MaxResponders
+#     Description: Maximum bots that greet the logging in player. (Responders, 1-8.)
+#     Default:     3
 AzerothVoices.GuildChatter.LoginGreeting.MaxResponders = 3
-# Chance for Quick (2-5s) timing band. (Percentage; default 20.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.QuickChance
+#     Description: Chance for Quick (2-5s) timing band. (Percentage.)
+#     Default:     20
 AzerothVoices.GuildChatter.LoginGreeting.QuickChance = 20
-# Chance for Busy (25-45s) timing band. (Percentage; default 25.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.BusyChance
+#     Description: Chance for Busy (25-45s) timing band. (Percentage.)
+#     Default:     25
 AzerothVoices.GuildChatter.LoginGreeting.BusyChance = 25
-# Interval between candidate readiness checks for pending greetings. (Seconds, 1-60; default 5.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.RetryIntervalSeconds
+#     Description: Interval between candidate readiness checks for pending greetings.
+#                  (Seconds, 1-60.)
+#     Default:     5
 AzerothVoices.GuildChatter.LoginGreeting.RetryIntervalSeconds = 5
-# Maximum timeout waiting for a candidate bot before discarding the greeting. (Seconds, 5-600; default 90.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.ReadinessTimeoutSeconds
+#     Description: Maximum timeout waiting for a candidate bot before discarding the
+#                  greeting. (Seconds, 5-600.)
+#     Default:     90
 AzerothVoices.GuildChatter.LoginGreeting.ReadinessTimeoutSeconds = 90
-# Chance to address the logging-in player by name in the greeting. (Percentage; default 60.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.PlayerNameChance
+#     Description: Chance to address the logging-in player by name in the greeting.
+#                  (Percentage.)
+#     Default:     60
 AzerothVoices.GuildChatter.LoginGreeting.PlayerNameChance = 60
-# Character limit for the guild login greeting. (Characters, 20-500; default 100.)
+
+# AzerothVoices.GuildChatter.LoginGreeting.MaxCharacters
+#     Description: Character limit for the guild login greeting. (Characters, 20-500.)
+#     Default:     100
 AzerothVoices.GuildChatter.LoginGreeting.MaxCharacters = 100
 
+
 # Advanced Guild player-driven conversation controls
-# Enables advanced Guild player-driven conversation controls. (Default 1.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.Enable
+#     Description: Enables advanced Guild player-driven conversation controls.
+#     Default:     1
 AzerothVoices.GuildChatter.PlayerReplies.Enable = 1
-# Minimum gap between replies to the same player in guild chat; falls back to ReplyDebounceSeconds if not set. (Seconds, 0-600; default 5.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.DebounceSeconds
+#     Description: Minimum gap between replies to the same player in guild chat; falls
+#                  back to ReplyDebounceSeconds if not set. (Seconds, 0-600.)
+#     Default:     5
 AzerothVoices.GuildChatter.PlayerReplies.DebounceSeconds = 5
-# Duration of ambient guild chatter suppression while a human conversation is active. (Seconds, 0-3600; default 90.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.IdleSuppressionSeconds
+#     Description: Duration of ambient guild chatter suppression while a human
+#                  conversation is active. (Seconds, 0-3600.)
+#     Default:     90
 AzerothVoices.GuildChatter.PlayerReplies.IdleSuppressionSeconds = 90
-# Maximum candidate bots to evaluate for guild replies. (Candidates, 1-32; default 12.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.MaxCandidates
+#     Description: Maximum candidate bots to evaluate for guild replies. (Candidates,
+#                  1-32.)
+#     Default:     12
 AzerothVoices.GuildChatter.PlayerReplies.MaxCandidates = 12
-# Chance that multiple bots reply to a player guild message. (Percentage; default 35.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.MultiReplyChance
+#     Description: Chance that multiple bots reply to a player guild message.
+#                  (Percentage.)
+#     Default:     35
 AzerothVoices.GuildChatter.PlayerReplies.MultiReplyChance = 35
-# Bonus chance added to MultiReplyChance when multiple bots are explicitly addressed by name. (Percentage; default 50.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.MultiAddressedBonus
+#     Description: Bonus chance added to MultiReplyChance when multiple bots are
+#                  explicitly addressed by name. (Percentage.)
+#     Default:     50
 AzerothVoices.GuildChatter.PlayerReplies.MultiAddressedBonus = 50
-# Chance that a player reply triggers a multi-bot guild conversation. (Percentage; default 20.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.ConversationChance
+#     Description: Chance that a player reply triggers a multi-bot guild conversation.
+#                  (Percentage.)
+#     Default:     20
 AzerothVoices.GuildChatter.PlayerReplies.ConversationChance = 20
-# Maximum bot responders to a single player message in multi-reply mode. (Responders, 1-8; default 3.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.MaxResponders
+#     Description: Maximum bot responders to a single player message in multi-reply
+#                  mode. (Responders, 1-8.)
+#     Default:     3
 AzerothVoices.GuildChatter.PlayerReplies.MaxResponders = 3
-# Chance to direct the responding bot to address the player by name. (Percentage; default 45.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.PlayerNameChance
+#     Description: Chance to direct the responding bot to address the player by name.
+#                  (Percentage.)
+#     Default:     45
 AzerothVoices.GuildChatter.PlayerReplies.PlayerNameChance = 45
-# Chance to inject callback context from earlier guild conversation turns into the prompt. (Percentage; default 25.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.CallbackChance
+#     Description: Chance to inject callback context from earlier guild conversation
+#                  turns into the prompt. (Percentage.)
+#     Default:     25
 AzerothVoices.GuildChatter.PlayerReplies.CallbackChance = 25
-# Chance to direct the responding bot to include a relevant follow-up question. (Percentage; default 30.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.FollowupQuestionChance
+#     Description: Chance to direct the responding bot to include a relevant follow-up
+#                  question. (Percentage.)
+#     Default:     30
 AzerothVoices.GuildChatter.PlayerReplies.FollowupQuestionChance = 30
-# Soft penalty applied to recent speakers during candidate weighting. (Percentage, 0-100; default 60.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.RecentSpeakerPenalty
+#     Description: Soft penalty applied to recent speakers during candidate weighting.
+#                  (Percentage, 0-100.)
+#     Default:     60
 AzerothVoices.GuildChatter.PlayerReplies.RecentSpeakerPenalty = 60
-# Minimum delay before the first guild reply line is delivered. (Seconds, 0-60; default 2.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMinSeconds
+#     Description: Minimum delay before the first guild reply line is delivered.
+#                  (Seconds, 0-60.)
+#     Default:     2
 AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMinSeconds = 2
-# Maximum delay before the first guild reply line is delivered. (Seconds, 0-60; default 6.)
+
+# AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMaxSeconds
+#     Description: Maximum delay before the first guild reply line is delivered.
+#                  (Seconds, 0-60.)
+#     Default:     6
 AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMaxSeconds = 6
 
-###################################################################################################
-# Deterministic bot memory ledger 
-###################################################################################################
+# --------------------------------------------
+# 13. DETERMINISTIC BOT MEMORY LEDGER
+# --------------------------------------------
 #
 # C++ writes short fixed-template memories from verified facts only: no provider
 # call is made and no player-written text is ever stored. Memories are per
 # bot/player pair, they feed a bounded prompt block, and both the Chatter addon's
 # Forget button and `.av memory forget` delete them.
+# --------------------------------------------
 
-# Enables the memory ledger. (Default 1.)
+# AzerothVoices.Memory.Enable
+#     Description: Enables the memory ledger.
+#     Default:     1
 AzerothVoices.Memory.Enable = 1
-# Hot-cache bound for loaded bot/player memory pairs. (Pairs, 1-100000; default 4096.)
+
+# AzerothVoices.Memory.CacheMaximumPairs
+#     Description: Hot-cache bound for loaded bot/player memory pairs. (Pairs,
+#                  1-100000.)
+#     Default:     4096
 AzerothVoices.Memory.CacheMaximumPairs = 4096
-# Newest rows kept per bot/player pair; older rows are pruned on write. (Rows, 1-200; default 30.)
+
+# AzerothVoices.Memory.MaximumPerPair
+#     Description: Newest rows kept per bot/player pair; older rows are pruned on write.
+#                  (Rows, 1-200.)
+#     Default:     30
 AzerothVoices.Memory.MaximumPerPair = 30
-# Age after which untouched rows are deleted by the hourly cleanup. (Days, 1-3650; default 180.)
+
+# AzerothVoices.Memory.RetentionDays
+#     Description: Age after which untouched rows are deleted by the hourly cleanup.
+#                  (Days, 1-3650.)
+#     Default:     180
 AzerothVoices.Memory.RetentionDays = 180
-# Memories injected into one prompt. (Items, 1-20; default 3.)
+
+# AzerothVoices.Memory.MaximumPromptItems
+#     Description: Memories injected into one prompt. (Items, 1-20.)
+#     Default:     3
 AzerothVoices.Memory.MaximumPromptItems = 3
-# Character cap for the injected memory block, charged to the context budget below personality. (Characters, 64-4000; default 600.)
+
+# AzerothVoices.Memory.MaximumPromptCharacters
+#     Description: Character cap for the injected memory block, charged to the context
+#                  budget below personality. (Characters, 64-4000.)
+#     Default:     600
 AzerothVoices.Memory.MaximumPromptCharacters = 600
-# Chance an ambient or group line draws on a memory at all; direct conversations may always use one. (Percentage; default 15.)
+
+# AzerothVoices.Memory.RecallChance
+#     Description: Chance an ambient or group line draws on a memory at all; direct
+#                  conversations may always use one. (Percentage.)
+#     Default:     15
 AzerothVoices.Memory.RecallChance = 15
-# Chance a first meeting in the same group becomes a durable memory. (Percentage; default 20.)
+
+# AzerothVoices.Memory.FirstMetChance
+#     Description: Chance a first meeting in the same group becomes a durable memory.
+#                  (Percentage.)
+#     Default:     20
 AzerothVoices.Memory.FirstMetChance = 20
-# Chance joining a real player's group becomes a memory. (Percentage; default 25.)
+
+# AzerothVoices.Memory.PartyMemberChance
+#     Description: Chance joining a real player's group becomes a memory. (Percentage.)
+#     Default:     25
 AzerothVoices.Memory.PartyMemberChance = 25
-# Chance completing a quest while grouped becomes a memory. (Percentage; default 25.)
+
+# AzerothVoices.Memory.QuestCompletedChance
+#     Description: Chance completing a quest while grouped becomes a memory.
+#                  (Percentage.)
+#     Default:     25
 AzerothVoices.Memory.QuestCompletedChance = 25
-# Chance a classified boss kill while grouped becomes a memory. (Percentage; default 50.)
+
+# AzerothVoices.Memory.BossKillChance
+#     Description: Chance a classified boss kill while grouped becomes a memory.
+#                  (Percentage.)
+#     Default:     50
 AzerothVoices.Memory.BossKillChance = 50
-# Chance a PvP kill while grouped becomes a memory. (Percentage; default 20.)
+
+# AzerothVoices.Memory.PvpKillChance
+#     Description: Chance a PvP kill while grouped becomes a memory. (Percentage.)
+#     Default:     20
 AzerothVoices.Memory.PvpKillChance = 20
-# Chance a wipe becomes a memory for every grouped bot. (Percentage; default 50.)
+
+# AzerothVoices.Memory.WipeChance
+#     Description: Chance a wipe becomes a memory for every grouped bot. (Percentage.)
+#     Default:     50
 AzerothVoices.Memory.WipeChance = 50
-# Chance a level-up while grouped becomes a memory. (Percentage; default 40.)
+
+# AzerothVoices.Memory.LevelUpChance
+#     Description: Chance a level-up while grouped becomes a memory. (Percentage.)
+#     Default:     40
 AzerothVoices.Memory.LevelUpChance = 40
-# Chance leaving an instance after at least one boss kill becomes a "we cleared this" memory. (Percentage; default 30.)
+
+# AzerothVoices.Memory.DungeonCompletedChance
+#     Description: Chance leaving an instance after at least one boss kill becomes a "we
+#                  cleared this" memory. (Percentage.)
+#     Default:     30
 AzerothVoices.Memory.DungeonCompletedChance = 30
-# Coalesced memory write interval. (Seconds, 1-3600; default 5.)
+
+# AzerothVoices.Memory.DatabaseFlushSeconds
+#     Description: Coalesced memory write interval. (Seconds, 1-3600.)
+#     Default:     5
 AzerothVoices.Memory.DatabaseFlushSeconds = 5
-# Rows per normal memory flush batch. (Rows, 1-1000; default 50.)
+
+# AzerothVoices.Memory.DatabaseFlushBatchSize
+#     Description: Rows per normal memory flush batch. (Rows, 1-1000.)
+#     Default:     50
 AzerothVoices.Memory.DatabaseFlushBatchSize = 50
 
-###################################################################################################
-# Random nearby, guild, and world chatter
-###################################################################################################
+# --------------------------------------------
+# 14. RANDOM NEARBY, GUILD, AND WORLD CHATTER
+# --------------------------------------------
 
-# Enables scheduled ambient chatter around online real players. (Default 1.)
+# AzerothVoices.Random.Enable
+#     Description: Enables scheduled ambient chatter around online real players.
+#     Default:     1
 AzerothVoices.Random.Enable = 1
-# Lower bound before the next ambient attempt. (Seconds, minimum 5; default 90.)
+
+# AzerothVoices.Random.MinimumIntervalSeconds
+#     Description: Lower bound before the next ambient attempt. (Seconds, minimum 5.)
+#     Default:     90
 AzerothVoices.Random.MinimumIntervalSeconds = 90
-# Upper interval bound. (Seconds, at least MinimumIntervalSeconds; default 240.)
+
+# AzerothVoices.Random.MaximumIntervalSeconds
+#     Description: Upper interval bound. (Seconds, at least MinimumIntervalSeconds.)
+#     Default:     240
 AzerothVoices.Random.MaximumIntervalSeconds = 240
-# Chance another actor replies after ambient chatter, a bot-originated Say/Yell/group/guild/world/custom reaction, or an event line; the corresponding bot-to-bot or RPG interaction cap is then applied. Every follow-up repeats the selected scope's real-audience rule. (Percentage; default 15.)
+
+# AzerothVoices.Random.FollowupChance
+#     Description: Chance another actor replies after ambient chatter, a bot-originated
+#                  Say/Yell/group/guild/world/custom reaction, or an event line; the
+#                  corresponding bot-to-bot or RPG interaction cap is then applied.
+#                  Every follow-up repeats the selected scope's real-audience rule.
+#                  (Percentage.)
+#     Default:     15
 AzerothVoices.Random.FollowupChance = 15
-# Generated conversation chain cap; 1 disables follow-ups. (Generated turns, minimum 1; default 2.)
+
+# AzerothVoices.Random.MaximumActors
+#     Description: Generated conversation chain cap; 1 disables follow-ups. (Generated
+#                  turns, minimum 1.)
+#     Default:     2
 AzerothVoices.Random.MaximumActors = 2
-# Chooses ambient-chat delivery scopes; a disabled or unavailable group scope safely falls back to Say. Party is used only when Random selects Party and requires the selected PlayerBot to share a subgroup with an online real player. Ordinary Say chatter is owned by the proximity subsystem (AzerothVoices.Proximity.*); a legacy `say` entry here is routed through that proximity gate instead of the generic NPC path so one Random roll cannot make the same NPC speak twice. Yell uses YellDistance, raid and guild/officer use real membership, World requires one online real player, and channel uses the custom-channel audience gate. (Comma-separated say/yell/party/raid/guild/officer/world/channel; default guild,world,party.)
+
+# AzerothVoices.Random.Scopes
+#     Description: Chooses ambient-chat delivery scopes; a disabled or unavailable group
+#                  scope safely falls back to Say. Party is used only when Random
+#                  selects Party and requires the selected PlayerBot to share a subgroup
+#                  with an online real player. Ordinary Say chatter is owned by the
+#                  proximity subsystem (AzerothVoices.Proximity.*); a legacy `say` entry
+#                  here is routed through that proximity gate instead of the generic NPC
+#                  path so one Random roll cannot make the same NPC speak twice. Yell
+#                  uses YellDistance, raid and guild/officer use real membership, World
+#                  requires one online real player, and channel uses the custom-channel
+#                  audience gate. (Comma-separated
+#                  say/yell/party/raid/guild/officer/world/channel.)
+#     Default:     guild,world,party
 AzerothVoices.Random.Scopes = guild,world,party
-# General ambient topic instructions. (Pipe-separated text choices.)
+
+# AzerothVoices.Random.Prompts
+#     Description: General ambient topic instructions. (Pipe-separated text choices.)
 AzerothVoices.Random.Prompts = Make a casual observation about the current zone.|Complain briefly about leveling or grinding.|Comment on loot, repairs, travel, professions, quests, dungeons, or battlegrounds.|Make a short joke that fits World of Warcraft.|Mention what you want to do next in the game.
-# Question-style ambient instructions. (Pipe-separated text choices.)
+
+# AzerothVoices.Random.Questions
+#     Description: Question-style ambient instructions. (Pipe-separated text choices.)
 AzerothVoices.Random.Questions = Ask whether anyone wants to group.|Ask for an opinion about the current zone.|Ask which dungeon people like.|Ask what people are farming.|Ask about professions, gear, or PvP.
-# Instructions that use live surroundings. (Pipe-separated text choices.)
+
+# AzerothVoices.Random.EnvironmentPrompts
+#     Description: Instructions that use live surroundings. (Pipe-separated text
+#                  choices.)
 AzerothVoices.Random.EnvironmentPrompts = React to something nearby.|Comment on the weather or surroundings.|Mention a creature, object, quest, spell, item, vendor, dungeon, or unfinished task that fits the location.
-# Topics used for guild ambient chatter. (Pipe-separated text choices.)
+
+# AzerothVoices.Random.GuildPrompts
+#     Description: Topics used for guild ambient chatter. (Pipe-separated text choices.)
 AzerothVoices.Random.GuildPrompts = Ask whether guild members want a dungeon group.|Congratulate the guild on recent progress.|Talk about raids, PvP, professions, loot, the guild bank, or helping another member.
-# Topics used for world/channel ambient chatter. (Pipe-separated text choices.)
+
+# AzerothVoices.Random.WorldPrompts
+#     Description: Topics used for world/channel ambient chatter. (Pipe-separated text
+#                  choices.)
 AzerothVoices.Random.WorldPrompts = Start a short world-chat topic about zones, dungeons, loot, professions, PvP, quests, travel, or server life.|Ask world chat a brief useful question.|Make a short public observation that could start a conversation.
 
-###################################################################################################
-# Automated World/custom-channel pacing
-###################################################################################################
+# --------------------------------------------
+# 15. AUTOMATED WORLD/CUSTOM-CHANNEL PACING
+# --------------------------------------------
 
-# Paces automated World and custom-channel chatter so concurrent exchanges cannot arrive as one
-# wall of text. Only this module's scheduled ambient World/custom-channel lines are paced; direct
-# player-directed replies stay immediate, and combat-start, event, boss, and dungeon/raid reactions
-# are never delayed by this timeline. (Default 1.)
+# AzerothVoices.GeneralChat.Pacing.Enable
+#     Description: Paces automated World and custom-channel chatter so concurrent
+#                  exchanges cannot arrive as one wall of text. Only this module's
+#                  scheduled ambient World/custom-channel lines are paced; direct
+#                  player-directed replies stay immediate, and combat-start, event,
+#                  boss, and dungeon/raid reactions are never delayed by this timeline.
+#     Default:     1
 AzerothVoices.GeneralChat.Pacing.Enable = 1
-# Minimum gap after a reserved multi-line exchange on the same normalized channel plus zone or
-# map/instance identity. (Seconds, 0-86400; default 15.)
+
+# AzerothVoices.GeneralChat.MinimumGapSeconds
+#     Description: Minimum gap after a reserved multi-line exchange on the same
+#                  normalized channel plus zone or map/instance identity. (Seconds,
+#                  0-86400.)
+#     Default:     15
 AzerothVoices.GeneralChat.MinimumGapSeconds = 15
 
-# Dedicated General/World ambient chatter system ported from mod-llm-chatter.
-# Enables periodic ambient chatter in General/World channels where real players are present. (Default 1.)
+# AzerothVoices.General.Enable
+#     Description: Dedicated General/World ambient chatter system ported from mod-llm-
+#                  chatter. Enables periodic ambient chatter in General/World channels
+#                  where real players are present.
+#     Default:     1
 AzerothVoices.General.Enable = 1
-# Interval between General chatter trigger evaluation passes across zones with players. (Seconds, minimum 5; default 30.)
+
+# AzerothVoices.General.TriggerIntervalSeconds
+#     Description: Interval between General chatter trigger evaluation passes across
+#                  zones with players. (Seconds, minimum 5.)
+#     Default:     30
 AzerothVoices.General.TriggerIntervalSeconds = 30
-# Base percent chance per zone to trigger a chatter event during an evaluation pass. (0-100; default 15.)
+
+# AzerothVoices.General.TriggerChance
+#     Description: Base percent chance per zone to trigger a chatter event during an
+#                  evaluation pass. (0-100.)
+#     Default:     15
 AzerothVoices.General.TriggerChance = 15
-# Multiplier applied to trigger chance in major capital cities (Stormwind, Ironforge, Orgrimmar, etc.). (1-10; default 2.)
+
+# AzerothVoices.General.CityMultiplier
+#     Description: Multiplier applied to trigger chance in major capital cities
+#                  (Stormwind, Ironforge, Orgrimmar, etc.). (1-10.)
+#     Default:     2
 AzerothVoices.General.CityMultiplier = 2
-# Chance that a triggered chatter event becomes a two-bot conversation instead of a solo observation. (0-100; default 40.)
+
+# AzerothVoices.General.ConversationChance
+#     Description: Chance that a triggered chatter event becomes a two-bot conversation
+#                  instead of a solo observation. (0-100.)
+#     Default:     40
 AzerothVoices.General.ConversationChance = 40
-# Chance that the chosen topic gossips about a nearby alive NPC in the zone. (0-100; default 5.)
+
+# AzerothVoices.General.NpcGossipChance
+#     Description: Chance that the chosen topic gossips about a nearby alive NPC in the
+#                  zone. (0-100.)
+#     Default:     5
 AzerothVoices.General.NpcGossipChance = 5
-# Chance that the chosen topic gossips about another bot in the same zone. (0-100; default 5.)
+
+# AzerothVoices.General.BotGossipChance
+#     Description: Chance that the chosen topic gossips about another bot in the same
+#                  zone. (0-100.)
+#     Default:     5
 AzerothVoices.General.BotGossipChance = 5
-# Cooldown before the same NPC or bot can be picked as a gossip subject again. (Seconds; default 1800.)
+
+# AzerothVoices.General.GossipTargetCooldownSeconds
+#     Description: Cooldown before the same NPC or bot can be picked as a gossip subject
+#                  again. (Seconds.)
+#     Default:     1800
 AzerothVoices.General.GossipTargetCooldownSeconds = 1800
-# Cooldown before the same bot can speak or participate in General channel ambient chatter again. (Seconds; default 900.)
+
+# AzerothVoices.General.BotSpeakerCooldownSeconds
+#     Description: Cooldown before the same bot can speak or participate in General
+#                  channel ambient chatter again. (Seconds.)
+#     Default:     900
 AzerothVoices.General.BotSpeakerCooldownSeconds = 900
 
-###################################################################################################
-# PartyGate per-party delivery pacing
-###################################################################################################
+# --------------------------------------------
+# 16. PARTYGATE PER-PARTY DELIVERY PACING
+# --------------------------------------------
 
-# Enables per-party delivery timeline pacing and trigger-based policy gating. (Default 1.)
+# AzerothVoices.PartyGate.Enable
+#     Description: Enables per-party delivery timeline pacing and trigger-based policy
+#                  gating.
+#     Default:     1
 AzerothVoices.PartyGate.Enable = 1
-# Minimum gap between filler chatter messages in the same party. (Seconds, 0-300; default 30.)
-AzerothVoices.PartyGate.FillerMinGapSeconds = 30
-# Minimum gap between contextual event chatter messages in the same party. (Seconds, 0-300; default 20.)
-AzerothVoices.PartyGate.ContextualMinGapSeconds = 20
-# Minimum gap between direct/responsive chatter messages in the same party. (Seconds, 0-300; default 4.)
-AzerothVoices.PartyGate.ResponsiveMinGapSeconds = 4
-# Minimum gap between urgent callout messages in the same party. (Seconds, 0-300; default 0.)
+
+# AzerothVoices.PartyGate.FillerMinGapSeconds
+#     Description: Minimum gap between filler chatter messages in the same party.
+#                  (Seconds, 0-300.)
+#     Default:     12
+AzerothVoices.PartyGate.FillerMinGapSeconds = 12
+
+# AzerothVoices.PartyGate.ContextualMinGapSeconds
+#     Description: Minimum gap between contextual event chatter messages in the same
+#                  party. (Seconds, 0-300.)
+#     Default:     10
+AzerothVoices.PartyGate.ContextualMinGapSeconds = 10
+
+# AzerothVoices.PartyGate.ResponsiveMinGapSeconds
+#     Description: Minimum gap between direct/responsive chatter messages in the same
+#                  party. (Seconds, 0-300.)
+#     Default:     3
+AzerothVoices.PartyGate.ResponsiveMinGapSeconds = 3
+
+# AzerothVoices.PartyGate.UrgentMinGapSeconds
+#     Description: Minimum gap between urgent callout messages in the same party.
+#                  (Seconds, 0-300.)
+#     Default:     0
 AzerothVoices.PartyGate.UrgentMinGapSeconds = 0
-# Threshold in seconds beyond which pre-LLM filler requests are deferred or dropped. (Seconds, 0-60; default 4.)
+
+# AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds
+#     Description: Threshold in seconds beyond which pre-LLM filler requests are
+#                  deferred or dropped. (Seconds, 0-60.)
+#     Default:     4
 AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds = 4
-# Maximum post-generation delay cap for filler chatter. (Seconds, 5-300; default 45.)
+
+# AzerothVoices.PartyGate.MaxFillerDelaySeconds
+#     Description: Maximum post-generation delay cap for filler chatter. (Seconds,
+#                  5-300.)
+#     Default:     45
 AzerothVoices.PartyGate.MaxFillerDelaySeconds = 45
-# Enables debug logging for PartyGate policy decisions and pacing reservations. (Default 0.)
+
+# AzerothVoices.PartyGate.DebugLog
+#     Description: Enables debug logging for PartyGate policy decisions and pacing
+#                  reservations.
+#     Default:     0
 AzerothVoices.PartyGate.DebugLog = 0
 
-###################################################################################################
-# Lightweight live environment context
-###################################################################################################
+# --------------------------------------------
+# 17. LIGHTWEIGHT LIVE ENVIRONMENT CONTEXT
+# --------------------------------------------
 
-# Adds map/zone/area/dungeon/combat/group/guild and bounded context. (Default 1.)
+# AzerothVoices.Environment.Enable
+#     Description: Adds map/zone/area/dungeon/combat/group/guild and bounded context.
+#     Default:     1
 AzerothVoices.Environment.Enable = 1
-# Radius for bounded nearby alive creature names, including friendly, neutral, or hostile creatures. (Decimal yards, clamped 1-100; default 25.)
+
+# AzerothVoices.Environment.Distance
+#     Description: Radius for bounded nearby alive creature names, including friendly,
+#                  neutral, or hostile creatures. (Decimal yards, clamped 1-100.)
+#     Default:     25
 AzerothVoices.Environment.Distance = 25
-# Maximum nearby creature names after bounded collection; 0 disables them. (Entries, clamped 0-50; default 5.)
+
+# AzerothVoices.Environment.MaximumCreatures
+#     Description: Maximum nearby creature names after bounded collection; 0 disables
+#                  them. (Entries, clamped 0-50.)
+#     Default:     5
 AzerothVoices.Environment.MaximumCreatures = 5
-# Combined equipment/backpack item-name cap; 0 disables item names. (Entries, clamped 0-50; default 8.)
+
+# AzerothVoices.Environment.MaximumItems
+#     Description: Combined equipment/backpack item-name cap; 0 disables item names.
+#                  (Entries, clamped 0-50.)
+#     Default:     8
 AzerothVoices.Environment.MaximumItems = 8
-# Includes bounded PlayerBot equipment names in context. (Default 1.)
+
+# AzerothVoices.Environment.IncludeEquipment
+#     Description: Includes bounded PlayerBot equipment names in context.
+#     Default:     1
 AzerothVoices.Environment.IncludeEquipment = 1
-# Includes bounded backpack names; off keeps prompts lightweight. (Default 0.)
+
+# AzerothVoices.Environment.IncludeBackpack
+#     Description: Includes bounded backpack names; off keeps prompts lightweight.
+#     Default:     0
 AzerothVoices.Environment.IncludeBackpack = 0
 
-###################################################################################################
-# Event chatter
-###################################################################################################
+# --------------------------------------------
+# 18. EVENT CHATTER
+# --------------------------------------------
 #
 # Automatic vMaNGOS hooks: creature/player kill, death, loot, quest complete, spell learned,
 # duel request/start/win, level-up, login, guild join, and guild leave.
@@ -890,210 +2128,548 @@ AzerothVoices.Environment.IncludeBackpack = 0
 # online real guild listener. Other events prioritize Party for PlayerBots in the subject's party
 # subgroup, then use Say for remaining nearby PlayerBot/NPC responders. Say actors require a real
 # human within SayDistance; Party actors require a real human in the same party subgroup.
+# --------------------------------------------
 
-# Master switch for automatic and adapter event reactions. (Default 1.)
+# AzerothVoices.Events.Enable
+#     Description: Master switch for automatic and adapter event reactions.
+#     Default:     1
 AzerothVoices.Events.Enable = 1
-# Second-stage chance that other actors react after the selected scope's real-audience check passes. (Percentage; default 25.)
+
+# AzerothVoices.Events.ResponderChance
+#     Description: Second-stage chance that other actors react after the selected
+#                  scope's real-audience check passes. (Percentage.)
+#     Default:     25
 AzerothVoices.Events.ResponderChance = 25
-# Chance an AI PlayerBot comments on its own event through Guild, preferred Party, or fallback Say after the selected scope's audience check passes. (Percentage; default 5.)
+
+# AzerothVoices.Events.SelfCommentChance
+#     Description: Chance an AI PlayerBot comments on its own event through Guild,
+#                  preferred Party, or fallback Say after the selected scope's audience
+#                  check passes. (Percentage.)
+#     Default:     5
 AzerothVoices.Events.SelfCommentChance = 5
-# Maximum other responders to one event. (Actors, minimum 1; default 2.)
+
+# AzerothVoices.Events.MaximumResponders
+#     Description: Maximum other responders to one event. (Actors, minimum 1.)
+#     Default:     2
 AzerothVoices.Events.MaximumResponders = 2
-# Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 60.)
+
+# AzerothVoices.Events.CooldownSeconds
+#     Description: Per-subject/per-event repeat cooldown. (Seconds, minimum 0.)
+#     Default:     60
 AzerothVoices.Events.CooldownSeconds = 60
-# Initial chance for an automatic creature-kill event. (Percentage; default 8.)
+
+# AzerothVoices.Events.Chance.CreatureDefeated
+#     Description: Initial chance for an automatic creature-kill event. (Percentage.)
+#     Default:     8
 AzerothVoices.Events.Chance.CreatureDefeated = 8
-# Initial chance for an automatic PvP-kill event. (Percentage; default 40.)
+
+# AzerothVoices.Events.Chance.PlayerDefeated
+#     Description: Initial chance for an automatic PvP-kill event. (Percentage.)
+#     Default:     40
 AzerothVoices.Events.Chance.PlayerDefeated = 40
-# Initial chance for automatic player-death event. (Percentage; default 25.)
+
+# AzerothVoices.Events.Chance.Died
+#     Description: Initial chance for automatic player-death event. (Percentage.)
+#     Default:     25
 AzerothVoices.Events.Chance.Died = 25
-# Initial chance for automatic non-rare loot chatter. (Percentage; default 8.)
+
+# AzerothVoices.Events.Chance.ItemLooted
+#     Description: Initial chance for automatic non-rare loot chatter. (Percentage.)
+#     Default:     8
 AzerothVoices.Events.Chance.ItemLooted = 8
-# Initial chance for automatic quest-completion chatter. (Percentage; default 25.)
+
+# AzerothVoices.Events.Chance.QuestCompleted
+#     Description: Initial chance for automatic quest-completion chatter. (Percentage.)
+#     Default:     25
 AzerothVoices.Events.Chance.QuestCompleted = 25
-# Initial chance for automatic spell-learning chatter. (Percentage; default 15.)
+
+# AzerothVoices.Events.Chance.SpellLearned
+#     Description: Initial chance for automatic spell-learning chatter. (Percentage.)
+#     Default:     15
 AzerothVoices.Events.Chance.SpellLearned = 15
-# Initial chance for automatic duel-request chatter. (Percentage; default 25.)
+
+# AzerothVoices.Events.Chance.DuelRequested
+#     Description: Initial chance for automatic duel-request chatter. (Percentage.)
+#     Default:     25
 AzerothVoices.Events.Chance.DuelRequested = 25
-# Initial chance for automatic duel-start chatter. (Percentage; default 20.)
+
+# AzerothVoices.Events.Chance.DuelStarted
+#     Description: Initial chance for automatic duel-start chatter. (Percentage.)
+#     Default:     20
 AzerothVoices.Events.Chance.DuelStarted = 20
-# Initial chance for automatic duel-victory chatter. (Percentage; default 35.)
+
+# AzerothVoices.Events.Chance.DuelWon
+#     Description: Initial chance for automatic duel-victory chatter. (Percentage.)
+#     Default:     35
 AzerothVoices.Events.Chance.DuelWon = 35
-# Initial chance for level-up chatter; a guilded subject requires a real guild listener and uses Guild, otherwise Party is preferred before Say. (Percentage; default 50.)
+
+# AzerothVoices.Events.Chance.LevelUp
+#     Description: Initial chance for level-up chatter; a guilded subject requires a
+#                  real guild listener and uses Guild, otherwise Party is preferred
+#                  before Say. (Percentage.)
+#     Default:     50
 AzerothVoices.Events.Chance.LevelUp = 50
-# Initial chance for automatic Guild chatter on guild join; requires an online real member in that guild. (Percentage; default 60.)
+
+# AzerothVoices.Events.Chance.GuildJoin
+#     Description: Initial chance for automatic Guild chatter on guild join; requires an
+#                  online real member in that guild. (Percentage.)
+#     Default:     60
 AzerothVoices.Events.Chance.GuildJoin = 60
-# Initial chance for Guild chatter on guild leave; the old guild id is retained and an online real member must remain in that guild. (Percentage; default 40.)
+
+# AzerothVoices.Events.Chance.GuildLeave
+#     Description: Initial chance for Guild chatter on guild leave; the old guild id is
+#                  retained and an online real member must remain in that guild.
+#                  (Percentage.)
+#     Default:     40
 AzerothVoices.Events.Chance.GuildLeave = 40
-# Initial chance for automatic Guild chatter on guild login; requires an online real member in that guild. (Percentage; default 10.)
+
+# AzerothVoices.Events.Chance.GuildLogin
+#     Description: Initial chance for automatic Guild chatter on guild login; requires
+#                  an online real member in that guild. (Percentage.)
+#     Default:     10
 AzerothVoices.Events.Chance.GuildLogin = 10
-# Initial chance for adapter-supplied Guild chatter on promotion; requires an online real member in that guild. (Percentage; default 50.)
+
+# AzerothVoices.Events.Chance.GuildPromotion
+#     Description: Initial chance for adapter-supplied Guild chatter on promotion;
+#                  requires an online real member in that guild. (Percentage.)
+#     Default:     50
 AzerothVoices.Events.Chance.GuildPromotion = 50
-# Initial chance for adapter-supplied Guild chatter on demotion; requires an online real member in that guild. (Percentage; default 30.)
+
+# AzerothVoices.Events.Chance.GuildDemotion
+#     Description: Initial chance for adapter-supplied Guild chatter on demotion;
+#                  requires an online real member in that guild. (Percentage.)
+#     Default:     30
 AzerothVoices.Events.Chance.GuildDemotion = 30
-# Initial chance for adapter-supplied pet-defeat chatter. (Percentage; default 20.)
+
+# AzerothVoices.Events.Chance.PetDefeated
+#     Description: Initial chance for adapter-supplied pet-defeat chatter. (Percentage.)
+#     Default:     20
 AzerothVoices.Events.Chance.PetDefeated = 20
-# Initial chance for adapter-supplied object-use chatter. (Percentage; default 10.)
+
+# AzerothVoices.Events.Chance.UsedObject
+#     Description: Initial chance for adapter-supplied object-use chatter. (Percentage.)
+#     Default:     10
 AzerothVoices.Events.Chance.UsedObject = 10
-# Initial chance for automatic rare-loot chatter; Party is preferred before Say. (Percentage; default 45.)
+
+# AzerothVoices.Events.Chance.RareItem
+#     Description: Initial chance for automatic rare-loot chatter; Party is preferred
+#                  before Say. (Percentage.)
+#     Default:     45
 AzerothVoices.Events.Chance.RareItem = 45
-# Initial chance for automatic epic-loot chatter; Party is preferred before Say. (Percentage; default 75.)
+
+# AzerothVoices.Events.Chance.EpicItem
+#     Description: Initial chance for automatic epic-loot chatter; Party is preferred
+#                  before Say. (Percentage.)
+#     Default:     75
 AzerothVoices.Events.Chance.EpicItem = 75
-# Initial chance for adapter-supplied dungeon completion. (Percentage; default 70.)
+
+# AzerothVoices.Events.Chance.DungeonCompleted
+#     Description: Initial chance for adapter-supplied dungeon completion. (Percentage.)
+#     Default:     70
 AzerothVoices.Events.Chance.DungeonCompleted = 70
-# Initial chance for adapter game-event start chatter; Party is preferred before Say. (Percentage; default 50.)
+
+# AzerothVoices.Events.Chance.GameEventStarted
+#     Description: Initial chance for adapter game-event start chatter; Party is
+#                  preferred before Say. (Percentage.)
+#     Default:     50
 AzerothVoices.Events.Chance.GameEventStarted = 50
-# Initial chance for adapter game-event stop chatter; Party is preferred before Say. (Percentage; default 30.)
+
+# AzerothVoices.Events.Chance.GameEventStopped
+#     Description: Initial chance for adapter game-event stop chatter; Party is
+#                  preferred before Say. (Percentage.)
+#     Default:     30
 AzerothVoices.Events.Chance.GameEventStopped = 30
 
-###################################################################################################
-# Reply length and PlayerBots-compatible typing delay
-###################################################################################################
+# --------------------------------------------
+# 19. REPLY LENGTH AND PLAYERBOTS-COMPATIBLE TYPING DELAY
+# --------------------------------------------
 
-# Delays delivery so generated chat appears naturally typed. (Default 1.)
+# AzerothVoices.Typing.Enable
+#     Description: Delays delivery so generated chat appears naturally typed.
+#     Default:     1
 AzerothVoices.Typing.Enable = 1
-# Fixed delay added to each line. (Milliseconds, minimum 0; default 0.)
+
+# AzerothVoices.Typing.BaseDelayMilliseconds
+#     Description: Fixed delay added to each line. (Milliseconds, minimum 0.)
+#     Default:     0
 AzerothVoices.Typing.BaseDelayMilliseconds = 0
-# Minimum natural typing delay; one speed is randomly selected between the minimum and maximum for each delivered reply line. (Ms/character, minimum 0; default 100.)
+
+# AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds
+#     Description: Minimum natural typing delay; one speed is randomly selected between
+#                  the minimum and maximum for each delivered reply line. (Ms/character,
+#                  minimum 0.)
+#     Default:     100
+#
+#     Realistic typing speeds:
+#     - 400ms per char = 2.5 chars/sec (slow/casual)
+#     - 250ms per char = 4 chars/sec (average human)
+#     - 150ms per char = 6.7 chars/sec (proficient)
+#     - 100ms per char = 10 chars/sec (professional)
 AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 100
-# Maximum natural typing delay; values below the minimum are swapped safely. (Ms/character, minimum 0; default 200.)
+
+# AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds
+#     Description: Maximum natural typing delay; values below the minimum are swapped
+#                  safely. (Ms/character, minimum 0.)
+#     Default:     200
 AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
-# Legacy compatibility: if both range keys above are absent, AzerothVoices.Typing.DelayPerCharacterMilliseconds is still accepted as one fixed per-character delay.
-# Subtracts provider generation time from the simulated typing delay, preserving the restored PlayerBots-style delivery timing. (Default 1.)
+
+# AzerothVoices.Typing.SubtractGenerationTime
+#     Description: Legacy compatibility: if both range keys above are absent,
+#                  AzerothVoices.Typing.DelayPerCharacterMilliseconds is still accepted
+#                  as one fixed per-character delay. Subtracts provider generation time
+#                  from the simulated typing delay, preserving the restored PlayerBots-
+#                  style delivery timing.
+#     Default:     1
 AzerothVoices.Typing.SubtractGenerationTime = 1
-# Cumulative total character budget across all delivered reply lines for a single request.
-# Messages are cleanly split on sentence and clause boundaries up to this cumulative character budget.
-# (Characters, minimum 1; default 140.)
-AzerothVoices.Reply.MaximumCharacters = 140
-# Maximum delivered lines/parts per request. Limits the number of separate chat messages a bot
-# can send per response turn. (Lines, minimum 1; default 2.)
+
+# AzerothVoices.Reply.MaximumCharacters
+#     Description: Maximum character budget per delivered reply line. Messages are
+#                  cleanly split on sentence and clause boundaries so each message
+#                  fits within this character limit without sentence starvation.
+#                  (Characters, minimum 1.)
+#     Default:     80
+AzerothVoices.Reply.MaximumCharacters = 80
+
+# AzerothVoices.Reply.MaximumLines
+#     Description: Maximum delivered lines/parts per request. Limits the number of
+#                  separate chat messages a bot can send per response turn. (Lines,
+#                  minimum 1.)
+#     Default:     2
 AzerothVoices.Reply.MaximumLines = 2
-# Enables structured, sentence-aware line breaking for delivered dialogue. When enabled, replies are cleanly split on natural sentence boundaries (.!?) and clause punctuation (,;-) instead of greedily packing characters and breaking in the middle of sentences across messages. (Default 1.)
+
+# AzerothVoices.Reply.SentenceAwareSplitting
+#     Description: Enables structured, sentence-aware line breaking for delivered
+#                  dialogue. When enabled, replies are cleanly split on natural sentence
+#                  boundaries (.!?) and clause punctuation (,;-) instead of greedily
+#                  packing characters and breaking in the middle of sentences across
+#                  messages.
+#     Default:     1
 AzerothVoices.Reply.SentenceAwareSplitting = 1
 
-###################################################################################################
-# Bounded conversation and surrounding-chat history
-###################################################################################################
+# --------------------------------------------
+# 20. BOUNDED CONVERSATION AND SURROUNDING-CHAT HISTORY
+# --------------------------------------------
 
-# 0 disables conversation history, 1 keeps bounded history only in RAM until restart, and 2 persists it in the character database with a bounded lazy-loaded RAM cache (falling back to RAM if the module tables are unavailable). (Mode 0/1/2; default 2.)
+# AzerothVoices.History.StorageMode
+#     Description: 0 disables conversation history, 1 keeps bounded history only in RAM
+#                  until restart, and 2 persists it in the character database with a
+#                  bounded lazy-loaded RAM cache (falling back to RAM if the module
+#                  tables are unavailable). (Mode 0/1/2.)
+#     Default:     2
 AzerothVoices.History.StorageMode = 2
+
+
 # --- SQL MODE SETTINGS (StorageMode = 2) ---
-# Used only when StorageMode = 2 (SQL); turns, default 20. Caps persistent rows and lazy-loaded hot-cache turns per conversation.
+
+# AzerothVoices.History.DatabaseMaximumTurns
+#     Description: Used only when StorageMode = 2 (SQL); turns, default 20. Caps
+#                  persistent rows and lazy-loaded hot-cache turns per conversation.
+#     Default:     20
 AzerothVoices.History.DatabaseMaximumTurns = 20
-# Used only when StorageMode = 2 (SQL); minutes, default 10080 (7 days). Older persistent conversation turns are not loaded and are deleted by cleanup.
+
+# AzerothVoices.History.DatabaseTTLMinutes
+#     Description: Used only when StorageMode = 2 (SQL); minutes, default 10080 (7
+#                  days). Older persistent conversation turns are not loaded and are
+#                  deleted by cleanup.
+#     Default:     10080 (7 days)
 AzerothVoices.History.DatabaseTTLMinutes = 10080
-# Used only when a StorageMode = 2 (SQL) feature has queued rows; seconds, default 5. Sets the maximum delay before batched history/snapshot writes flush.
+
+# AzerothVoices.History.DatabaseFlushSeconds
+#     Description: Used only when a StorageMode = 2 (SQL) feature has queued rows;
+#                  seconds, default 5. Sets the maximum delay before batched
+#                  history/snapshot writes flush.
+#     Default:     5
 AzerothVoices.History.DatabaseFlushSeconds = 5
-# Used only when a StorageMode = 2 (SQL) feature has queued rows; rows, default 20. Flushes the shared history/snapshot transaction when this many rows wait.
+
+# AzerothVoices.History.DatabaseFlushBatchSize
+#     Description: Used only when a StorageMode = 2 (SQL) feature has queued rows; rows,
+#                  default 20. Flushes the shared history/snapshot transaction when this
+#                  many rows wait.
+#     Default:     20
 AzerothVoices.History.DatabaseFlushBatchSize = 20
+
+
 # --- RAM MODE SETTINGS (StorageMode = 1) ---
-# Used only when StorageMode = 1 (RAM); turns, default 6. Caps retained turns per conversation until worldserver restarts.
+
+# AzerothVoices.History.RamMaximumTurns
+#     Description: Used only when StorageMode = 1 (RAM); turns, default 6. Caps retained
+#                  turns per conversation until worldserver restarts.
+#     Default:     6
 AzerothVoices.History.RamMaximumTurns = 6
-# Prompt-age limit for conversation turns in RAM or the SQL hot cache. (Minutes, minimum 1; default 30.)
+
+# AzerothVoices.History.TTLMinutes
+#     Description: Prompt-age limit for conversation turns in RAM or the SQL hot cache.
+#                  (Minutes, minimum 1.)
+#     Default:     30
 AzerothVoices.History.TTLMinutes = 30
-# Hard rendered conversation-history cap per provider request. (Characters, minimum 128; default 2500.)
+
+# AzerothVoices.History.MaximumCharacters
+#     Description: Hard rendered conversation-history cap per provider request.
+#                  (Characters, minimum 128.)
+#     Default:     2500
 AzerothVoices.History.MaximumCharacters = 2500
-# Hard bound on in-memory conversation buckets in StorageMode 1 or 2. (Keys, minimum 1; default 2048.)
+
+# AzerothVoices.History.MaximumConversations
+#     Description: Hard bound on in-memory conversation buckets in StorageMode 1 or 2.
+#                  (Keys, minimum 1.)
+#     Default:     2048
 AzerothVoices.History.MaximumConversations = 2048
-# Introduces previous conversation context. (Text template.)
+
+# AzerothVoices.History.HeaderTemplate
+#     Description: Introduces previous conversation context. (Text template.)
 AzerothVoices.History.HeaderTemplate = Recent conversation with <sender name>, use it only as context:
-# Renders each stored exchange. (Text template with \n escapes.)
+
+# AzerothVoices.History.LineTemplate
+#     Description: Renders each stored exchange. (Text template with \n escapes.)
 AzerothVoices.History.LineTemplate = <sender name>: <sender message>\n<bot name>: <bot reply>\n
-# Separates history from the new incoming message. (Text template.)
+
+# AzerothVoices.History.FooterTemplate
+#     Description: Separates history from the new incoming message. (Text template.)
 AzerothVoices.History.FooterTemplate = New message from <sender name>: <initial message>
 
-# Adds recent lines only from the same whisper, group, guild, channel, or local map-area scope so references such as "him" or "that" retain context. (Default 1.)
+# AzerothVoices.SurroundingChat.Enable
+#     Description: Adds recent lines only from the same whisper, group, guild, channel,
+#                  or local map-area scope so references such as "him" or "that" retain
+#                  context.
+#     Default:     1
 AzerothVoices.SurroundingChat.Enable = 1
-# Hard per-scope recent-line cap. (Lines, minimum 0; default 8.)
+
+# AzerothVoices.SurroundingChat.MaximumLines
+#     Description: Hard per-scope recent-line cap. (Lines, minimum 0.)
+#     Default:     8
 AzerothVoices.SurroundingChat.MaximumLines = 8
-# Discards stale surrounding lines. (Minutes, minimum 1; default 5.)
+
+# AzerothVoices.SurroundingChat.TTLMinutes
+#     Description: Discards stale surrounding lines. (Minutes, minimum 1.)
+#     Default:     5
 AzerothVoices.SurroundingChat.TTLMinutes = 5
-# Rendered surrounding-context cap. (Characters, minimum 128; default 1200.)
+
+# AzerothVoices.SurroundingChat.MaximumCharacters
+#     Description: Rendered surrounding-context cap. (Characters, minimum 128.)
+#     Default:     1200
 AzerothVoices.SurroundingChat.MaximumCharacters = 1200
-# Hard bound on RAM scope buckets. (Scopes, minimum 1; default 512.)
+
+# AzerothVoices.SurroundingChat.MaximumScopes
+#     Description: Hard bound on RAM scope buckets. (Scopes, minimum 1.)
+#     Default:     512
 AzerothVoices.SurroundingChat.MaximumScopes = 512
 
-###################################################################################################
-# SNAPSHOT SYSTEM
-###################################################################################################
+# --------------------------------------------
+# 21. SNAPSHOT SYSTEM
+# --------------------------------------------
 
-# When enabled, adds a richer PlayerBot-only world-thread block with combat, group, spells, quests, visible objects, and nearby players; disabling omits it, while enabling increases prompt tokens and may increase provider response time. (Default 0.)
+# AzerothVoices.Snapshot.Enable
+#     Description: When enabled, adds a richer PlayerBot-only world-thread block with
+#                  combat, group, spells, quests, visible objects, and nearby players;
+#                  disabling omits it, while enabling increases prompt tokens and may
+#                  increase provider response time.
+#     Default:     0
 AzerothVoices.Snapshot.Enable = 0
-# Adds current health, active power resource, combat state, victim name/level/health, and whether the bot is fighting. (Default 1.)
+
+# AzerothVoices.Snapshot.IncludeCombat
+#     Description: Adds current health, active power resource, combat state, victim
+#                  name/level/health, and whether the bot is fighting.
+#     Default:     1
 AzerothVoices.Snapshot.IncludeCombat = 1
-# Adds bounded same-map group members with class, race, health, distance, and current fighting state. (Default 1.)
+
+# AzerothVoices.Snapshot.IncludeGroup
+#     Description: Adds bounded same-map group members with class, race, health,
+#                  distance, and current fighting state.
+#     Default:     1
 AzerothVoices.Snapshot.IncludeGroup = 1
-# Adds bounded active known spells after removing passive/internal entries and keeping the highest useful rank for each spell name. (Default 1.)
+
+# AzerothVoices.Snapshot.IncludeSpells
+#     Description: Adds bounded active known spells after removing passive/internal
+#                  entries and keeping the highest useful rank for each spell name.
+#     Default:     1
 AzerothVoices.Snapshot.IncludeSpells = 1
-# Adds bounded quest-log titles and whether each active quest is in progress, complete, or failed. (Default 1.)
+
+# AzerothVoices.Snapshot.IncludeQuests
+#     Description: Adds bounded quest-log titles and whether each active quest is in
+#                  progress, complete, or failed.
+#     Default:     1
 AzerothVoices.Snapshot.IncludeQuests = 1
-# Adds bounded nearby creatures and spawned game objects that pass the bot's live line-of-sight check. (Default 1.)
+
+# AzerothVoices.Snapshot.IncludeLineOfSight
+#     Description: Adds bounded nearby creatures and spawned game objects that pass the
+#                  bot's live line-of-sight check.
+#     Default:     1
 AzerothVoices.Snapshot.IncludeLineOfSight = 1
-# Adds bounded non-GM players and PlayerBots within range and line of sight with level, race, class, faction, distance, and actor type. (Default 1.)
+
+# AzerothVoices.Snapshot.IncludeNearbyPlayers
+#     Description: Adds bounded non-GM players and PlayerBots within range and line of
+#                  sight with level, race, class, faction, distance, and actor type.
+#     Default:     1
 AzerothVoices.Snapshot.IncludeNearbyPlayers = 1
-# Shared bounded search radius for snapshot creature, game-object, and nearby-player collection; group distance is reported for same-map members. (Decimal yards, clamped 1-100; default 40.)
+
+# AzerothVoices.Snapshot.Distance
+#     Description: Shared bounded search radius for snapshot creature, game-object, and
+#                  nearby-player collection; group distance is reported for same-map
+#                  members. (Decimal yards, clamped 1-100.)
+#     Default:     40
 AzerothVoices.Snapshot.Distance = 40
-# Maximum other group members rendered in the current snapshot; 0 omits the group-member list. (Entries, clamped 0-40; default 5.)
+
+# AzerothVoices.Snapshot.MaximumGroupMembers
+#     Description: Maximum other group members rendered in the current snapshot; 0 omits
+#                  the group-member list. (Entries, clamped 0-40.)
+#     Default:     5
 AzerothVoices.Snapshot.MaximumGroupMembers = 5
-# Maximum deduplicated highest-rank usable spell names rendered in the current snapshot; 0 omits spells. (Entries, clamped 0-100; default 20.)
+
+# AzerothVoices.Snapshot.MaximumSpells
+#     Description: Maximum deduplicated highest-rank usable spell names rendered in the
+#                  current snapshot; 0 omits spells. (Entries, clamped 0-100.)
+#     Default:     20
 AzerothVoices.Snapshot.MaximumSpells = 20
-# Maximum occupied quest-log entries rendered in the current snapshot; 0 omits quests. (Entries, clamped 0-20; default 10.)
+
+# AzerothVoices.Snapshot.MaximumQuests
+#     Description: Maximum occupied quest-log entries rendered in the current snapshot;
+#                  0 omits quests. (Entries, clamped 0-20.)
+#     Default:     10
 AzerothVoices.Snapshot.MaximumQuests = 10
-# Maximum line-of-sight creatures rendered after bounded collection and nearest-first sorting; 0 omits creatures. (Entries, clamped 0-50; default 10.)
+
+# AzerothVoices.Snapshot.MaximumCreatures
+#     Description: Maximum line-of-sight creatures rendered after bounded collection and
+#                  nearest-first sorting; 0 omits creatures. (Entries, clamped 0-50.)
+#     Default:     10
 AzerothVoices.Snapshot.MaximumCreatures = 10
-# Maximum spawned line-of-sight game objects rendered after bounded collection and nearest-first sorting; 0 omits game objects. (Entries, clamped 0-50; default 8.)
+
+# AzerothVoices.Snapshot.MaximumGameObjects
+#     Description: Maximum spawned line-of-sight game objects rendered after bounded
+#                  collection and nearest-first sorting; 0 omits game objects. (Entries,
+#                  clamped 0-50.)
+#     Default:     8
 AzerothVoices.Snapshot.MaximumGameObjects = 8
-# Maximum non-GM nearby players rendered after bounded collection and nearest-first sorting; 0 omits players. (Entries, clamped 0-50; default 8.)
+
+# AzerothVoices.Snapshot.MaximumPlayers
+#     Description: Maximum non-GM nearby players rendered after bounded collection and
+#                  nearest-first sorting; 0 omits players. (Entries, clamped 0-50.)
+#     Default:     8
 AzerothVoices.Snapshot.MaximumPlayers = 8
-# Hard cap on the complete current detailed snapshot before it enters the request context budget. (Characters, clamped 256-16000; default 3500.)
+
+# AzerothVoices.Snapshot.MaximumCharacters
+#     Description: Hard cap on the complete current detailed snapshot before it enters
+#                  the request context budget. (Characters, clamped 256-16000.)
+#     Default:     3500
 AzerothVoices.Snapshot.MaximumCharacters = 3500
-# Replaces {combat}, {group}, {spells}, {quests}, {line_of_sight}, and {nearby_players}; disabled or empty sections insert no text. (Text template with literal \n line breaks.)
+
+# AzerothVoices.Snapshot.PromptTemplate
+#     Description: Replaces {combat}, {group}, {spells}, {quests}, {line_of_sight}, and
+#                  {nearby_players}; disabled or empty sections insert no text. (Text
+#                  template with literal \n line breaks.)
 AzerothVoices.Snapshot.PromptTemplate = "CURRENT PLAYERBOT SNAPSHOT:\n{combat}\n{group}\n{spells}\n{quests}\n{line_of_sight}\n{nearby_players}"
-# Controls only older delivered snapshots: 0 stores none while the current snapshot still works, 1 stores bounded RAM until restart, and 2 persists SQL plus a lazy RAM cache (falling back to bounded RAM if tables are unavailable). (Mode 0/1/2; default 0.)
+
+# AzerothVoices.Snapshot.StorageMode
+#     Description: Controls only older delivered snapshots: 0 stores none while the
+#                  current snapshot still works, 1 stores bounded RAM until restart, and
+#                  2 persists SQL plus a lazy RAM cache (falling back to bounded RAM if
+#                  tables are unavailable). (Mode 0/1/2.)
+#     Default:     0
 AzerothVoices.Snapshot.StorageMode = 0
+
+
 # --- SQL MODE SETTINGS (StorageMode = 2) ---
-# Used only when StorageMode = 2 (SQL); snapshots, default 10. Caps persistent rows and lazy-loaded hot-cache snapshots per PlayerBot.
+
+# AzerothVoices.Snapshot.DatabaseMaximumSnapshots
+#     Description: Used only when StorageMode = 2 (SQL); snapshots, default 10. Caps
+#                  persistent rows and lazy-loaded hot-cache snapshots per PlayerBot.
+#     Default:     10
 AzerothVoices.Snapshot.DatabaseMaximumSnapshots = 10
-# Used only when StorageMode = 2 (SQL); minutes, default 10080 (7 days). Older persistent snapshots are not loaded and are deleted by cleanup.
+
+# AzerothVoices.Snapshot.DatabaseTTLMinutes
+#     Description: Used only when StorageMode = 2 (SQL); minutes, default 10080 (7
+#                  days). Older persistent snapshots are not loaded and are deleted by
+#                  cleanup.
+#     Default:     10080 (7 days)
 AzerothVoices.Snapshot.DatabaseTTLMinutes = 10080
+
+
 # --- RAM MODE SETTINGS (StorageMode = 1) ---
-# Used only when StorageMode = 1 (RAM); snapshots, default 3. Caps retained snapshots per PlayerBot until worldserver restarts.
+
+# AzerothVoices.Snapshot.RamMaximumSnapshots
+#     Description: Used only when StorageMode = 1 (RAM); snapshots, default 3. Caps
+#                  retained snapshots per PlayerBot until worldserver restarts.
+#     Default:     3
 AzerothVoices.Snapshot.RamMaximumSnapshots = 3
-# Prompt-age limit for older snapshots in RAM or the SQL hot cache; the current live snapshot is never aged out. (Minutes, minimum 1; default 30.)
+
+# AzerothVoices.Snapshot.HistoryTTLMinutes
+#     Description: Prompt-age limit for older snapshots in RAM or the SQL hot cache; the
+#                  current live snapshot is never aged out. (Minutes, minimum 1.)
+#     Default:     30
 AzerothVoices.Snapshot.HistoryTTLMinutes = 30
-# Hard combined prompt cap for older snapshots, separate from the richer current-snapshot cap. (Characters, minimum 128; default 1600.)
+
+# AzerothVoices.Snapshot.HistoryMaximumCharacters
+#     Description: Hard combined prompt cap for older snapshots, separate from the
+#                  richer current-snapshot cap. (Characters, minimum 128.)
+#     Default:     1600
 AzerothVoices.Snapshot.HistoryMaximumCharacters = 1600
-# Hard bound on in-memory PlayerBot snapshot-history buckets in StorageMode 1 or 2. (Actors, minimum 1; default 2048.)
+
+# AzerothVoices.Snapshot.HistoryMaximumActors
+#     Description: Hard bound on in-memory PlayerBot snapshot-history buckets in
+#                  StorageMode 1 or 2. (Actors, minimum 1.)
+#     Default:     2048
 AzerothVoices.Snapshot.HistoryMaximumActors = 2048
 
-###################################################################################################
-# Structured local RAG (optional, no embeddings or extra provider call)
-###################################################################################################
+# --------------------------------------------
+# 22. STRUCTURED LOCAL RAG (OPTIONAL, NO EMBEDDINGS OR EXTRA PROVIDER CALL)
+# --------------------------------------------
 
-# Loads cached local JSON lore and retrieves by keywords. (Default 0.)
+# AzerothVoices.RAG.Enable
+#     Description: Loads cached local JSON lore and retrieves by keywords.
+#     Default:     0
 AzerothVoices.RAG.Enable = 0
-# Loads every .json file here and also checks the installed and source-tree module data paths so one value works in both deployments. (Directory path.)
+
+# AzerothVoices.RAG.Directory
+#     Description: Loads every .json file here and also checks the installed and source-
+#                  tree module data paths so one value works in both deployments.
+#                  (Directory path.)
 AzerothVoices.RAG.Directory = modules/mod-azeroth-voices/data/rag/
-# Maximum RAG excerpts per provider request. (Entries, minimum 1; default 3.)
+
+# AzerothVoices.RAG.MaximumItems
+#     Description: Maximum RAG excerpts per provider request. (Entries, minimum 1.)
+#     Default:     3
 AzerothVoices.RAG.MaximumItems = 3
-# Minimum local weighted similarity required to include an entry; lower values increase coverage and noise, higher values increase precision and may miss useful lore, with 0.2-0.4 recommended. (Decimal 0.0-1.0; default 0.3.)
+
+# AzerothVoices.RAG.SimilarityThreshold
+#     Description: Minimum local weighted similarity required to include an entry; lower
+#                  values increase coverage and noise, higher values increase precision
+#                  and may miss useful lore, with 0.2-0.4 recommended. (Decimal
+#                  0.0-1.0.)
+#     Default:     0.3
 AzerothVoices.RAG.SimilarityThreshold = 0.3
-# Total structured RAG prompt cap. (Characters, minimum 128; default 1200.)
+
+# AzerothVoices.RAG.MaximumCharacters
+#     Description: Total structured RAG prompt cap. (Characters, minimum 128.)
+#     Default:     1200
 AzerothVoices.RAG.MaximumCharacters = 1200
-# Reloads JSON when the module restarts via `.av restart`. (Default 1.)
+
+# AzerothVoices.RAG.ReloadOnRestart
+#     Description: Reloads JSON when the module restarts via `.av restart`.
+#     Default:     1
 AzerothVoices.RAG.ReloadOnRestart = 1
-# The required {rag_info} placeholder is replaced with the selected local RAG excerpts before the provider request. (Text template with literal \n line breaks.)
+
+# AzerothVoices.RAG.PromptTemplate
+#     Description: The required {rag_info} placeholder is replaced with the selected
+#                  local RAG excerpts before the provider request. (Text template with
+#                  literal \n line breaks.)
 AzerothVoices.RAG.PromptTemplate = "RELEVANT INFORMATION:\n{rag_info}\nUse this information to provide accurate and detailed responses when applicable."
 
-###################################################################################################
-# Azeroth Voices Companion addon and Chatter compatibility
-###################################################################################################
+# --------------------------------------------
+# 23. AZEROTH VOICES COMPANION ADDON AND CHATTER COMPATIBILITY
+# --------------------------------------------
 
-# Enables the `.avaddon` and legacy `.llmc` command channels along with `AZEROTH_VOICES` addon
-# message and legacy `CHATTER_ADDON` system responses used by the bundled AzerothVoices client
-# addon and stock Chatter clients. No GM security is required: a player only ever sees and edits bots
-# in their own contact roster. Requires azeroth_voices_addon_contacts; when that table is missing the
-# roster degrades to empty and every other subsystem keeps working. (Default 1.)
+# AzerothVoices.Addon.Enable
+#     Description: Enables the `.avaddon` and legacy `.llmc` command channels along with
+#                  `AZEROTH_VOICES` addon message and legacy `CHATTER_ADDON` system
+#                  responses used by the bundled AzerothVoices client addon and stock
+#                  Chatter clients. No GM security is required: a player only ever sees
+#                  and edits bots in their own contact roster. Requires
+#                  azeroth_voices_addon_contacts; when that table is missing the roster
+#                  degrades to empty and every other subsystem keeps working.
+#     Default:     1
 AzerothVoices.Addon.Enable = 1
-# Hard bound on the roster returned to one player. (Entries, minimum 1; default 200.)
+
+# AzerothVoices.Addon.MaximumRosterEntries
+#     Description: Hard bound on the roster returned to one player. (Entries, minimum
+#                  1.)
+#     Default:     200
 AzerothVoices.Addon.MaximumRosterEntries = 200

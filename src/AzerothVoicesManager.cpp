@@ -1310,7 +1310,6 @@ namespace AzerothVoices
             m_ingress.clear();
         }
         m_scheduled.clear();
-        m_pendingCoalesce.clear();
         m_actorCooldowns.clear();
         m_eventCooldowns.clear();
         m_history.clear();
@@ -1369,7 +1368,6 @@ namespace AzerothVoices
         if (!m_started || !m_config || !m_config->enabled)
             return;
         DrainIngress();
-        FlushPendingCoalescedChat();
         DrainCompletions();
         ReportTelemetry();
         DeliverScheduled();
@@ -1735,6 +1733,7 @@ namespace AzerothVoices
             }
             // Group chatter is exempt: in-combat callouts are its purpose.
             if (m_config->disableRepliesInCombat && bot->IsInCombat() &&
+                scope != ChatScope::Party && scope != ChatScope::Raid &&
                 trigger.compare(0, 6, "group:") != 0 && trigger.compare(0, 5, "raid:") != 0)
             {
                 RecordPreflightRejection(PreflightReason::Combat);
@@ -2579,96 +2578,8 @@ namespace AzerothVoices
         m_ingress.push_back(std::move(signal));
     }
 
-    void Manager::FlushPendingCoalescedChat()
-    {
-        if (m_pendingCoalesce.empty())
-            return;
-
-        auto const now = Clock::now();
-        std::vector<PendingCoalescedChat> toFlush;
-        for (auto it = m_pendingCoalesce.begin(); it != m_pendingCoalesce.end(); )
-        {
-            if (now >= it->second.flushAt)
-            {
-                toFlush.push_back(std::move(it->second));
-                it = m_pendingCoalesce.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
-
-        for (PendingCoalescedChat const& pending : toFlush)
-        {
-            Player* player = ObjectAccessor::FindPlayer(ObjectGuid(pending.playerGuid));
-            if (!player || !player->IsInWorld())
-                continue;
-
-            ProcessChatImmediate(player, pending.scope, pending.combinedMessage,
-                                 pending.targetName, pending.channelName);
-        }
-    }
-
     void Manager::ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                               std::string const& targetName, std::string const& channelName)
-    {
-        if (!m_started || !m_config || !m_config->enabled || m_paused || !speaker ||
-            message.empty() || !IsScopeEnabled(*m_config, scope) ||
-            IsBlockedChannel(*m_config, scope, channelName) || IsBlacklisted(*m_config, message))
-            return;
-
-        bool const speakerIsBot = Script_IsAIControlled(speaker);
-        if (!speakerIsBot && m_config->speakerCoalesceEnabled && m_config->speakerCoalesceDelayMilliseconds > 0)
-        {
-            SpeakerCoalesceKey key;
-            key.speakerGuid = speaker->GetObjectGuid().GetRawValue();
-            key.scope = scope;
-            key.targetName = Lower(Trim(targetName));
-            key.channelName = Lower(Trim(channelName));
-
-            auto const now = Clock::now();
-            auto it = m_pendingCoalesce.find(key);
-            if (it != m_pendingCoalesce.end())
-            {
-                it->second.combinedMessage += " " + message;
-                it->second.lineCount++;
-                it->second.lastSeen = now;
-                auto const windowDuration = std::chrono::milliseconds(m_config->speakerCoalesceDelayMilliseconds);
-                auto const maxTotalWindow = std::chrono::milliseconds(m_config->speakerCoalesceDelayMilliseconds * 2);
-                it->second.flushAt = std::min(now + windowDuration, it->second.firstSeen + maxTotalWindow);
-
-                if (it->second.lineCount >= m_config->speakerCoalesceMaxLines ||
-                    it->second.combinedMessage.size() >= 500)
-                {
-                    std::string const combined = it->second.combinedMessage;
-                    m_pendingCoalesce.erase(it);
-                    ProcessChatImmediate(speaker, scope, combined, targetName, channelName);
-                }
-                return;
-            }
-            else
-            {
-                PendingCoalescedChat pending;
-                pending.playerGuid = speaker->GetObjectGuid().GetRawValue();
-                pending.scope = scope;
-                pending.targetName = targetName;
-                pending.channelName = channelName;
-                pending.combinedMessage = message;
-                pending.lineCount = 1;
-                pending.firstSeen = now;
-                pending.lastSeen = now;
-                pending.flushAt = now + std::chrono::milliseconds(m_config->speakerCoalesceDelayMilliseconds);
-                m_pendingCoalesce[key] = std::move(pending);
-                return;
-            }
-        }
-
-        ProcessChatImmediate(speaker, scope, message, targetName, channelName);
-    }
-
-    void Manager::ProcessChatImmediate(Player* speaker, ChatScope scope, std::string const& message,
-                                       std::string const& targetName, std::string const& channelName)
     {
         if (!m_started || !m_config || !m_config->enabled || m_paused || !speaker ||
             message.empty() || !IsScopeEnabled(*m_config, scope) ||
@@ -3094,6 +3005,7 @@ namespace AzerothVoices
                 acceptedActorGuid = candidate.actor.guid;
                 responderAccepted = true;
                 ++acceptedResponders;
+                ObjectGuid const selected = speaker->GetSelectionGuid();
                 if (!speakerIsBot && !selected.IsEmpty() && selected.IsPlayer() &&
                     acceptedActorGuid == selected.GetRawValue())
                 {
@@ -6576,13 +6488,6 @@ namespace AzerothVoices
             uint64_t const guid = player->GetObjectGuid().GetRawValue();
             m_addonReassembler.ClearPlayer(guid);
             CancelPendingGuildGreeting(guid);
-            for (auto it = m_pendingCoalesce.begin(); it != m_pendingCoalesce.end(); )
-            {
-                if (it->second.playerGuid == guid)
-                    it = m_pendingCoalesce.erase(it);
-                else
-                    ++it;
-            }
         }
     }
 
@@ -8296,9 +8201,7 @@ namespace AzerothVoices
         if (!m_generalPacing.CanDeliver(key, now))
             return false;
 
-        uint32_t const assumedLineCharacters = m_config->maximumReplyLines
-            ? std::max<uint32_t>(24, m_config->maximumReplyCharacters / m_config->maximumReplyLines)
-            : 80;
+        uint32_t const assumedLineCharacters = std::max<uint32_t>(24, m_config->maximumReplyCharacters);
         uint32_t const duration = EstimateExchangeMilliseconds(
             std::max<size_t>(1, lines), m_config->typingSimulationEnabled,
             m_config->typingBaseDelayMilliseconds,
@@ -9330,7 +9233,7 @@ namespace AzerothVoices
 
         QueueDialogue(botActor, speakerSnapshot, scope, channelName,
             "targeted-bot-observer", message, RequestPriority::Nearby,
-            false, false, 0, nullptr, nullptr, false, nullptr, "", &targetedBotSnapshot);
+            false, false, 0, nullptr, nullptr, false, nullptr, nullptr, "", &targetedBotSnapshot);
 
         if (m_config->debug)
         {
@@ -9424,7 +9327,7 @@ namespace AzerothVoices
 
         QueueDialogue(observerActor, speakerSnapshot, scope, channelName,
             "bot-reply-observer", botReply, RequestPriority::Nearby,
-            false, false, 0, nullptr, nullptr, false, nullptr, playerMessage, &botActor);
+            false, false, 0, nullptr, nullptr, false, nullptr, nullptr, playerMessage, &botActor);
 
         if (m_config->debug)
         {

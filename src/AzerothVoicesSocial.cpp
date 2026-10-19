@@ -1382,12 +1382,13 @@ namespace AzerothVoices
         if (cleaned.empty())
             return {};
 
-        size_t const totalBudget = maximumCharacters;
-        size_t const maxLinePacketLimit = std::min<size_t>(totalBudget, 240);
+        size_t const lineLimit = std::min<size_t>(maximumCharacters, 240);
+        if (lineLimit == 0)
+            return {};
 
         if (!sentenceAware)
         {
-            // Legacy greedy space-splitting behavior bounded by totalBudget
+            // Legacy greedy space-splitting bounded per line
             std::stringstream stream(cleaned);
             std::string line;
             std::vector<std::string> rawLines;
@@ -1395,42 +1396,34 @@ namespace AzerothVoices
                 rawLines.push_back(line);
 
             std::vector<std::string> result;
-            size_t totalCharacters = 0;
             for (std::string l : rawLines)
             {
                 l = StripSpeakerPrefix(l, speakerName);
-                while (!l.empty() && result.size() < maximumLines && totalCharacters < totalBudget)
+                while (!l.empty() && result.size() < maximumLines)
                 {
-                    size_t const remaining = totalBudget - totalCharacters;
-                    size_t const chunkLimit = std::min<size_t>(remaining, maxLinePacketLimit);
-                    if (chunkLimit == 0)
-                        break;
-
-                    if (l.size() <= chunkLimit)
+                    if (l.size() <= lineLimit)
                     {
-                        totalCharacters += l.size();
                         result.push_back(l);
                         break;
                     }
-                    size_t split = l.rfind(' ', chunkLimit);
-                    if (split == std::string::npos || split < chunkLimit / 2)
-                        split = chunkLimit;
+                    size_t split = l.rfind(' ', lineLimit);
+                    if (split == std::string::npos || split < lineLimit / 2)
+                        split = lineLimit;
                     std::string chunk = trimStr(l.substr(0, split));
                     if (!chunk.empty())
                     {
-                        totalCharacters += chunk.size();
                         result.push_back(chunk);
                     }
                     l = trimStr(l.substr(split));
                     l = StripSpeakerPrefix(l, speakerName);
                 }
-                if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                if (result.size() >= maximumLines)
                     break;
             }
             return result;
         }
 
-        // Sentence-aware structured splitting respecting cumulative total budget
+        // Sentence-aware structured splitting with independent per-line budgeting
         std::stringstream stream(cleaned);
         std::string paragraph;
         std::vector<std::string> paragraphs;
@@ -1442,18 +1435,17 @@ namespace AzerothVoices
         }
 
         std::vector<std::string> result;
-        size_t totalCharacters = 0;
         std::string currentLine;
 
         for (std::string const& para : paragraphs)
         {
-            if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+            if (result.size() >= maximumLines)
                 break;
 
             std::vector<std::string> sentences = SplitIntoSentences(para);
             for (std::string const& s : sentences)
             {
-                if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                if (result.size() >= maximumLines)
                     break;
 
                 if (s.empty())
@@ -1461,95 +1453,86 @@ namespace AzerothVoices
 
                 if (currentLine.empty())
                 {
-                    size_t const remaining = (totalBudget > totalCharacters) ? (totalBudget - totalCharacters) : 0;
-                    if (remaining == 0)
-                        break;
-
-                    size_t const lineLimit = std::min<size_t>(remaining, maxLinePacketLimit);
                     if (s.size() <= lineLimit)
                     {
                         currentLine = s;
                     }
-                    else if (result.empty())
+                    else
                     {
-                        // First line must fit what it can into the budget
                         std::vector<std::string> chunks = SplitSingleSentence(s, lineLimit);
                         for (size_t k = 0; k < chunks.size(); ++k)
                         {
                             if (k + 1 < chunks.size())
                             {
-                                if (result.size() < maximumLines && totalCharacters + chunks[k].size() <= totalBudget)
+                                if (result.size() < maximumLines)
                                 {
-                                    totalCharacters += chunks[k].size();
                                     result.push_back(chunks[k]);
-                                    if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                                    if (result.size() >= maximumLines)
                                         break;
                                 }
                             }
                             else
                             {
-                                if (totalCharacters + chunks[k].size() <= totalBudget)
-                                    currentLine = chunks[k];
+                                currentLine = chunks[k];
                             }
                         }
-                    }
-                    else
-                    {
-                        // Clean stop at sentence boundary if previous complete lines exist
-                        break;
                     }
                 }
                 else
                 {
-                    size_t const committed = totalCharacters + currentLine.size();
-                    size_t const remaining = (totalBudget > committed) ? (totalBudget - committed) : 0;
-
-                    // Check if appending s fits in line limit and remaining budget
-                    if (1 + s.size() <= remaining && currentLine.size() + 1 + s.size() <= maxLinePacketLimit)
+                    // Check if appending s fits in current line limit
+                    if (currentLine.size() + 1 + s.size() <= lineLimit)
                     {
                         currentLine += " " + s;
                     }
                     else
                     {
-                        // Current line ends cleanly at sentence boundary!
+                        // Commit current line
                         result.push_back(currentLine);
-                        totalCharacters += currentLine.size();
                         currentLine.clear();
 
-                        if (result.size() >= maximumLines || totalCharacters >= totalBudget)
+                        if (result.size() >= maximumLines)
                             break;
 
-                        size_t const newRemaining = (totalBudget > totalCharacters) ? (totalBudget - totalCharacters) : 0;
-                        if (newRemaining == 0)
-                            break;
-
-                        size_t const newLineLimit = std::min<size_t>(newRemaining, maxLinePacketLimit);
-                        if (s.size() <= newLineLimit)
+                        if (s.size() <= lineLimit)
                         {
                             currentLine = s;
                         }
                         else
                         {
-                            // Clean stop at complete sentence boundary already committed
-                            break;
+                            std::vector<std::string> chunks = SplitSingleSentence(s, lineLimit);
+                            for (size_t k = 0; k < chunks.size(); ++k)
+                            {
+                                if (k + 1 < chunks.size())
+                                {
+                                    if (result.size() < maximumLines)
+                                    {
+                                        result.push_back(chunks[k]);
+                                        if (result.size() >= maximumLines)
+                                            break;
+                                    }
+                                }
+                                else
+                                {
+                                    currentLine = chunks[k];
+                                }
+                            }
                         }
                     }
                 }
             }
 
             // Paragraph boundary: flush currentLine
-            if (!currentLine.empty())
+            if (!currentLine.empty() && result.size() < maximumLines)
             {
                 result.push_back(currentLine);
-                totalCharacters += currentLine.size();
                 currentLine.clear();
             }
         }
 
-        if (!currentLine.empty() && result.size() < maximumLines && totalCharacters + currentLine.size() <= totalBudget)
+        if (!currentLine.empty() && result.size() < maximumLines)
         {
             result.push_back(currentLine);
-            totalCharacters += currentLine.size();
             currentLine.clear();
         }
 

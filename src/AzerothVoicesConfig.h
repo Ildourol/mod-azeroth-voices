@@ -80,9 +80,6 @@ namespace AzerothVoices
         uint32_t retryMaximum = 1;
         uint32_t retryBackoffMilliseconds = 500;
         uint32_t globalRequestsPerMinute = 60;
-        bool speakerCoalesceEnabled = true;
-        uint32_t speakerCoalesceDelayMilliseconds = 2000;
-        uint32_t speakerCoalesceMaxLines = 3;
 
         GlobalMode globalMode = GlobalMode::Normal;
         std::string globalPromptRoleplay;
@@ -111,6 +108,10 @@ namespace AzerothVoices
         uint32_t personalityGenerationRetrySeconds = 300;
         uint32_t personalityMaxBackgroundCharacters = 500;
         uint32_t personalityMaxPromptCharacters = 700;
+        std::string personalityPromptRoleplay;
+        std::string personalityPromptNormal;
+        std::string personalityPromptTraits;
+        std::string personalityPromptTone;
 
         bool sentimentEnabled = false;
         bool sentimentUseInRandom = false;
@@ -402,7 +403,7 @@ namespace AzerothVoices
         uint32_t typingBaseDelayMilliseconds = 0;
         TypingDelayRange typingDelayPerCharacterMilliseconds;
         bool subtractGenerationTime = true;
-        uint32_t maximumReplyCharacters = 140;
+        uint32_t maximumReplyCharacters = 80;
         uint32_t maximumReplyLines = 2;
         bool sentenceAwareSplitting = true;
 

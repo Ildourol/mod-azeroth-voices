@@ -783,26 +783,23 @@ namespace AzerothVoices
         }
 
         std::vector<std::string> result;
-        size_t currentTotalChars = 0;
         for (std::string const& raw : rawLines)
         {
-            if (result.size() >= config.maximumReplyLines || currentTotalChars >= config.maximumReplyCharacters)
+            if (result.size() >= config.maximumReplyLines)
                 break;
 
             size_t remainingLines = config.maximumReplyLines - result.size();
-            size_t remainingBudget = config.maximumReplyCharacters - currentTotalChars;
             std::vector<std::string> parts = SplitReplyLinesStructured(
                 raw,
                 speakerName,
-                remainingBudget,
+                config.maximumReplyCharacters,
                 remainingLines,
                 config.sentenceAwareSplitting);
 
             for (std::string& p : parts)
             {
-                currentTotalChars += p.size();
                 result.push_back(std::move(p));
-                if (result.size() >= config.maximumReplyLines || currentTotalChars >= config.maximumReplyCharacters)
+                if (result.size() >= config.maximumReplyLines)
                     break;
             }
         }

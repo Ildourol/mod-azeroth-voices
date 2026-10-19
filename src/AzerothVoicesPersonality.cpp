@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <exception>
+#include <random>
 #include <set>
 #include <sstream>
 
@@ -156,17 +157,14 @@ namespace AzerothVoices
         }
         else
         {
-            prompt << " The object must contain only traits, tone, and background. traits must be an array of exactly "
-                   << PersonalityTraitCount
-                   << " distinct concise descriptors chosen freely so their combination feels specific, varied, and "
-                      "internally coherent. Do not use a fixed trait checklist, and do not merely restate race or "
-                      "class. ";
+            prompt << " The object must contain only traits, tone, and background. "
+                   << config.personalityPromptTraits << " ";
         }
 
         if (mode != PersonalityGenerationMode::BackgroundOnly)
         {
             if (config.personalityGenerateTone)
-                prompt << "tone must be a concise speaking-style description derived from the traits. ";
+                prompt << config.personalityPromptTone << " ";
             else
                 prompt << "tone must be an empty string. ";
         }
@@ -176,20 +174,9 @@ namespace AzerothVoices
             if (!config.personalityGenerateBackground)
                 prompt << "background must be an empty string. ";
             else if (config.personalityBackgroundMode == 0)
-                prompt << "background must be a short, freely imagined backstory for an actual character living in "
-                          "Vanilla/Turtle WoW-era Azeroth. Invent it without a fixed biography template or supplied story "
-                          "ingredients. Keep it plausible for the supplied race, class, faction, and gender, avoid "
-                          "later-expansion assumptions, and favor a distinctive believable premise over a generic WoW "
-                          "archetype. ";
+                prompt << "background must follow this guidance: " << config.personalityPromptRoleplay << " ";
             else
-                prompt << "background must be a short, freely imagined fictional real-world backstory for a person who "
-                          "plays World of Warcraft. Invent the player's life and relationship with WoW without a fixed "
-                          "biography template or supplied life ingredients. Choose one specific adult real-life age at "
-                          "random from 18 through 60 and state that age naturally in the background story. Treat the "
-                          "supplied race, class, faction, and gender as properties of the in-game avatar only and do not "
-                          "infer the real person's identity from them. Do not impersonate a real person, favor a distinctive "
-                          "believable persona over a generic gamer stereotype, and avoid gratuitous modern-platform "
-                          "references. ";
+                prompt << "background must follow this guidance: " << config.personalityPromptNormal << " ";
 
             prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
                       "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. "
@@ -225,6 +212,14 @@ namespace AzerothVoices
                << "\nGender: " << actor.gender
                << "\nBackground mode: "
                << (config.personalityBackgroundMode == 0 ? "roleplay Azeroth character" : "fictional real-world WoW player");
+
+        if (config.personalityBackgroundMode != 0)
+        {
+            static thread_local std::mt19937 engine(std::random_device{}());
+            uint32_t const realLifeAge = std::uniform_int_distribution<uint32_t>(19, 58)(engine);
+            prompt << "\nPlayer real-life age: " << realLifeAge;
+        }
+
         if (mode != PersonalityGenerationMode::Full && !fixed.traits.empty())
         {
             prompt << "\nFixed personality traits: " << JoinPersonalityTraits(fixed.traits);

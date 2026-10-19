@@ -39,15 +39,25 @@ namespace AzerothVoices
         else if (t.rfind("raid:", 0) == 0)
             t = t.substr(5);
 
+        // Normalize hyphens to underscores for uniform comparison across hyphenated and snake_case triggers
+        std::replace(t.begin(), t.end(), '-', '_');
+
         // Urgent: critical combat events, low resources, wipes, boss pulls
         if (t == "low_health" || t == "low_mana" || t == "aggro_loss" ||
             t == "boss_pull" || t == "wipe" || t == "battle_cry")
             return PartyGatePolicy::Urgent;
 
         // Responsive: direct replies to player, follow-ups to player questions
-        if (t == "player_directed" || t == "player_followup" || t == "name_directed" ||
-            t == "player-reply" || t == "name-mention" || t == "direct-address" ||
-            t == "direct" || t == "targeted-npc-observer" || t == "npc-reply-observer")
+        if (t == "player_directed" || t == "player-directed" ||
+            t == "player_followup" || t == "player-followup" ||
+            t == "name_directed" || t == "name-directed" ||
+            t == "player-reply" || t == "player_reply" ||
+            t == "name-mention" || t == "name_mention" ||
+            t == "direct-address" || t == "direct_address" ||
+            t == "direct" || t == "direct-chat" || t == "direct_chat" ||
+            t == "overheard-chat" || t == "overheard_chat" ||
+            t == "targeted-npc-observer" || t == "npc-reply-observer" ||
+            t == "targeted-bot-observer" || t == "bot-reply-observer")
             return PartyGatePolicy::Responsive;
 
         // Contextual: game progression events (dungeon entry, zone changes, kills, loot, quests, resurrections)

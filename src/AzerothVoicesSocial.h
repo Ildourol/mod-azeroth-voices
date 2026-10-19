@@ -362,7 +362,7 @@ namespace AzerothVoices
     std::vector<std::string> SplitIntoSentences(std::string const& text);
 
     // Splits reply dialogue into structured lines respecting sentence and clause boundaries
-    // up to a cumulative total of maximumCharacters across all delivered lines and maximumLines in total.
+    // up to maximumCharacters per delivered line and maximumLines in total.
     std::vector<std::string> SplitReplyLinesStructured(
         std::string const& text,
         std::string const& speakerName,

@@ -357,9 +357,6 @@ namespace AzerothVoices
         void DrainIngress();
         void ProcessChat(Player* speaker, ChatScope scope, std::string const& message,
                          std::string const& targetName, std::string const& channelName);
-        void ProcessChatImmediate(Player* speaker, ChatScope scope, std::string const& message,
-                                  std::string const& targetName, std::string const& channelName);
-        void FlushPendingCoalescedChat();
         bool ProcessPlayerSay(Player* speaker, std::string const& message,
                               std::string const& targetName, std::string const& channelName,
                               Creature** outHandledNpc = nullptr);
@@ -583,37 +580,6 @@ namespace AzerothVoices
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;
         DeliveryTimeline m_generalPacing;
         DeliveryTimeline m_partyPacing;
-
-        // Player message coalescing / input debounce
-        struct SpeakerCoalesceKey
-        {
-            uint64_t speakerGuid = 0;
-            ChatScope scope = ChatScope::Say;
-            std::string targetName;
-            std::string channelName;
-
-            bool operator<(SpeakerCoalesceKey const& other) const
-            {
-                if (speakerGuid != other.speakerGuid) return speakerGuid < other.speakerGuid;
-                if (scope != other.scope) return scope < other.scope;
-                if (targetName != other.targetName) return targetName < other.targetName;
-                return channelName < other.channelName;
-            }
-        };
-
-        struct PendingCoalescedChat
-        {
-            uint64_t playerGuid = 0;
-            ChatScope scope = ChatScope::Say;
-            std::string targetName;
-            std::string channelName;
-            std::string combinedMessage;
-            uint32_t lineCount = 0;
-            std::chrono::steady_clock::time_point firstSeen;
-            std::chrono::steady_clock::time_point lastSeen;
-            std::chrono::steady_clock::time_point flushAt;
-        };
-        std::map<SpeakerCoalesceKey, PendingCoalescedChat> m_pendingCoalesce;
 
         std::chrono::steady_clock::time_point m_nextGeneralTrigger;
         GeneralSpeakerTracker m_generalSpeakerTracker;
