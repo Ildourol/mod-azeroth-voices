@@ -116,7 +116,7 @@ AzerothVoices.MaxResponseBytes = 65536
 # AzerothVoices.MaxTokens
 #     Description: Requested output limit in generated provider JSON. (Tokens, minimum
 #                  1.)
-#     Default:     50
+#     Default:     100
 #
 #     IMPORTANT: this cap covers reasoning AND the reply. On a reasoning model
 #     (gpt-oss, deepseek-r1, qwen3 thinking builds) the reasoning is emitted
@@ -132,7 +132,7 @@ AzerothVoices.MaxResponseBytes = 65536
 #     |     50     |   ~35–38      | Slightly longer reply            |
 #     |     75     |   ~50–60      | Long quest/lore text             |
 #     |    100+    |   70–80+      | Multi-paragraph (not typical)    |
-AzerothVoices.MaxTokens = 50
+AzerothVoices.MaxTokens = 100
 
 # AzerothVoices.Thinking.Mode
 #     Description: Official-endpoint Thinking policy. Only api.openai.com and
@@ -2305,13 +2305,13 @@ AzerothVoices.Typing.BaseDelayMilliseconds = 0
 #     - 250ms per char = 4 chars/sec (average human)
 #     - 150ms per char = 6.7 chars/sec (proficient)
 #     - 100ms per char = 10 chars/sec (professional)
-AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 150
+AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds = 100
 
 # AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds
 #     Description: Maximum natural typing delay; values below the minimum are swapped
 #                  safely. (Ms/character, minimum 0.)
 #     Default:     200
-AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 250
+AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds = 200
 
 # AzerothVoices.Typing.SubtractGenerationTime
 #     Description: Legacy compatibility: if both range keys above are absent,
@@ -2327,8 +2327,8 @@ AzerothVoices.Typing.SubtractGenerationTime = 1
 #                  cleanly split on sentence and clause boundaries so each message
 #                  fits within this character limit without sentence starvation.
 #                  (Characters, minimum 1.)
-#     Default:     80
-AzerothVoices.Reply.MaximumCharacters = 80
+#     Default:     120
+AzerothVoices.Reply.MaximumCharacters = 120
 
 # AzerothVoices.Reply.MaximumLines
 #     Description: Maximum delivered lines/parts per request. Limits the number of
