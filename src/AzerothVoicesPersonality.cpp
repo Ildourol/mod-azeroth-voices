@@ -545,49 +545,27 @@ namespace AzerothVoices
             personality.backgroundMode != config.personalityBackgroundMode)
             return false;
 
-        // 1. Direct question priority: if directly asked about backstory/origin, always 100% include
-        if (directConversation && IsBackstoryInquiry(message))
-            return true;
+        // 1. Tactical & combat suppression: never inject during combat, boss encounters, tactical actions, duels, or pvp
+        if (trigger == "combat" || trigger == "boss-dialogue" || trigger == "aggro" ||
+            trigger == "assist" || trigger == "tactical" || trigger == "spell-cast" ||
+            trigger == "heal-request" || trigger == "death" || trigger == "flee" ||
+            trigger.compare(0, 5, "duel:") == 0 || trigger.compare(0, 4, "pvp:") == 0)
+            return false;
 
         // 2. Brief casual messages suppress backstory
         if (IsBriefCasualMessage(message))
             return false;
 
-        // 3. Tactical & combat suppression: never inject during combat, boss encounters, or tactical actions
-        if (trigger == "combat" || trigger == "boss-dialogue" || trigger == "aggro" ||
-            trigger == "assist" || trigger == "tactical" || trigger == "spell-cast" ||
-            trigger == "heal-request" || trigger == "death" || trigger == "flee")
-            return false;
+        // 3. Strict inquiry & context gating: include ONLY when directly asked or mentioned
+        if (IsBackstoryInquiry(message))
+            return true;
 
-        // 4. Roll against scope-specific chance
-        uint32_t chance = 0;
-        switch (scope)
-        {
-            case ChatScope::Whisper:
-                chance = 100;
-                break;
-            case ChatScope::Party:
-            case ChatScope::Raid:
-                chance = ambient ? config.personalityBackstoryIdleChance : config.personalityBackstoryPartyChance;
-                break;
-            case ChatScope::Say:
-            case ChatScope::Yell:
-                chance = config.personalityBackstoryProximityChance;
-                break;
-            case ChatScope::Channel:
-            case ChatScope::World:
-                chance = config.personalityBackstoryGeneralChance;
-                break;
-            case ChatScope::Guild:
-            case ChatScope::Officer:
-                chance = config.personalityBackstoryGuildChance;
-                break;
-            default:
-                chance = 0;
-                break;
-        }
+        // 4. Explicit origin/lore-sharing event triggers
+        if (trigger == "story-share" || trigger == "lore-share" || trigger == "campfire-story")
+            return true;
 
-        return RollPersonalityChance(chance);
+        // All routine dialogue, ambient banter, and unprompted turns omit backstory
+        return false;
     }
 
     std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality,

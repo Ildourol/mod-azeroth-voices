@@ -401,47 +401,16 @@ AzerothVoices.Personality.UseInEvents = 1
 AzerothVoices.Personality.GenerationRetrySeconds = 15
 
 # AzerothVoices.Personality.MaxBackgroundChars
-#     Description: Bounds a generated stored background; accepted range 100-1500
-#                  characters; default 500.
-#     Default:     500
-AzerothVoices.Personality.MaxBackgroundChars = 1200
+#     Description: Bounds a generated stored background; accepted range 100-600
+#                  characters; default 350.
+#     Default:     350
+AzerothVoices.Personality.MaxBackgroundChars = 350
 
 # AzerothVoices.Personality.MaxPromptChars
 #     Description: Bounds personality and background text inserted into each prompt;
-#                  accepted range 100-2000 characters; default 700.
-#     Default:     700
-AzerothVoices.Personality.MaxPromptChars = 700
-
-# AzerothVoices.Personality.Backstory.PartyChance
-#     Description: Percentage chance that a bot's backstory is included in routine party replies;
-#                  direct questions about backstory/origin always carry 100% chance; accepted
-#                  range 0-100; default 50.
-#     Default:     25
-AzerothVoices.Personality.Backstory.PartyChance = 25
-
-# AzerothVoices.Personality.Backstory.IdleChance
-#     Description: Percentage chance that a bot's backstory is included during idle group chatter;
-#                  accepted range 0-100; default 25.
-#     Default:     15
-AzerothVoices.Personality.Backstory.IdleChance = 15
-
-# AzerothVoices.Personality.Backstory.ProximityChance
-#     Description: Percentage chance that a bot's backstory is included in proximity /say or /yell;
-#                  accepted range 0-100; default 15.
-#     Default:     15
-AzerothVoices.Personality.Backstory.ProximityChance = 15
-
-# AzerothVoices.Personality.Backstory.GeneralChance
-#     Description: Percentage chance that a bot's backstory is included in General chat;
-#                  accepted range 0-100; default 25.
-#     Default:     25
-AzerothVoices.Personality.Backstory.GeneralChance = 25
-
-# AzerothVoices.Personality.Backstory.GuildChance
-#     Description: Percentage chance that a bot's backstory is included in Guild chat;
-#                  accepted range 0-100; default 25.
-#     Default:     25
-AzerothVoices.Personality.Backstory.GuildChance = 25
+#                  accepted range 100-1000 characters; default 500.
+#     Default:     500
+AzerothVoices.Personality.MaxPromptChars = 500
 
 
 # AzerothVoices.Personality.Prompt.Roleplay

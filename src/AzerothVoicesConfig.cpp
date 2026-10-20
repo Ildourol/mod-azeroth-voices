@@ -238,19 +238,9 @@ namespace AzerothVoices
         c.personalityGenerationRetrySeconds = Bounded(
             "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
         c.personalityMaxBackgroundCharacters = Bounded(
-            "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
+            "AzerothVoices.Personality.MaxBackgroundChars", 350, 100, 600);
         c.personalityMaxPromptCharacters = Bounded(
-            "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
-        c.personalityBackstoryPartyChance = Bounded(
-            "AzerothVoices.Personality.Backstory.PartyChance", 25, 0, 100);
-        c.personalityBackstoryIdleChance = Bounded(
-            "AzerothVoices.Personality.Backstory.IdleChance", 15, 0, 100);
-        c.personalityBackstoryProximityChance = Bounded(
-            "AzerothVoices.Personality.Backstory.ProximityChance", 15, 0, 100);
-        c.personalityBackstoryGeneralChance = Bounded(
-            "AzerothVoices.Personality.Backstory.GeneralChance", 25, 0, 100);
-        c.personalityBackstoryGuildChance = Bounded(
-            "AzerothVoices.Personality.Backstory.GuildChance", 25, 0, 100);
+            "AzerothVoices.Personality.MaxPromptChars", 500, 100, 1000);
 
         std::string const defaultPersonalityRoleplayPrompt =
             "Write a concise, immersive 3-4 sentence backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "

@@ -464,7 +464,7 @@ function AzerothVoices:BuildEditor(panel)
     panel.tone = createToneBox(content, 0, -166, contentWidth, 58)
 
     -- Background Story
-    local lStory = createLabel(content, "Background Story", 0, -236)
+    local lStory = createLabel(content, "Background Story (Origin Context, Max 350 Chars)", 0, -236)
     panel.backstory = createBackstoryBox(content, 0, -254, contentWidth, 158)
 
     -- Regenerate Story Button
@@ -472,6 +472,17 @@ function AzerothVoices:BuildEditor(panel)
         AzerothVoices:RegenBackstory()
     end, 24)
     regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -424)
+    regenStoryBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_TOP")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Generate Background Story", 1, 1, 1)
+        GameTooltip:AddLine("Generates a compact 3-4 sentence origin (max 350 chars) via LLM.", 0.8, 0.8, 0.8, 1)
+        GameTooltip:AddLine("Injected only when the bot is directly asked about their past.", 0.3, 1, 0.3, 1)
+        GameTooltip:Show()
+    end)
+    regenStoryBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     regenStoryBtn:Disable()
     panel.regenStoryBtn = regenStoryBtn
 

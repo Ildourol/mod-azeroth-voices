@@ -512,13 +512,8 @@
 | [`AzerothVoices.Personality.UseInRandom`](#azerothvoicespersonalityuseinrandom) | Boolean (`0` or `1`) | `1` | Uses the persistent PlayerBot personality in random/ambient and generated-f... |
 | [`AzerothVoices.Personality.UseInEvents`](#azerothvoicespersonalityuseinevents) | Boolean (`0` or `1`) | `1` | Uses the persistent PlayerBot personality in automatic and adapter event pr... |
 | [`AzerothVoices.Personality.GenerationRetrySeconds`](#azerothvoicespersonalitygenerationretryseconds) | Integer (Seconds) | `300` | Sets the minimum delay after failed generation before the same bot can retr... |
-| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer | `500` | Bounds a generated stored background; accepted range 100-1500 characters; d... |
-| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer | `700` | Bounds personality and background text inserted into each prompt; accepted ... |
-| [`AzerothVoices.Personality.Backstory.PartyChance`](#azerothvoicespersonalitybackstorypartychance) | Integer (0-100) | `25` | Percentage chance that a bot's backstory is included in routine party replies... |
-| [`AzerothVoices.Personality.Backstory.IdleChance`](#azerothvoicespersonalitybackstoryidlechance) | Integer (0-100) | `15` | Percentage chance that a bot's backstory is included during idle group chatter... |
-| [`AzerothVoices.Personality.Backstory.ProximityChance`](#azerothvoicespersonalitybackstoryproximitychance) | Integer (0-100) | `15` | Percentage chance that a bot's backstory is included in proximity /say or /yell... |
-| [`AzerothVoices.Personality.Backstory.GeneralChance`](#azerothvoicespersonalitybackstorygeneralchance) | Integer (0-100) | `25` | Percentage chance that a bot's backstory is included in General chat... |
-| [`AzerothVoices.Personality.Backstory.GuildChance`](#azerothvoicespersonalitybackstoryguildchance) | Integer (0-100) | `25` | Percentage chance that a bot's backstory is included in Guild chat... |
+| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer | `350` | Bounds a generated stored background; accepted range 100-600 characters; de... |
+| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer | `500` | Bounds personality and background text inserted into each prompt; accepted ... |
 | [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth...` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0). |
 | [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a concise, realistic backstory for a fictional person who plays World of Warcraft...` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1). |
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
@@ -584,51 +579,16 @@
 ### <a id="azerothvoicespersonalitymaxbackgroundchars"></a>`AzerothVoices.Personality.MaxBackgroundChars`
 
 - **Data Type**: Integer
-- **Default Value**: `500`
-- **Description**: Bounds a generated stored background; accepted range 100-1500 characters; default 500.
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Default Value**: `350`
+- **Description**: Bounds a generated stored background; accepted range 100-600 characters; default 350.
+- **Operator Guidance & Impact**: Restricts backstories to compact, concise 3–4 sentence origins (~50–70 tokens). Fits within the 500-character total prompt budget without mid-sentence truncation.
 
 ### <a id="azerothvoicespersonalitymaxpromptchars"></a>`AzerothVoices.Personality.MaxPromptChars`
 
 - **Data Type**: Integer
-- **Default Value**: `700`
-- **Description**: Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 700.
-- **Operator Guidance & Impact**: Limits prompt context injected into LLM requests. Keep balanced to ensure bot personalities, memories, and surrounding dialogue fit comfortably within LLM context windows without token bloat.
-
-### <a id="azerothvoicespersonalitybackstorypartychance"></a>`AzerothVoices.Personality.Backstory.PartyChance`
-
-- **Data Type**: Integer (0-100)
-- **Default Value**: `25`
-- **Description**: Percentage chance that a bot's backstory is included in routine party replies. Direct questions about backstory/origin always carry 100% chance.
-- **Operator Guidance & Impact**: Keeps prompt tokens lightweight (~25 tokens baseline for traits + tone) while naturally sampling the 3-4 sentence origin context. When included, it is framed with negative steering ("don't force it") so bots do not recite their memoirs unprompted.
-
-### <a id="azerothvoicespersonalitybackstoryidlechance"></a>`AzerothVoices.Personality.Backstory.IdleChance`
-
-- **Data Type**: Integer (0-100)
-- **Default Value**: `15`
-- **Description**: Percentage chance that a bot's backstory is included during idle group chatter.
-- **Operator Guidance & Impact**: Provides occasional natural character flavor during campfire/rest downtime without monopolizing chat.
-
-### <a id="azerothvoicespersonalitybackstoryproximitychance"></a>`AzerothVoices.Personality.Backstory.ProximityChance`
-
-- **Data Type**: Integer (0-100)
-- **Default Value**: `15`
-- **Description**: Percentage chance that a bot's backstory is included in proximity `/say` or `/yell`.
-- **Operator Guidance & Impact**: Keeps world proximity dialogue focused on immediate physical surroundings while allowing rare references to a character's origins.
-
-### <a id="azerothvoicespersonalitybackstorygeneralchance"></a>`AzerothVoices.Personality.Backstory.GeneralChance`
-
-- **Data Type**: Integer (0-100)
-- **Default Value**: `25`
-- **Description**: Percentage chance that a bot's backstory is included in General chat (`/1`).
-- **Operator Guidance & Impact**: Regulates world-channel personal background references.
-
-### <a id="azerothvoicespersonalitybackstoryguildchance"></a>`AzerothVoices.Personality.Backstory.GuildChance`
-
-- **Data Type**: Integer (0-100)
-- **Default Value**: `25`
-- **Description**: Percentage chance that a bot's backstory is included in Guild chat (`/g`).
-- **Operator Guidance & Impact**: Balances guild banter between active daily conversation and occasional personal lore references.
+- **Default Value**: `500`
+- **Description**: Bounds personality and background text inserted into each prompt; accepted range 100-1000 characters; default 500.
+- **Operator Guidance & Impact**: Limits combined persona context (traits + tone + contextually gated backstory) injected into LLM requests. Strictly prevents token bloat while ensuring complete descriptions are never sliced.
 
 ### <a id="azerothvoicespersonalitypromptroleplay"></a>`AzerothVoices.Personality.Prompt.Roleplay`
 
