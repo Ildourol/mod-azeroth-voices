@@ -191,7 +191,7 @@ namespace AzerothVoices
                 prompt << "JSON shape: {\"tone\":\"...\",\"background\":\"...\"}.";
                 break;
             case PersonalityGenerationMode::BackgroundOnly:
-                prompt << "JSON shape: {\"background\":\"...\"}.";
+                prompt << "JSON shape: {\"background\":\"...\"}. The \"background\" property must contain the backstory paragraph.";
                 break;
             case PersonalityGenerationMode::ToneOnly:
                 prompt << "JSON shape: {\"tone\":\"...\"}.";
@@ -279,22 +279,37 @@ namespace AzerothVoices
         {
             Json root;
             std::string const trimmed = Trim(response);
+            bool isJson = false;
             try
             {
                 root = Json::parse(trimmed);
+                isJson = root.is_object();
             }
-            catch (std::exception const& directError)
+            catch (std::exception const& /*directError*/)
             {
-                if (!TryParseEmbeddedJsonObject(trimmed, root))
+                if (TryParseEmbeddedJsonObject(trimmed, root) && root.is_object())
+                    isJson = true;
+            }
+
+            if (!isJson)
+            {
+                // Fallback for single-field modes (BackgroundOnly / ToneOnly) if LLM responded with free text
+                // like mod-llm-chatter-wotlk does (no JSON brackets, plain text response).
+                if (mode == PersonalityGenerationMode::BackgroundOnly && !trimmed.empty() && trimmed.front() != '<' && trimmed.front() != '[')
                 {
-                    error = std::string("personality response JSON error: ") + directError.what();
+                    root = Json::object();
+                    root["background"] = trimmed;
+                }
+                else if (mode == PersonalityGenerationMode::ToneOnly && !trimmed.empty() && trimmed.front() != '<' && trimmed.front() != '[')
+                {
+                    root = Json::object();
+                    root["tone"] = trimmed;
+                }
+                else
+                {
+                    error = "personality response is not a JSON object";
                     return false;
                 }
-            }
-            if (!root.is_object())
-            {
-                error = "personality response is not a JSON object";
-                return false;
             }
             static std::set<std::string> const allowed = { "traits", "tone", "background" };
             for (auto it = root.begin(); it != root.end(); ++it)
@@ -370,10 +385,14 @@ namespace AzerothVoices
                 tone = CleanGeneratedText(root["tone"].get<std::string>());
             }
             if (mode != PersonalityGenerationMode::BackgroundOnly && config.personalityGenerateTone &&
-                (tone.empty() || tone.size() > 200))
+                tone.empty())
             {
-                error = "personality tone is empty or longer than 200 characters";
+                error = "personality tone is empty";
                 return false;
+            }
+            if (mode != PersonalityGenerationMode::BackgroundOnly && tone.size() > 200)
+            {
+                tone = HeadBounded(tone, 200);
             }
             if (mode != PersonalityGenerationMode::BackgroundOnly && !config.personalityGenerateTone)
                 tone.clear();
@@ -390,11 +409,14 @@ namespace AzerothVoices
             }
             bool const expectBackground = mode != PersonalityGenerationMode::ToneOnly &&
                 (config.personalityGenerateBackground || mode == PersonalityGenerationMode::BackgroundOnly);
-            if (expectBackground &&
-                (background.empty() || background.size() > config.personalityMaxBackgroundCharacters))
+            if (expectBackground && background.empty())
             {
-                error = "personality background is empty or exceeds MaxBackgroundChars";
+                error = "personality background is empty";
                 return false;
+            }
+            if (expectBackground && background.size() > config.personalityMaxBackgroundCharacters)
+            {
+                background = HeadBounded(background, config.personalityMaxBackgroundCharacters);
             }
             personality = BotPersonality();
             personality.characterGuid = actor.guid;
@@ -413,7 +435,20 @@ namespace AzerothVoices
         }
     }
 
-    std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality)
+    namespace
+    {
+        bool RollPersonalityChance(uint32_t chance)
+        {
+            if (chance == 0)
+                return false;
+            if (chance >= 100)
+                return true;
+            static thread_local std::mt19937 engine(std::random_device{}());
+            return std::uniform_int_distribution<uint32_t>(1, 100)(engine) <= chance;
+        }
+    }
+
+    std::string BuildVoicePromptBlock(Config const& config, BotPersonality const& personality)
     {
         if (!config.personalityEnabled || personality.traits.empty())
             return "";
@@ -422,19 +457,171 @@ namespace AzerothVoices
         if (config.personalityBackgroundMode == 0)
             block << "You are a distinct character in Azeroth's story. ";
         else
-            block << "You portray a distinct fictional real-world World of Warcraft player behind this character; ordinary out-of-game life details from this persona are allowed when natural, but remain focused on WoW and never impersonate a real person. ";
-        block << "Your personality traits are " << JoinPersonalityTraits(personality.traits)
-              << ". Let them naturally shape vocabulary, opinions, humor, confidence, caution, emotions, and social behavior; "
-                 "do not list or announce the traits in dialogue.";
+            block << "You portray a distinct fictional player behind this character; focus on WoW and never impersonate a real person. ";
+
+        block << "Your personality traits: " << JoinPersonalityTraits(personality.traits) << ".";
         if (!personality.tone.empty())
-            block << " Your speaking style is " << personality.tone << '.';
-        if (!personality.background.empty() && personality.backgroundMode == config.personalityBackgroundMode)
-            block << " Your persistent background: " << personality.background;
-        if (config.personalityBackgroundMode == 0)
-            block << " Stay in character and keep race, class, background, and current specialization consistent.";
-        else
-            block << " Speak consistently as this recurring player persona while remaining focused on World of Warcraft.";
+            block << " Your speaking style: " << personality.tone << ".";
+
+        block << " Personality and tone are fixed: they define how you speak. "
+                 "Mood, topic, and background feelings only colour that voice; never let them change who you are. "
+                 "Traits shape how you see and say things; they are not subjects to name or repeat in dialogue.";
+
+        return block.str();
+    }
+
+    std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality)
+    {
+        if (!config.personalityEnabled || personality.background.empty() ||
+            personality.backgroundMode != config.personalityBackgroundMode)
+            return "";
+
+        std::ostringstream block;
+        block << "<backstory>\n"
+              << "Your history: " << personality.background << "\n"
+              << "Draw from this background naturally if it fits the moment -- don't force it.\n"
+              << "</backstory>";
+        return block.str();
+    }
+
+    bool IsBackstoryInquiry(std::string const& message)
+    {
+        if (message.empty())
+            return false;
+
+        std::string lower = message;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+        static char const* const keywords[] = {
+            "backstory", "back story", "history", "background",
+            "where are you from", "where were you born", "where did you grow up",
+            "who are you", "tell me about yourself", "tell us about yourself",
+            "your past", "origin", "childhood", "hometown", "born and raised",
+            "where ya from", "what's your story", "whats your story"
+        };
+
+        for (char const* kw : keywords)
+        {
+            if (lower.find(kw) != std::string::npos)
+                return true;
+        }
+        return false;
+    }
+
+    bool IsBriefCasualMessage(std::string const& message)
+    {
+        if (message.empty())
+            return false;
+
+        std::string text = Trim(message);
+        if (text.empty() || text.size() > 25)
+            return false;
+
+        std::string lower = text;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        while (!lower.empty() && (lower.back() == '!' || lower.back() == '?' || lower.back() == '.' || lower.back() == ' '))
+            lower.pop_back();
+
+        static char const* const briefWords[] = {
+            "lol", "kek", "haha", "hahaha", "rofl", "lmao",
+            "gg", "gj", "wp", "ty", "thx", "thanks",
+            "brb", "afk", "back", "re",
+            "hi", "hey", "yo", "hello", "wb", "bye", "cya",
+            "ok", "okay", "k", "kk", "np", "yw", "yes", "no", "yep", "nope"
+        };
+        for (char const* bw : briefWords)
+        {
+            if (lower == bw)
+                return true;
+        }
+        return false;
+    }
+
+    bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
+                                ChatScope scope, std::string const& trigger,
+                                std::string const& message, bool directConversation, bool ambient)
+    {
+        if (!config.personalityEnabled || personality.background.empty() ||
+            personality.backgroundMode != config.personalityBackgroundMode)
+            return false;
+
+        // 1. Direct question priority: if directly asked about backstory/origin, always 100% include
+        if (directConversation && IsBackstoryInquiry(message))
+            return true;
+
+        // 2. Brief casual messages suppress backstory
+        if (IsBriefCasualMessage(message))
+            return false;
+
+        // 3. Tactical & combat suppression: never inject during combat, boss encounters, or tactical actions
+        if (trigger == "combat" || trigger == "boss-dialogue" || trigger == "aggro" ||
+            trigger == "assist" || trigger == "tactical" || trigger == "spell-cast" ||
+            trigger == "heal-request" || trigger == "death" || trigger == "flee")
+            return false;
+
+        // 4. Roll against scope-specific chance
+        uint32_t chance = 0;
+        switch (scope)
+        {
+            case ChatScope::Whisper:
+                chance = 100;
+                break;
+            case ChatScope::Party:
+            case ChatScope::Raid:
+                chance = ambient ? config.personalityBackstoryIdleChance : config.personalityBackstoryPartyChance;
+                break;
+            case ChatScope::Say:
+            case ChatScope::Yell:
+                chance = config.personalityBackstoryProximityChance;
+                break;
+            case ChatScope::Channel:
+            case ChatScope::World:
+                chance = config.personalityBackstoryGeneralChance;
+                break;
+            case ChatScope::Guild:
+            case ChatScope::Officer:
+                chance = config.personalityBackstoryGuildChance;
+                break;
+            default:
+                chance = 0;
+                break;
+        }
+
+        return RollPersonalityChance(chance);
+    }
+
+    std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality,
+                                            ChatScope scope, std::string const& trigger,
+                                            std::string const& message, bool directConversation, bool ambient)
+    {
+        std::string voice = BuildVoicePromptBlock(config, personality);
+        if (voice.empty())
+            return "";
+
+        std::ostringstream block;
+        block << voice;
+
+        if (ShouldIncludeBackstory(config, personality, scope, trigger, message, directConversation, ambient))
+        {
+            std::string backstory = BuildBackstoryPromptBlock(config, personality);
+            if (!backstory.empty())
+                block << "\n" << backstory;
+        }
+
         return HeadBounded(block.str(), config.personalityMaxPromptCharacters);
+    }
+
+    std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality)
+    {
+        std::string voice = BuildVoicePromptBlock(config, personality);
+        if (voice.empty())
+            return "";
+
+        std::string backstory = BuildBackstoryPromptBlock(config, personality);
+        if (backstory.empty())
+            return HeadBounded(voice, config.personalityMaxPromptCharacters);
+
+        return HeadBounded(voice + "\n" + backstory, config.personalityMaxPromptCharacters);
     }
 
     std::string JoinPersonalityTraits(std::vector<std::string> const& traits)

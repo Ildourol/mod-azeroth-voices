@@ -483,7 +483,96 @@ function AzerothVoices:BuildEditor(panel)
     regenAllBtn:Disable()
     panel.regenAllBtn = regenAllBtn
 
-    content:SetHeight(470)
+    -- Sentiment Section Header & Reset Button
+    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -462)
+    panel.sentimentLabel = lSentiment
+
+    local resetSentimentBtn = button(content, "Reset Sentiment", 130, function()
+        AzerothVoices:ResetSentiment()
+    end, 22)
+    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -458)
+    resetSentimentBtn:Disable()
+    panel.resetSentimentBtn = resetSentimentBtn
+
+    -- Sentiment Status Bar (low -100 to high +100)
+    local barHolder = CreateFrame("Frame", nil, content)
+    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -486)
+    barHolder:SetWidth(contentWidth)
+    barHolder:SetHeight(18)
+    barHolder:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 }
+    })
+    barHolder:SetBackdropColor(0, 0, 0, 0.85)
+    barHolder:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+
+    local bar = CreateFrame("StatusBar", nil, barHolder)
+    bar:SetPoint("TOPLEFT", barHolder, "TOPLEFT", 3, -3)
+    bar:SetPoint("BOTTOMRIGHT", barHolder, "BOTTOMRIGHT", -3, 3)
+    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    if bar:GetStatusBarTexture() and bar:GetStatusBarTexture().SetHorizTile then
+        bar:GetStatusBarTexture():SetHorizTile(false)
+    end
+    bar:SetMinMaxValues(0, 200)
+    bar:SetValue(100)
+    bar:SetStatusBarColor(0.9, 0.82, 0.2)
+
+    local barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    barText:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    barText:SetText("Score: 0 | Neutral")
+    bar.text = barText
+    panel.sentimentBar = bar
+    panel.sentimentBarHolder = barHolder
+
+    barHolder:EnableMouse(true)
+    barHolder:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        local score = AzerothVoices.loadedSentiment or 0
+        local tier, r, g, b = AzerothVoices:GetSentimentTier(score)
+        local sign = ""
+        if score > 0 then sign = "+" end
+        GameTooltip:AddLine("Bot Sentiment toward You", 1, 0.82, 0)
+        GameTooltip:AddDoubleLine("Current Score:", sign .. score .. " (" .. tier .. ")", 1, 1, 1, r, g, b)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Sentiment Scale:", 0.8, 0.8, 0.8)
+        GameTooltip:AddDoubleLine("  Hostile:", "-100 to -40", 0.85, 0.2, 0.2, 0.85, 0.2, 0.2)
+        GameTooltip:AddDoubleLine("  Cold:", "-39 to -10", 0.9, 0.55, 0.2, 0.9, 0.55, 0.2)
+        GameTooltip:AddDoubleLine("  Neutral:", "-9 to +9", 0.9, 0.82, 0.2, 0.9, 0.82, 0.2)
+        GameTooltip:AddDoubleLine("  Warm:", "+10 to +39", 0.4, 0.85, 0.3, 0.4, 0.85, 0.3)
+        GameTooltip:AddDoubleLine("  Trusted:", "+40 to +100", 0.2, 0.85, 0.5, 0.2, 0.85, 0.5)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Evolves dynamically through party chat, questing, and dialogue.", 0.6, 0.6, 0.6, 1)
+        GameTooltip:Show()
+    end)
+    barHolder:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    -- Scale Labels below the bar
+    local scaleLow = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    scaleLow:SetPoint("TOPLEFT", barHolder, "BOTTOMLEFT", 2, -3)
+    scaleLow:SetText("-100 (Hostile)")
+    scaleLow:SetTextColor(0.85, 0.3, 0.3)
+    panel.sentimentScaleLow = scaleLow
+
+    local scaleMid = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    scaleMid:SetPoint("TOP", barHolder, "BOTTOM", 0, -3)
+    scaleMid:SetText("0 (Neutral)")
+    scaleMid:SetTextColor(0.9, 0.82, 0.2)
+    panel.sentimentScaleMid = scaleMid
+
+    local scaleHigh = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    scaleHigh:SetPoint("TOPRIGHT", barHolder, "BOTTOMRIGHT", -2, -3)
+    scaleHigh:SetText("+100 (Trusted)")
+    scaleHigh:SetTextColor(0.3, 0.85, 0.4)
+    panel.sentimentScaleHigh = scaleHigh
+
+    content:SetHeight(545)
 
     -- Status label at bottom
     local status = createLabel(panel, "", 16, 10)
@@ -507,6 +596,8 @@ function AzerothVoices:BuildEditor(panel)
             lStory:Hide(); panel.backstory:Hide()
             regenStoryBtn:Hide()
             regenAllBtn:Hide()
+            lSentiment:Hide(); barHolder:Hide(); resetSentimentBtn:Hide()
+            scaleLow:Hide(); scaleMid:Hide(); scaleHigh:Hide()
             forgetBtn:Show()
             all:Show(); clear:Show()
             content:SetHeight(230)
@@ -521,6 +612,8 @@ function AzerothVoices:BuildEditor(panel)
             panel.backstory:Show()
             regenStoryBtn:Show()
             regenAllBtn:Hide()
+            lSentiment:Hide(); barHolder:Hide(); resetSentimentBtn:Hide()
+            scaleLow:Hide(); scaleMid:Hide(); scaleHigh:Hide()
             forgetBtn:Hide()
             all:Hide(); clear:Hide()
             content:SetHeight(440)
@@ -535,9 +628,11 @@ function AzerothVoices:BuildEditor(panel)
             lStory:Show(); panel.backstory:Show()
             regenStoryBtn:Show()
             regenAllBtn:Show()
+            lSentiment:Show(); barHolder:Show(); resetSentimentBtn:Show()
+            scaleLow:Show(); scaleMid:Show(); scaleHigh:Show()
             forgetBtn:Show()
             all:Show(); clear:Show()
-            content:SetHeight(470)
+            content:SetHeight(545)
         end
         updateEditorScroll()
         AzerothVoices:UpdateSaveButton()

@@ -9,13 +9,13 @@ This is a community server module, not an official Turtle WoW service or client 
 ## Features
 
 - **Direct dialogue:** configurable responses in whisper, say, yell, party, raid, guild, and world/custom-channel contexts, subject to configured gates and speaker eligibility.
-- **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, with SQL-backed persistence.
+- **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, backed by SQL persistence. Features a dual-layer lightweight architecture: an active voice layer (Traits + Tone + Priority Rule, ~25 tokens) always present, paired with context-gated backstory sampling (~60 tokens in `<backstory>` tags with soft negative steering) and guaranteed 100% backstory inclusion on direct inquiries.
 - **Conversation context:** bounded history, snapshots, player sentiment, and a deterministic memory ledger for more consistent interactions.
 - **Ambient dialogue:** optional nearby, proximity, guild, world-channel, party, and raid chatter with separate probabilities, cooldowns, and pacing.
 - **Event reactions:** contextual lines for supported combat, group, quest, loot, and environmental events.
 - **NPC and encounter dialogue:** supported NPC interactions and configurable dungeon/raid pre-aggro boss speech.
 - **In-process provider client:** asynchronous requests to supported Chat Completions endpoints, with a separate OpenAI Responses mode, configurable timeouts, retries, workers, and token limits.
-- **Optional client addon:** contact and personality management interface for the compatible 1.12.1-based client.
+- **Optional client addon:** contact and personality management interface for the compatible 1.12.1-based client. (feat(personality): lightweight dual-layer persona architecture and backstory gating)
 
 Feature activity depends on the configuration, available bots/NPCs, database setup, client support, and the server build.
 

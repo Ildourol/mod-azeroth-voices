@@ -282,9 +282,6 @@
 | [`AzerothVoices.RequestTTLSeconds`](#azerothvoicesrequestttlseconds) | Integer (Seconds, minimum 1; default 90) | `90` | Drops queued requests that are no longer timely. (Seconds, minimum 1; defau... |
 | [`AzerothVoices.AmbientActorCooldownSeconds`](#azerothvoicesambientactorcooldownseconds) | Integer (Seconds, minimum 0; default 120) | `120` | Longer per-actor random-chatter cooldown. (Seconds, minimum 0; default 120.... |
 | [`AzerothVoices.BotSpeakerCooldownSeconds`](#azerothvoicesbotspeakercooldownseconds) | Integer (Seconds) | `900` | Per-bot cooldown (seconds) for General channel speech. After a bot speaks i... |
-| [`AzerothVoices.SpeakerCoalesce.Enable`](#azerothvoicesspeakercoalesceenable) | Boolean (`0` or `1`) | `1` | Enables merging rapid consecutive messages from a real human player into a ... |
-| [`AzerothVoices.SpeakerCoalesce.DelayMilliseconds`](#azerothvoicesspeakercoalescedelaymilliseconds) | Integer (Milliseconds, minimum 500, default 2000.) | `2000` | Time window in milliseconds to wait for additional follow-up lines from the... |
-| [`AzerothVoices.SpeakerCoalesce.MaxLines`](#azerothvoicesspeakercoalescemaxlines) | Integer | `3` | Maximum number of consecutive lines to merge before forcing dispatch. (Coun... |
 | [`AzerothVoices.RetryMaximum`](#azerothvoicesretrymaximum) | Integer | `1` | Retries transient connection, 429, and 5xx failures. (Retries, minimum 0; d... |
 | [`AzerothVoices.RetryBackoffMilliseconds`](#azerothvoicesretrybackoffmilliseconds) | Integer (Milliseconds, minimum 0; default 500) | `500` | Base increasing delay between retries. (Milliseconds, minimum 0; default 50... |
 
@@ -365,7 +362,7 @@
 - **Default Value**: `3`
 - **Description**: Maximum number of consecutive lines to merge before forcing dispatch. (Count, minimum 2, default 900)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
-
+ (feat(personality): lightweight dual-layer persona architecture and backstory gating)
 ### <a id="azerothvoicesretrymaximum"></a>`AzerothVoices.RetryMaximum`
 
 - **Data Type**: Integer
@@ -389,7 +386,7 @@
 | [`AzerothVoices.GlobalMode`](#azerothvoicesglobalmode) | Enum (`Roleplay/Normal`) | `Normal` | Selects PlayerBot conversation style for PlayerBot-to-real-player and Playe... |
 | [`AzerothVoices.GlobalPrompt.Roleplay`](#azerothvoicesglobalpromptroleplay) | String | `You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.` | System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs... |
 | [`AzerothVoices.GlobalPrompt.Normal`](#azerothvoicesglobalpromptnormal) | String | `You write short, natural WoW chat. Context: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If speaker or counterpart is NPC, speak strictly in-world as a fantasy character. Otherwise, speak casually as a real human playing WoW without forced slang. Never add name prefixes or dialogue tags. Return only the spoken chat.` | System prompt selected by GlobalMode=Normal for PlayerBot-to-real-player an... |
-| [`AzerothVoices.GlobalPrompt`](#azerothvoicesglobalprompt) | String | `You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.` | Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is ab... |
+| [`AzerothVoices.GlobalPrompt`](#azerothvoicesglobalprompt) | String | `You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.` | Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is ab... | (feat(personality): lightweight dual-layer persona architecture and backstory gating)
 | [`AiPlayerbot.LLMPrePrompt`](#aiplayerbotllmpreprompt) | String (Template with placeholders) | `You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. <bot personality block>` | Describes a PlayerBot before a normal response. (Text template.) |
 | [`AiPlayerbot.LLMPrompt`](#aiplayerbotllmprompt) | String (Template with placeholders) | `<sender name>: <initial message>` | Formats incoming chat for the provider using the actual incoming speaker na... |
 | [`AiPlayerbot.LLMPostPrompt`](#aiplayerbotllmpostprompt) | String (Template with placeholders) | `# AiPlayerbot.LLMRpgPrompt` | Optional response cue appended after incoming chat; empty by default becaus... |
@@ -414,7 +411,7 @@
 
 - **Data Type**: String
 - **Default Value**: `You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.`
-- **Description**: System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text.)
+- **Description**: System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text.) (feat(personality): lightweight dual-layer persona architecture and backstory gating)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesglobalpromptnormal"></a>`AzerothVoices.GlobalPrompt.Normal`
@@ -422,13 +419,6 @@
 - **Data Type**: String
 - **Default Value**: `You write short, natural WoW chat. Context: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If speaker or counterpart is NPC, speak strictly in-world as a fantasy character. Otherwise, speak casually as a real human playing WoW without forced slang. Never add name prefixes or dialogue tags. Return only the spoken chat.`
 - **Description**: System prompt selected by GlobalMode=Normal for PlayerBot-to-real-player and PlayerBot-to-PlayerBot dialogue; NPC-involved dialogue is switched to GlobalPrompt.Roleplay by C++ before provider serialization, so customizing this prompt cannot opt NPCs into Normal mode. (Text.)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
-
-### <a id="azerothvoicesglobalprompt"></a>`AzerothVoices.GlobalPrompt`
-
-- **Data Type**: String
-- **Default Value**: `You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.`
-- **Description**: Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is absent; existing installations may keep this value during migration. (Text.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmpreprompt"></a>`AiPlayerbot.LLMPrePrompt`
@@ -524,6 +514,15 @@
 | [`AzerothVoices.Personality.GenerationRetrySeconds`](#azerothvoicespersonalitygenerationretryseconds) | Integer (Seconds) | `300` | Sets the minimum delay after failed generation before the same bot can retr... |
 | [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer | `500` | Bounds a generated stored background; accepted range 100-1500 characters; d... |
 | [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer | `700` | Bounds personality and background text inserted into each prompt; accepted ... |
+| [`AzerothVoices.Personality.Backstory.PartyChance`](#azerothvoicespersonalitybackstorypartychance) | Integer (0-100) | `25` | Percentage chance that a bot's backstory is included in routine party replies... |
+| [`AzerothVoices.Personality.Backstory.IdleChance`](#azerothvoicespersonalitybackstoryidlechance) | Integer (0-100) | `15` | Percentage chance that a bot's backstory is included during idle group chatter... |
+| [`AzerothVoices.Personality.Backstory.ProximityChance`](#azerothvoicespersonalitybackstoryproximitychance) | Integer (0-100) | `15` | Percentage chance that a bot's backstory is included in proximity /say or /yell... |
+| [`AzerothVoices.Personality.Backstory.GeneralChance`](#azerothvoicespersonalitybackstorygeneralchance) | Integer (0-100) | `25` | Percentage chance that a bot's backstory is included in General chat... |
+| [`AzerothVoices.Personality.Backstory.GuildChance`](#azerothvoicespersonalitybackstoryguildchance) | Integer (0-100) | `25` | Percentage chance that a bot's backstory is included in Guild chat... |
+| [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth...` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0). |
+| [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a concise, realistic backstory for a fictional person who plays World of Warcraft...` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1). |
+| [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
+| [`AzerothVoices.Personality.Prompt.Tone`](#azerothvoicespersonalityprompttone) | String | `tone must be a concise speaking-style description derived from the traits...` | System guidance prompt used when generating a bot's persistent speaking style. |
 
 
 ### <a id="azerothvoicespersonalityenable"></a>`AzerothVoices.Personality.Enable`
@@ -595,6 +594,69 @@
 - **Default Value**: `700`
 - **Description**: Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 700.
 - **Operator Guidance & Impact**: Limits prompt context injected into LLM requests. Keep balanced to ensure bot personalities, memories, and surrounding dialogue fit comfortably within LLM context windows without token bloat.
+
+### <a id="azerothvoicespersonalitybackstorypartychance"></a>`AzerothVoices.Personality.Backstory.PartyChance`
+
+- **Data Type**: Integer (0-100)
+- **Default Value**: `25`
+- **Description**: Percentage chance that a bot's backstory is included in routine party replies. Direct questions about backstory/origin always carry 100% chance.
+- **Operator Guidance & Impact**: Keeps prompt tokens lightweight (~25 tokens baseline for traits + tone) while naturally sampling the 3-4 sentence origin context. When included, it is framed with negative steering ("don't force it") so bots do not recite their memoirs unprompted.
+
+### <a id="azerothvoicespersonalitybackstoryidlechance"></a>`AzerothVoices.Personality.Backstory.IdleChance`
+
+- **Data Type**: Integer (0-100)
+- **Default Value**: `15`
+- **Description**: Percentage chance that a bot's backstory is included during idle group chatter.
+- **Operator Guidance & Impact**: Provides occasional natural character flavor during campfire/rest downtime without monopolizing chat.
+
+### <a id="azerothvoicespersonalitybackstoryproximitychance"></a>`AzerothVoices.Personality.Backstory.ProximityChance`
+
+- **Data Type**: Integer (0-100)
+- **Default Value**: `15`
+- **Description**: Percentage chance that a bot's backstory is included in proximity `/say` or `/yell`.
+- **Operator Guidance & Impact**: Keeps world proximity dialogue focused on immediate physical surroundings while allowing rare references to a character's origins.
+
+### <a id="azerothvoicespersonalitybackstorygeneralchance"></a>`AzerothVoices.Personality.Backstory.GeneralChance`
+
+- **Data Type**: Integer (0-100)
+- **Default Value**: `25`
+- **Description**: Percentage chance that a bot's backstory is included in General chat (`/1`).
+- **Operator Guidance & Impact**: Regulates world-channel personal background references.
+
+### <a id="azerothvoicespersonalitybackstoryguildchance"></a>`AzerothVoices.Personality.Backstory.GuildChance`
+
+- **Data Type**: Integer (0-100)
+- **Default Value**: `25`
+- **Description**: Percentage chance that a bot's backstory is included in Guild chat (`/g`).
+- **Operator Guidance & Impact**: Balances guild banter between active daily conversation and occasional personal lore references.
+
+### <a id="azerothvoicespersonalitypromptroleplay"></a>`AzerothVoices.Personality.Prompt.Roleplay`
+
+- **Data Type**: String
+- **Default Value**: `Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions. Return only the backstory text.`
+- **Description**: System guidance prompt used when generating backstories in Roleplay mode (`BackgroundMode=0`). Instructs the model to create authentic, in-world Vanilla/Turtle WoW lore-appropriate character biographies without cliché tropes.
+- **Operator Guidance & Impact**: Customize this prompt to inject custom server lore, faction nuances, or specific regional flavor into your bots' generated backstories.
+
+### <a id="azerothvoicespersonalitypromptnormal"></a>`AzerothVoices.Personality.Prompt.Normal`
+
+- **Data Type**: String
+- **Default Value**: `Write a concise, realistic backstory for a fictional person who plays World of Warcraft. Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction enthusiasts, lore fans, or nostalgic veterans). Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity. Return only the backstory text.`
+- **Description**: System guidance prompt used when generating backstories in Normal mode (`BackgroundMode=1`). Instructs the model to create varied, realistic fictional real-world player personas behind the bot avatars, strictly forbidding repetitive trauma/divorce/escapism tropes.
+- **Operator Guidance & Impact**: Used in conjunction with C++'s true randomized player age (19-58) to eliminate formulaic opening syntax and prevent "found solace in" cliché loops.
+
+### <a id="azerothvoicespersonalityprompttraits"></a>`AzerothVoices.Personality.Prompt.Traits`
+
+- **Data Type**: String
+- **Default Value**: `traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). Do not use a fixed checklist, and do not merely restate race or class.`
+- **Description**: System guidance prompt used when generating a bot's 3 personality traits. Instructs the model to select diverse, distinctive quirks and flaws rather than repetitive generic adjectives.
+- **Operator Guidance & Impact**: Customizing this prompt allows injecting specific behavioral profiles, quirks, and flaws across your server's bots, completely preventing the repetitive "strategic/thoughtful" archetype collapse.
+
+### <a id="azerothvoicespersonalityprompttone"></a>`AzerothVoices.Personality.Prompt.Tone`
+
+- **Data Type**: String
+- **Default Value**: `tone must be a concise speaking-style description derived from the traits. Avoid clichés like 'passion for storytelling' or 'thoughtful and articulate'. Focus on concrete vocal habits (e.g. blunt and dry, energetic fast-talker, deadpan sarcasm, gruff veteran brevity, cheerful banter, or hesitant caution).`
+- **Description**: System guidance prompt used when generating a bot's persistent speaking style. Instructs the model to produce varied, natural speech rhythms.
+- **Operator Guidance & Impact**: Keeps tone descriptions concise (<200 characters) and prevents the model from defaulting to "storytelling" clichés.
 
 ---
 
@@ -3082,7 +3144,7 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds`](#azerothvoicestypingminimumdelaypercharactermilliseconds) | Integer | `100` | Minimum natural typing delay; one speed is randomly selected between the mi... |
 | [`AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds`](#azerothvoicestypingmaximumdelaypercharactermilliseconds) | Integer | `200` | Maximum natural typing delay; values below the minimum are swapped safely. ... |
 | [`AzerothVoices.Typing.SubtractGenerationTime`](#azerothvoicestypingsubtractgenerationtime) | Boolean (`0` or `1`) | `1` | Legacy compatibility: if both range keys above are absent, AzerothVoices.Ty... |
-| [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 120) | `120` | Cumulative total character budget across all delivered reply lines for a... |
+| [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 120) | `120` | Cumulative total character budget across all delivered reply lines for a... | (feat(personality): lightweight dual-layer persona architecture and backstory gating)
 | [`AzerothVoices.Reply.MaximumLines`](#azerothvoicesreplymaximumlines) | Integer | `2` | Maximum delivered lines/parts per request. Limits the number of separate... |
 | [`AzerothVoices.Reply.SentenceAwareSplitting`](#azerothvoicesreplysentenceawaresplitting) | Boolean (`0` or `1`) | `1` | Enables structured, sentence-aware line breaking for delivered dialogue. Wh... |
 
@@ -3124,10 +3186,10 @@ human within SayDistance; Party actors require a real human in the same party su
 
 ### <a id="azerothvoicesreplymaximumcharacters"></a>`AzerothVoices.Reply.MaximumCharacters`
 
-- **Data Type**: Integer (Characters, minimum 1; default 120)
-- **Default Value**: `120`
-- **Description**: Cumulative total character budget across all delivered reply lines for a single request. Messages are cleanly split on sentence and clause boundaries up to this cumulative character budget. (Characters, minimum 1; default 120)
-- **Operator Guidance & Impact**: Enforces the maximum combined character length of a bot's delivered response across all lines. Lower values keep bot replies short, punchy, and non-spammy; higher values allow longer multi-sentence thoughts.
+- **Data Type**: Integer (Characters, minimum 1; default 80.)
+- **Default Value**: `80`
+- **Description**: Maximum character budget per delivered reply line. Messages are cleanly split on sentence and clause boundaries so each message fits within this character limit without sentence starvation. (Characters, minimum 1; default 80.)
+- **Operator Guidance & Impact**: Enforces the maximum character length for each individual delivered line. With per-line budgeting, Line 1 no longer cannibalizes Line 2. Values around 70-90 produce natural, believable WoW chat lines. (feat(personality): lightweight dual-layer persona architecture and backstory gating)
 
 ### <a id="azerothvoicesreplymaximumlines"></a>`AzerothVoices.Reply.MaximumLines`
 
@@ -3575,4 +3637,4 @@ Start with the defaults in `conf/mod-azeroth-voices.conf.dist`. Adjust provider 
 
 ## Maintenance and updates
 
-The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference tracks the repository template as reviewed on 20 October 2026; runtime validation and fallback behavior depend on the installed module revision.
+The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference tracks the repository template as reviewed on 20 October 2026; runtime validation and fallback behavior depend on the installed module revision. (feat(personality): lightweight dual-layer persona architecture and backstory gating)

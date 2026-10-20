@@ -26,6 +26,16 @@ namespace AzerothVoices
                                   PersonalityGenerationMode mode, BotPersonality const& fixed,
                                   std::string const& response, BotPersonality& personality,
                                   std::string& error);
+    std::string BuildVoicePromptBlock(Config const& config, BotPersonality const& personality);
+    std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality);
+    bool IsBackstoryInquiry(std::string const& message);
+    bool IsBriefCasualMessage(std::string const& message);
+    bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
+                                ChatScope scope, std::string const& trigger,
+                                std::string const& message, bool directConversation, bool ambient);
+    std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality,
+                                            ChatScope scope, std::string const& trigger,
+                                            std::string const& message, bool directConversation, bool ambient);
     std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality);
     std::string JoinPersonalityTraits(std::vector<std::string> const& traits);
     std::string SerializePersonalityTraits(std::vector<std::string> const& traits);

@@ -241,22 +241,31 @@ namespace AzerothVoices
             "AzerothVoices.Personality.MaxBackgroundChars", 500, 100, 1500);
         c.personalityMaxPromptCharacters = Bounded(
             "AzerothVoices.Personality.MaxPromptChars", 700, 100, 2000);
+        c.personalityBackstoryPartyChance = Bounded(
+            "AzerothVoices.Personality.Backstory.PartyChance", 25, 0, 100);
+        c.personalityBackstoryIdleChance = Bounded(
+            "AzerothVoices.Personality.Backstory.IdleChance", 15, 0, 100);
+        c.personalityBackstoryProximityChance = Bounded(
+            "AzerothVoices.Personality.Backstory.ProximityChance", 15, 0, 100);
+        c.personalityBackstoryGeneralChance = Bounded(
+            "AzerothVoices.Personality.Backstory.GeneralChance", 25, 0, 100);
+        c.personalityBackstoryGuildChance = Bounded(
+            "AzerothVoices.Personality.Backstory.GuildChance", 25, 0, 100);
 
         std::string const defaultPersonalityRoleplayPrompt =
-            "Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "
-            "Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived "
-            "experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, "
-            "culture, and tone consistent with race, class, and faction without later-expansion assumptions. "
-            "Return only the backstory text.";
+            "Write a concise, immersive 3-4 sentence backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "
+            "Include a birthplace appropriate to their race and Warcraft lore, a brief mention of their upbringing, and 1-2 formative "
+            "events that shaped them. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. "
+            "Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. "
+            "Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions.";
 
         std::string const defaultPersonalityNormalPrompt =
-            "Write a concise, realistic backstory for a fictional person who plays World of Warcraft. "
+            "Write a concise, realistic 3-4 sentence backstory for a fictional person who plays World of Warcraft. "
             "Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, "
             "everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction "
             "enthusiasts, lore fans, or nostalgic veterans). "
             "Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. "
-            "Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity. "
-            "Return only the backstory text.";
+            "Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity.";
 
         c.personalityPromptRoleplay = Trim(sConfig.GetStringDefault(
             "AzerothVoices.Personality.Prompt.Roleplay", defaultPersonalityRoleplayPrompt.c_str()));

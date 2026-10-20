@@ -2021,6 +2021,13 @@ namespace AzerothVoices
                 request.groupId = speaker.groupId;
         }
 
+        Player* directActor = actor.kind == ActorKind::PlayerBot ? ObjectAccessor::FindPlayer(ObjectGuid(actor.guid)) : nullptr;
+        Player* directTarget = ObjectAccessor::FindPlayer(ObjectGuid(speaker.guid));
+        bool const directConversation = directActor && !ambient && !eventTrigger && !speaker.isBot &&
+            (trigger != "targeted-npc-observer") && (trigger != "npc-reply-observer") &&
+            (trigger != "targeted-bot-observer") && (trigger != "bot-reply-observer") &&
+            IsDirectSentimentConversation(directActor, directTarget, scope, message);
+
         if (actor.kind == ActorKind::PlayerBot && usePersonality)
         {
             BotPersonality personality;
@@ -2029,7 +2036,8 @@ namespace AzerothVoices
                 request.personality = std::move(personality);
                 if (request.personality.backgroundMode != m_config->personalityBackgroundMode)
                     request.personality.background.clear();
-                request.personalityBlock = BuildPersonalityPromptBlock(*m_config, request.personality);
+                request.personalityBlock = BuildPersonalityPromptBlock(
+                    *m_config, request.personality, scope, trigger, message, directConversation, ambient);
             }
             else if (m_config->personalityGenerateOnDemand &&
                      !m_pendingPersonalityRequests.count(actor.guid))
@@ -2043,11 +2051,8 @@ namespace AzerothVoices
         if (m_config->sentimentEnabled && actor.kind == ActorKind::PlayerBot &&
             trigger != "gm-test")
         {
-            Player* sentimentActor = ObjectAccessor::FindPlayer(ObjectGuid(actor.guid));
-            Player* target = ObjectAccessor::FindPlayer(ObjectGuid(speaker.guid));
-            bool const directConversation = !ambient && !eventTrigger && !speaker.isBot &&
-                (trigger != "targeted-npc-observer") && (trigger != "npc-reply-observer") && (trigger != "targeted-bot-observer") && (trigger != "bot-reply-observer") &&
-                IsDirectSentimentConversation(sentimentActor, target, scope, message);
+            Player* sentimentActor = directActor;
+            Player* target = directTarget;
             bool const readOnlyContext = (ambient && m_config->sentimentUseInRandom) ||
                 (eventTrigger && m_config->sentimentUseInEvents) ||
                 (trigger == "targeted-npc-observer") || (trigger == "npc-reply-observer") || (trigger == "targeted-bot-observer") || (trigger == "bot-reply-observer");
@@ -6356,9 +6361,17 @@ namespace AzerothVoices
                 CancelPersonalityGeneration(command.guid);
 
                 ActorSnapshot actor;
-                actor.kind = ActorKind::PlayerBot;
-                actor.guid = command.guid;
-                actor.name = botName;
+                Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(command.guid));
+                if (!bot)
+                    bot = ObjectAccessor::FindPlayerByName(botName.c_str());
+                if (bot)
+                    actor = SnapshotBot(bot);
+                else
+                {
+                    actor.kind = ActorKind::PlayerBot;
+                    actor.guid = command.guid;
+                    actor.name = botName;
+                }
                 if (!QueuePersonalityGeneration(actor, true,
                         PersonalityGenerationMode::BackgroundOnly, stored))
                 {
@@ -6401,9 +6414,17 @@ namespace AzerothVoices
                 CancelPersonalityGeneration(command.guid);
 
                 ActorSnapshot actor;
-                actor.kind = ActorKind::PlayerBot;
-                actor.guid = command.guid;
-                actor.name = botName;
+                Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(command.guid));
+                if (!bot)
+                    bot = ObjectAccessor::FindPlayerByName(botName.c_str());
+                if (bot)
+                    actor = SnapshotBot(bot);
+                else
+                {
+                    actor.kind = ActorKind::PlayerBot;
+                    actor.guid = command.guid;
+                    actor.name = botName;
+                }
                 if (!QueuePersonalityGeneration(actor, true,
                         PersonalityGenerationMode::ToneOnly, stored))
                 {
