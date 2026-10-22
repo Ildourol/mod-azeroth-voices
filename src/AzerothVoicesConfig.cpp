@@ -272,12 +272,15 @@ namespace AzerothVoices
             "Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions.";
 
         std::string const defaultPersonalityNormalPrompt =
-            "Write a concise, realistic backstory for a fictional person who plays World of Warcraft. "
-            "Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, "
-            "everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction "
-            "enthusiasts, lore fans, or nostalgic veterans). "
-            "Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. "
-            "Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity.";
+            "Write a realistic personal background for an authentic, everyday person. "
+            "Vary the start and structure naturally: do not start with formulaic phrases like 'At [age]...'. "
+            "Focus purely on real-life details: their occupation, trade, career, or studies (such as a carpenter, nurse, "
+            "mechanic, graphic designer, teacher, chef, electrician, or university student); their hometown, region, or living "
+            "situation; and their genuine daily routines, quirks, and hobbies outside of work (such as weekend hiking, fixing up an "
+            "old car, cooking, local sports, woodworking, gardening, or music). "
+            "Strictly do NOT mention World of Warcraft, Azeroth, video games, gaming habits, or avatars—this is purely a real-world "
+            "biographical background. Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', "
+            "or 'tumultuous divorce'. Avoid melodrama or trauma therapy. Return only the backstory text.";
 
         c.personalityPromptRoleplay = Trim(sConfig.GetStringDefault(
             "AzerothVoices.Personality.Prompt.Roleplay", defaultPersonalityRoleplayPrompt.c_str()));

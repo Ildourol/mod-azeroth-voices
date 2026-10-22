@@ -28,7 +28,8 @@ namespace AzerothVoices
                                   std::string const& response, BotPersonality& personality,
                                   std::string& error);
     std::string BuildVoicePromptBlock(Config const& config, BotPersonality const& personality);
-    std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality);
+    std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality,
+                                          bool isDirectInquiry = false);
     bool IsBackstoryInquiry(std::string const& message);
     bool IsBriefCasualMessage(std::string const& message);
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,

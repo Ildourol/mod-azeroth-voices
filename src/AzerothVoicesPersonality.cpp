@@ -257,7 +257,7 @@ namespace AzerothVoices
                << "\nFaction: " << actor.faction
                << "\nGender: " << actor.gender
                << "\nBackground mode: "
-               << (config.personalityBackgroundMode == 0 ? "roleplay Azeroth character" : "fictional real-world WoW player");
+               << (config.personalityBackgroundMode == 0 ? "roleplay Azeroth character" : "authentic real-world individual");
 
         if (config.personalityBackgroundMode != 0)
         {
@@ -505,6 +505,23 @@ namespace AzerothVoices
             static thread_local std::mt19937 engine(std::random_device{}());
             return std::uniform_int_distribution<uint32_t>(1, 100)(engine) <= chance;
         }
+
+        bool ContainsWord(std::string const& text, std::string const& word)
+        {
+            if (word.empty() || text.size() < word.size())
+                return false;
+            size_t pos = 0;
+            while ((pos = text.find(word, pos)) != std::string::npos)
+            {
+                bool const startBoundary = (pos == 0 || !isalnum(static_cast<unsigned char>(text[pos - 1])));
+                size_t const endPos = pos + word.size();
+                bool const endBoundary = (endPos == text.size() || !isalnum(static_cast<unsigned char>(text[endPos])));
+                if (startBoundary && endBoundary)
+                    return true;
+                pos += word.size();
+            }
+            return false;
+        }
     }
 
     std::string BuildVoicePromptBlock(Config const& config, BotPersonality const& personality)
@@ -514,9 +531,9 @@ namespace AzerothVoices
 
         std::ostringstream block;
         if (config.personalityBackgroundMode == 0)
-            block << "You are a distinct character in Azeroth's story. ";
+            block << "You are a distinct character in Azeroth's story living in the world of Warcraft. ";
         else
-            block << "You portray a distinct fictional player behind this character; focus on WoW and never impersonate a real person. ";
+            block << "You portray an authentic person playing World of Warcraft with your own genuine real-life background, everyday routines, and personality. ";
 
         block << "Your personality traits: " << JoinPersonalityTraits(personality.traits) << ".";
         if (!personality.tone.empty())
@@ -529,17 +546,25 @@ namespace AzerothVoices
         return block.str();
     }
 
-    std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality)
+    std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality,
+                                          bool isDirectInquiry)
     {
-        if (!config.personalityEnabled || personality.background.empty() ||
-            personality.backgroundMode != config.personalityBackgroundMode)
+        if (!config.personalityEnabled || personality.background.empty())
             return "";
 
         std::ostringstream block;
         block << "<backstory>\n"
-              << "Your history: " << personality.background << "\n"
-              << "Draw from this background naturally if it fits the moment -- don't force it.\n"
-              << "</backstory>";
+              << "Your personal background: " << personality.background << "\n";
+        if (isDirectInquiry)
+        {
+            block << "The player is asking about you, your real life, or your background. "
+                  << "Draw directly and authentically from your personal background above in your response.\n";
+        }
+        else
+        {
+            block << "Draw from this background naturally if it fits the conversation.\n";
+        }
+        block << "</backstory>";
         return block.str();
     }
 
@@ -551,17 +576,44 @@ namespace AzerothVoices
         std::string lower = message;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
-        static char const* const keywords[] = {
-            "backstory", "back story", "history", "background",
+        // Word-boundary inquiries
+        if (ContainsWord(lower, "irl") || ContainsWord(lower, "backstory") || ContainsWord(lower, "bio"))
+            return true;
+
+        static char const* const phrases[] = {
+            // Identity & introductions
+            "who are you", "who r u", "who are u", "who you are", "who am i talking to",
+            "who am i playing with", "tell me about yourself", "tell us about yourself",
+            "about yourself", "tell me about you", "tell us about you", "tell me more about yourself",
+            "introduce yourself", "what's your story", "whats your story", "what is your story",
+
+            // Real life & offline reality
+            "real life", "real-life", "in real life", "in rl",
+            "outside wow", "outside of wow", "outside the game", "outside of the game",
+            "in the real world", "real world", "off wow", "when not playing",
+
+            // Profession, career & work
+            "what do you do for a living", "for a living", "for work",
+            "what's your job", "whats your job", "what is your job", "your job", "have a job",
+            "your occupation", "your career", "your profession", "your trade", "day job",
+            "where do you work", "what work do you do", "at work",
+            "what do you do", "what you do", "what u do", "what do u do",
+            "are you a student", "what do you study", "what are you studying",
+
+            // Origin, residence & upbringing
             "where are you from", "where were you born", "where did you grow up",
-            "who are you", "tell me about yourself", "tell us about yourself",
-            "your past", "origin", "childhood", "hometown", "born and raised",
-            "where ya from", "what's your story", "whats your story"
+            "where do you live", "where do u live", "where do you reside", "where ya from",
+            "born and raised", "hometown", "childhood", "upbringing",
+            "your past", "your history", "back story", "your background",
+
+            // Hobbies & personal life
+            "your hobbies", "any hobbies", "what are your hobbies", "what do you like to do",
+            "what else do you do", "free time", "spare time"
         };
 
-        for (char const* kw : keywords)
+        for (char const* phrase : phrases)
         {
-            if (lower.find(kw) != std::string::npos)
+            if (lower.find(phrase) != std::string::npos)
                 return true;
         }
         return false;
@@ -600,8 +652,7 @@ namespace AzerothVoices
                                 ChatScope scope, std::string const& trigger,
                                 std::string const& message, bool directConversation, bool ambient)
     {
-        if (!config.personalityEnabled || personality.background.empty() ||
-            personality.backgroundMode != config.personalityBackgroundMode)
+        if (!config.personalityEnabled || personality.background.empty())
             return false;
 
         // 1. Tactical & combat suppression: never inject during combat, boss encounters, tactical actions, duels, or pvp
@@ -615,11 +666,15 @@ namespace AzerothVoices
         if (IsBriefCasualMessage(message))
             return false;
 
-        // 3. Strict inquiry & context gating: include ONLY when directly asked or mentioned
+        // 3. Strict inquiry & context gating: include when directly asked or inquiry detected
         if (IsBackstoryInquiry(message))
             return true;
 
-        // 4. Explicit origin/lore-sharing event triggers
+        // 4. In direct 1-on-1 whispers or direct conversation, if asking personal questions
+        if ((scope == ChatScope::Whisper || directConversation) && IsBackstoryInquiry(message))
+            return true;
+
+        // 5. Explicit origin/lore-sharing event triggers
         if (trigger == "story-share" || trigger == "lore-share" || trigger == "campfire-story")
             return true;
 
@@ -640,7 +695,8 @@ namespace AzerothVoices
 
         if (ShouldIncludeBackstory(config, personality, scope, trigger, message, directConversation, ambient))
         {
-            std::string backstory = BuildBackstoryPromptBlock(config, personality);
+            bool const isInquiry = IsBackstoryInquiry(message);
+            std::string backstory = BuildBackstoryPromptBlock(config, personality, isInquiry);
             if (!backstory.empty())
                 block << "\n" << backstory;
         }
@@ -657,7 +713,7 @@ namespace AzerothVoices
         if (voice.empty())
             return "";
 
-        std::string backstory = BuildBackstoryPromptBlock(config, personality);
+        std::string backstory = BuildBackstoryPromptBlock(config, personality, false);
         std::string combined = backstory.empty() ? voice : (voice + "\n" + backstory);
         if (config.personalityMaxPromptCharacters == 0)
             return combined;

@@ -2034,8 +2034,6 @@ namespace AzerothVoices
             if (LoadPersonality(actor, personality))
             {
                 request.personality = std::move(personality);
-                if (request.personality.backgroundMode != m_config->personalityBackgroundMode)
-                    request.personality.background.clear();
                 request.personalityBlock = BuildPersonalityPromptBlock(
                     *m_config, request.personality, scope, trigger, message, directConversation, ambient);
             }
@@ -3543,9 +3541,7 @@ namespace AzerothVoices
             return false;
         if (m_config->personalityGenerateTone && personality.tone.empty())
             return false;
-        if (m_config->personalityGenerateBackground &&
-            (personality.background.empty() ||
-             personality.backgroundMode != m_config->personalityBackgroundMode))
+        if (m_config->personalityGenerateBackground && personality.background.empty())
             return false;
         if (m_config->personalityMaxBackgroundCharacters > 0 &&
             personality.background.size() > m_config->personalityMaxBackgroundCharacters)
