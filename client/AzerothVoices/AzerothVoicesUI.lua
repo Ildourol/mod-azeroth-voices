@@ -177,8 +177,7 @@ local function createToneBox(parent, x, y, width, height)
         scroll:SetVerticalScroll(this:GetValue() or 0)
     end)
 
-    holder:EnableMouseWheel(true)
-    holder:SetScript("OnMouseWheel", function()
+    local function onMouseWheel()
         local delta = arg1 or 0
         local _, maxScroll = bar:GetMinMaxValues()
         local cur = bar:GetValue() or 0
@@ -186,7 +185,14 @@ local function createToneBox(parent, x, y, width, height)
         local newVal = math.max(0, math.min(maxScroll, cur - (delta * step)))
         bar:SetValue(newVal)
         scroll:SetVerticalScroll(newVal)
-    end)
+    end
+
+    holder:EnableMouseWheel(true)
+    holder:SetScript("OnMouseWheel", onMouseWheel)
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", onMouseWheel)
+    content:EnableMouseWheel(true)
+    content:SetScript("OnMouseWheel", onMouseWheel)
 
     holder.scroll = scroll
     holder.text = text
@@ -246,8 +252,9 @@ local function createBackstoryBox(parent, x, y, width, height)
     local function updateScroll()
         local strHeight = getTextHeight(text, width - 28)
         local viewHeight = scroll:GetHeight() or (height - 12)
-        local contentHeight = math.max(viewHeight, strHeight + 6)
+        local contentHeight = math.max(viewHeight, strHeight + 16)
         content:SetHeight(contentHeight)
+        text:SetHeight(contentHeight)
         local maxScroll = math.max(0, contentHeight - viewHeight)
         bar:SetMinMaxValues(0, maxScroll)
         local cur = math.min(bar:GetValue() or 0, maxScroll)
@@ -264,8 +271,7 @@ local function createBackstoryBox(parent, x, y, width, height)
         scroll:SetVerticalScroll(this:GetValue() or 0)
     end)
 
-    holder:EnableMouseWheel(true)
-    holder:SetScript("OnMouseWheel", function()
+    local function onMouseWheel()
         local delta = arg1 or 0
         local _, maxScroll = bar:GetMinMaxValues()
         local cur = bar:GetValue() or 0
@@ -273,7 +279,14 @@ local function createBackstoryBox(parent, x, y, width, height)
         local newVal = math.max(0, math.min(maxScroll, cur - (delta * step)))
         bar:SetValue(newVal)
         scroll:SetVerticalScroll(newVal)
-    end)
+    end
+
+    holder:EnableMouseWheel(true)
+    holder:SetScript("OnMouseWheel", onMouseWheel)
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", onMouseWheel)
+    content:EnableMouseWheel(true)
+    content:SetScript("OnMouseWheel", onMouseWheel)
 
     holder.scroll = scroll
     holder.text = text
@@ -464,20 +477,20 @@ function AzerothVoices:BuildEditor(panel)
     panel.tone = createToneBox(content, 0, -166, contentWidth, 58)
 
     -- Background Story
-    local lStory = createLabel(content, "Background Story (Origin Context, Max 350 Chars)", 0, -236)
-    panel.backstory = createBackstoryBox(content, 0, -254, contentWidth, 158)
+    local lStory = createLabel(content, "Background Story", 0, -236)
+    panel.backstory = createBackstoryBox(content, 0, -254, contentWidth, 200)
 
     -- Regenerate Story Button
     local regenStoryBtn = button(content, "Generate Story", 120, function()
         AzerothVoices:RegenBackstory()
     end, 24)
-    regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -424)
+    regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -466)
     regenStoryBtn:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_TOP")
         GameTooltip:ClearLines()
         GameTooltip:AddLine("Generate Background Story", 1, 1, 1)
-        GameTooltip:AddLine("Generates a compact 3-4 sentence origin (max 350 chars) via LLM.", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine("Injected only when the bot is directly asked about their past.", 0.3, 1, 0.3, 1)
+        GameTooltip:AddLine("Generates an authentic character origin backstory via LLM.", 0.8, 0.8, 0.8, 1)
+        GameTooltip:AddLine("Injected when the bot is directly asked about their past.", 0.3, 1, 0.3, 1)
         GameTooltip:Show()
     end)
     regenStoryBtn:SetScript("OnLeave", function()
@@ -495,19 +508,19 @@ function AzerothVoices:BuildEditor(panel)
     panel.regenAllBtn = regenAllBtn
 
     -- Sentiment Section Header & Reset Button
-    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -462)
+    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -504)
     panel.sentimentLabel = lSentiment
 
     local resetSentimentBtn = button(content, "Reset Sentiment", 130, function()
         AzerothVoices:ResetSentiment()
     end, 22)
-    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -458)
+    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -500)
     resetSentimentBtn:Disable()
     panel.resetSentimentBtn = resetSentimentBtn
 
     -- Sentiment Status Bar (low -100 to high +100)
     local barHolder = CreateFrame("Frame", nil, content)
-    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -486)
+    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -528)
     barHolder:SetWidth(contentWidth)
     barHolder:SetHeight(18)
     barHolder:SetBackdrop({
@@ -583,7 +596,7 @@ function AzerothVoices:BuildEditor(panel)
     scaleHigh:SetTextColor(0.3, 0.85, 0.4)
     panel.sentimentScaleHigh = scaleHigh
 
-    content:SetHeight(545)
+    content:SetHeight(585)
 
     -- Status label at bottom
     local status = createLabel(panel, "", 16, 10)
@@ -643,7 +656,7 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Show(); scaleMid:Show(); scaleHigh:Show()
             forgetBtn:Show()
             all:Show(); clear:Show()
-            content:SetHeight(545)
+            content:SetHeight(585)
         end
         updateEditorScroll()
         AzerothVoices:UpdateSaveButton()
