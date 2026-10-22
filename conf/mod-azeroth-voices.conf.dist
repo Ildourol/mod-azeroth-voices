@@ -437,10 +437,14 @@ AzerothVoices.Personality.MaxTokens = 0
 AzerothVoices.Personality.MaxBackgroundChars = 0
 
 # AzerothVoices.Personality.MaxPromptChars
-#     Description: Bounds personality and background text inserted into each prompt;
-#                  accepted range 100-2000 characters; default 750.
-#     Default:     750
-AzerothVoices.Personality.MaxPromptChars = 750
+#     Description: Bounds personality and background text inserted into each prompt.
+#                  - Set to 0 for automatic mode (accommodates the full persona voice
+#                    and backstory without artificial prompt character capping).
+#                  - Set to a fixed number (100 - 2000) to strictly limit the maximum
+#                    characters of personality context injected into LLM requests.
+#     Accepted:    0 - 2000 (0 = auto)
+#     Default:     0
+AzerothVoices.Personality.MaxPromptChars = 0
 
 
 # AzerothVoices.Personality.Prompt.Roleplay

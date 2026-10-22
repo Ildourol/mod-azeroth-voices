@@ -109,7 +109,7 @@ namespace AzerothVoices
         uint32_t personalityBackstorySentences = 0;
         uint32_t personalityMaxTokens = 0;
         uint32_t personalityMaxBackgroundCharacters = 0;
-        uint32_t personalityMaxPromptCharacters = 750;
+        uint32_t personalityMaxPromptCharacters = 0;
         std::string personalityPromptRoleplay;
         std::string personalityPromptNormal;
         std::string personalityPromptTraits;

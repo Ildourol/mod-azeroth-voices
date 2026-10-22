@@ -262,7 +262,7 @@ namespace AzerothVoices
         c.personalityMaxBackgroundCharacters = Clamped(
             "AzerothVoices.Personality.MaxBackgroundChars", 0, 0, 1500);
         c.personalityMaxPromptCharacters = Clamped(
-            "AzerothVoices.Personality.MaxPromptChars", 750, 100, 2000);
+            "AzerothVoices.Personality.MaxPromptChars", 0, 0, 2000);
 
         std::string const defaultPersonalityRoleplayPrompt =
             "Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "

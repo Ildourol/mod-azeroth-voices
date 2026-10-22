@@ -643,6 +643,9 @@ namespace AzerothVoices
                 block << "\n" << backstory;
         }
 
+        if (config.personalityMaxPromptCharacters == 0)
+            return block.str();
+
         return HeadBounded(block.str(), config.personalityMaxPromptCharacters);
     }
 
@@ -653,10 +656,11 @@ namespace AzerothVoices
             return "";
 
         std::string backstory = BuildBackstoryPromptBlock(config, personality);
-        if (backstory.empty())
-            return HeadBounded(voice, config.personalityMaxPromptCharacters);
+        std::string combined = backstory.empty() ? voice : (voice + "\n" + backstory);
+        if (config.personalityMaxPromptCharacters == 0)
+            return combined;
 
-        return HeadBounded(voice + "\n" + backstory, config.personalityMaxPromptCharacters);
+        return HeadBounded(combined, config.personalityMaxPromptCharacters);
     }
 
     std::string JoinPersonalityTraits(std::vector<std::string> const& traits)

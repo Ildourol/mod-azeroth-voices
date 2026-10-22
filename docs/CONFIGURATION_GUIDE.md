@@ -515,7 +515,7 @@
 | [`AzerothVoices.Personality.BackstorySentences`](#azerothvoicespersonalitybackstorysentences) | Integer (`0-10`) | `0` | Target sentence count for generated backstories; 0 = unconstrained / auto; 1-2 = short/punchy; 3-4 = traditional. |
 | [`AzerothVoices.Personality.MaxTokens`](#azerothvoicespersonalitymaxtokens) | Integer (`0-2048`) | `0` | Hard output token limit sent to API for personality/backstory generation; 0 = auto budgeting from character budget. |
 | [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-1500`) | `0` | Hard maximum character limit stored in DB and displayed in UI; 0 = auto / full column capacity (1500 characters). |
-| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`100-2000`) | `750` | Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 750. |
+| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`0-2000`) | `0` | Bounds personality and background text inserted into each prompt; 0 = auto mode (full unclipped persona context). |
 | [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth...` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0). |
 | [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a concise, realistic backstory for a fictional person who plays World of Warcraft...` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1). |
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
@@ -601,10 +601,10 @@
 
 ### <a id="azerothvoicespersonalitymaxpromptchars"></a>`AzerothVoices.Personality.MaxPromptChars`
 
-- **Data Type**: Integer (`100-2000`)
-- **Default Value**: `750`
-- **Description**: Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 750.
-- **Operator Guidance & Impact**: Limits combined persona context (traits + tone + contextually gated backstory) injected into LLM requests. Strictly prevents token bloat while ensuring complete descriptions are never sliced.
+- **Data Type**: Integer (`0-2000`)
+- **Default Value**: `0`
+- **Description**: Bounds personality and background text inserted into each prompt. Set to 0 for automatic mode (accommodates the full persona voice and backstory without artificial prompt character capping). Set to a fixed number (100-2000) to strictly limit the maximum characters of personality context injected into LLM requests.
+- **Operator Guidance & Impact**: In auto mode (`0`), the prompt block is preserved intact, allowing whatever backstory is configured to fit alongside traits and tone without mid-sentence slicing. If token budgeting requires strict prompt headroom, set a fixed character bound (e.g. 500-750).
 
 ### <a id="azerothvoicespersonalitypromptroleplay"></a>`AzerothVoices.Personality.Prompt.Roleplay`
 
