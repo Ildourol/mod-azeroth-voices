@@ -83,10 +83,10 @@ The complete, setting-by-setting reference is the [Configuration and Tuning Guid
 | `AzerothVoices.QueueMaximum` | `128` | Queued request capacity |
 | `AzerothVoices.GlobalRequestsPerMinute` | `60` | Shared request rate cap |
 | `AzerothVoices.GlobalMode` | `Normal` | Default PlayerBot dialogue style |
-| `AzerothVoices.Personality.BackstorySentences` | `0` | Target sentences for backstories (0 = auto) |
-| `AzerothVoices.Personality.MaxTokens` | `0` | Generation token budget (0 = auto) |
-| `AzerothVoices.Personality.MaxBackgroundChars` | `0` | Backstory DB/UI character cap (0 = auto) |
-| `AzerothVoices.Personality.MaxPromptChars` | `0` | Persona prompt character cap (0 = auto) |
+| `AzerothVoices.Personality.BackstorySentences` | `3` | Target sentences for backstories (default 3) |
+| `AzerothVoices.Personality.MaxTokens` | `120` | Generation token budget (default 120) |
+| `AzerothVoices.Personality.MaxBackgroundChars` | `600` | Backstory DB/UI character cap (default 600) |
+| `AzerothVoices.Personality.MaxPromptChars` | `900` | Persona prompt character cap (default 900) |
 
 In `Thinking.Mode=Auto`, reasoning controls are conditional on the recognized official provider/model and `AzerothVoices.Thinking.AutoKinds` (default: `PersonalityGeneration,EventChat`). Some reasoning models cannot fully disable reasoning. For conversational latency and cost, consider output limits, request rates, the selected provider, and ambient trigger frequency together.
 

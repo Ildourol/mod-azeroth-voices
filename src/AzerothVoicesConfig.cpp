@@ -256,19 +256,19 @@ namespace AzerothVoices
         c.personalityGenerationRetrySeconds = Bounded(
             "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
         c.personalityBackstorySentences = Clamped(
-            "AzerothVoices.Personality.BackstorySentences", 0, 0, 10);
+            "AzerothVoices.Personality.BackstorySentences", 3, 0, 10);
         c.personalityMaxTokens = Clamped(
-            "AzerothVoices.Personality.MaxTokens", 0, 0, 2048);
+            "AzerothVoices.Personality.MaxTokens", 120, 0, 2048);
         c.personalityMaxBackgroundCharacters = Clamped(
-            "AzerothVoices.Personality.MaxBackgroundChars", 0, 0, 65535);
+            "AzerothVoices.Personality.MaxBackgroundChars", 600, 0, 65535);
         c.personalityMaxPromptCharacters = Clamped(
-            "AzerothVoices.Personality.MaxPromptChars", 0, 0, 2000);
+            "AzerothVoices.Personality.MaxPromptChars", 900, 0, 2000);
 
         std::string const defaultPersonalityRoleplayPrompt =
-            "Write a concise Vanilla/Turtle WoW character backstory. Include lore-accurate birthplace, everyday occupation (craftsperson, guard, herbalist, traveler), and upbringing. Avoid tragic clichés (orphan, burned village, revenge). Return only backstory text.";
+            "Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.";
 
         std::string const defaultPersonalityNormalPrompt =
-            "Write a realistic background for an authentic person: occupation, hometown, daily routines, and hobbies. Strictly do NOT mention WoW, gaming, or avatars—pure real-world life only. Avoid melodrama and divorce clichés. Return only backstory text.";
+            "Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.";
 
         c.personalityPromptRoleplay = Trim(sConfig.GetStringDefault(
             "AzerothVoices.Personality.Prompt.Roleplay", defaultPersonalityRoleplayPrompt.c_str()));

@@ -76,24 +76,26 @@ namespace AzerothVoices
             char c = value[i];
             if (c == '.' || c == '!' || c == '?')
             {
-                if (i + 1 == value.size() || value[i + 1] == ' ' || value[i + 1] == '"' || value[i + 1] == '\'')
+                if (i + 1 == value.size() || value[i + 1] == ' ' || value[i + 1] == '\n' || value[i + 1] == '\r' || value[i + 1] == '"' || value[i + 1] == '\'')
                 {
                     lastPunct = i;
                     break;
                 }
             }
-            if (searchLimit - i > 120)
+            if (i < (maximum / 3))
                 break;
         }
 
-        if (lastPunct != std::string::npos && lastPunct >= (maximum / 2))
+        if (lastPunct != std::string::npos)
         {
             return value.substr(0, lastPunct + 1);
         }
 
-        value.resize(maximum - 3);
-        value += "...";
-        return value;
+        size_t lastSpace = value.rfind(' ', maximum);
+        if (lastSpace != std::string::npos && lastSpace >= (maximum / 2))
+            return value.substr(0, lastSpace);
+
+        return value.substr(0, maximum);
     }
 
     namespace
@@ -222,8 +224,9 @@ namespace AzerothVoices
                        << (config.personalityBackstorySentences == 1 ? " sentence. " : " sentences. ");
             }
 
-            prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
-                      "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. ";
+            prompt << "Write in plain, simple, straightforward prose. Do NOT be poetic, dramatic, or flowery. "
+                      "Keep it compact with minimal details. Vary premise and structure naturally. "
+                      "Do not mention randomness, generation, prompts, or these instructions. ";
 
             if (config.personalityMaxBackgroundCharacters > 0)
                 prompt << "Keep background at or below " << config.personalityMaxBackgroundCharacters << " characters. ";
@@ -583,10 +586,11 @@ namespace AzerothVoices
                 block << "\n" << backstory;
         }
 
-        if (config.personalityMaxPromptCharacters == 0)
-            return block.str();
+        std::string const full = block.str();
+        if (config.personalityMaxPromptCharacters == 0 || full.size() <= config.personalityMaxPromptCharacters)
+            return full;
 
-        return HeadBounded(block.str(), config.personalityMaxPromptCharacters);
+        return CleanHeadBounded(full, config.personalityMaxPromptCharacters);
     }
 
     std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality)
@@ -597,10 +601,10 @@ namespace AzerothVoices
 
         std::string backstory = BuildBackstoryPromptBlock(config, personality);
         std::string combined = backstory.empty() ? voice : (voice + "\n" + backstory);
-        if (config.personalityMaxPromptCharacters == 0)
+        if (config.personalityMaxPromptCharacters == 0 || combined.size() <= config.personalityMaxPromptCharacters)
             return combined;
 
-        return HeadBounded(combined, config.personalityMaxPromptCharacters);
+        return CleanHeadBounded(combined, config.personalityMaxPromptCharacters);
     }
 
     std::string JoinPersonalityTraits(std::vector<std::string> const& traits)

@@ -106,10 +106,10 @@ namespace AzerothVoices
         bool personalityUseInRandom = true;
         bool personalityUseInEvents = true;
         uint32_t personalityGenerationRetrySeconds = 300;
-        uint32_t personalityBackstorySentences = 0;
-        uint32_t personalityMaxTokens = 0;
-        uint32_t personalityMaxBackgroundCharacters = 0;
-        uint32_t personalityMaxPromptCharacters = 0;
+        uint32_t personalityBackstorySentences = 3;
+        uint32_t personalityMaxTokens = 120;
+        uint32_t personalityMaxBackgroundCharacters = 600;
+        uint32_t personalityMaxPromptCharacters = 900;
         std::string personalityPromptRoleplay;
         std::string personalityPromptNormal;
         std::string personalityPromptTraits;

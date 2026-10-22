@@ -407,62 +407,61 @@ AzerothVoices.Personality.GenerationRetrySeconds = 300
 # AzerothVoices.Personality.BackstorySentences
 #     Description: Target sentence count for generated backstories.
 #                  - Set to 1 or 2 for short, punchy backstories.
-#                  - Set to 3 or 4 for traditional biographies.
+#                  - Set to 3 for compact 3-sentence backstories (ideal for 3-4 sentence biographies).
+#                  - Set to 1 or 2 for ultra-short, punchy backstories.
 #                  - Set to 0 to disable sentence constraints entirely, letting
 #                    token and character limits govern the output.
 #     Accepted:    0 - 10 (0 = no sentence constraint / auto)
-#     Default:     0
-AzerothVoices.Personality.BackstorySentences = 0
+#     Default:     3
+AzerothVoices.Personality.BackstorySentences = 3
 
 # AzerothVoices.Personality.MaxTokens
 #     Description: Hard output token limit sent directly to the LLM API for
 #                  personality & backstory generation calls.
+#                  - Set to 120 for compact 3-4 sentence backstories without rambling.
 #                  - Set to 0 for automatic token budgeting based on characters.
-#                  - Set to a fixed number (e.g. 60-150) to strictly constrain
-#                    how many tokens the model is allowed to generate.
 #                  - Bypasses reasoning/thinking token inflation so the model
 #                    cannot generate long, rambling stories.
 #     Accepted:    0 - 2048 (0 = auto)
-#     Default:     0
-AzerothVoices.Personality.MaxTokens = 0
+#     Default:     120
+AzerothVoices.Personality.MaxTokens = 120
 
 # AzerothVoices.Personality.MaxBackgroundChars
 #     Description: Hard maximum character limit stored in the database and
-#                  displayed in the Chatter Companion UI.
-#                  - Set to 0 for automatic / unconstrained mode (saves full
-#                    generated backstory into the database without character capping).
-#                  - Set to a fixed number (e.g. 350 - 5000) to strictly constrain
-#                    how many characters of backstory are stored in the database.
-#                  - Clamps smoothly instead of resetting to fallback defaults.
+#                  displayed in the Chatter / Azeroth Voices Companion UI.
+#                  - Set to 600 to comfortably fit complete 3-4 sentence backstories
+#                    without mid-sentence truncation or ellipsis in the database.
+#                  - Set to 0 for unconstrained mode (saves full generated backstory).
+#                  - Clamps cleanly at sentence boundaries instead of resetting to defaults.
 #     Accepted:    0 - 65535 (0 = auto / unconstrained)
-#     Default:     0
-AzerothVoices.Personality.MaxBackgroundChars = 0
+#     Default:     600
+AzerothVoices.Personality.MaxBackgroundChars = 600
 
 # AzerothVoices.Personality.MaxPromptChars
 #     Description: Bounds personality and background text inserted into each prompt.
-#                  - Set to 0 for automatic mode (accommodates the full persona voice
+#                  - Set to 900 to ensure full voice persona and complete 3-4 sentence
+#                    backstory are injected into requests without any ellipsis truncation.
+#                  - Set to 0 for automatic mode (accommodates full persona voice
 #                    and backstory without artificial prompt character capping).
-#                  - Set to a fixed number (100 - 2000) to strictly limit the maximum
-#                    characters of personality context injected into LLM requests.
 #     Accepted:    0 - 2000 (0 = auto)
-#     Default:     0
-AzerothVoices.Personality.MaxPromptChars = 0
+#     Default:     900
+AzerothVoices.Personality.MaxPromptChars = 900
 
 
 # AzerothVoices.Personality.Prompt.Roleplay
 #     Description: Compact system guidance prompt used when generating backstories in Roleplay
-#                  mode (BackgroundMode=0). Instructs the model to create authentic,
-#                  lore-appropriate character biographies without cliché tropes. (Text.)
-#     Default:     Write a concise Vanilla/Turtle WoW character backstory. Include lore-accurate birthplace, everyday occupation (craftsperson, guard, herbalist, traveler), and upbringing. Avoid tragic clichés (orphan, burned village, revenge). Return only backstory text.
-AzerothVoices.Personality.Prompt.Roleplay = Write a concise Vanilla/Turtle WoW character backstory. Include lore-accurate birthplace, everyday occupation (craftsperson, guard, herbalist, traveler), and upbringing. Avoid tragic clichés (orphan, burned village, revenge). Return only backstory text.
+#                  mode (BackgroundMode=0). Instructs the model to create simple,
+#                  lore-appropriate character biographies without poetic or flowery language. (Text.)
+#     Default:     Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.
+AzerothVoices.Personality.Prompt.Roleplay = Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.
 
 # AzerothVoices.Personality.Prompt.Normal
 #     Description: Compact system guidance prompt used when generating backstories in Normal
-#                  mode (BackgroundMode=1). Instructs the model to create authentic,
+#                  mode (BackgroundMode=1). Instructs the model to create simple,
 #                  purely real-life biographical backgrounds (occupation, hometown,
-#                  daily routines, hobbies) with zero mention of WoW or gaming. (Text.)
-#     Default:     Write a realistic background for an authentic person: occupation, hometown, daily routines, and hobbies. Strictly do NOT mention WoW, gaming, or avatars—pure real-world life only. Avoid melodrama and divorce clichés. Return only backstory text.
-AzerothVoices.Personality.Prompt.Normal = Write a realistic background for an authentic person: occupation, hometown, daily routines, and hobbies. Strictly do NOT mention WoW, gaming, or avatars—pure real-world life only. Avoid melodrama and divorce clichés. Return only backstory text.
+#                  daily routines) with zero poetic phrasing and zero mention of WoW. (Text.)
+#     Default:     Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.
+AzerothVoices.Personality.Prompt.Normal = Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.
 
 # AzerothVoices.Personality.Prompt.Traits
 #     Description: System guidance prompt used when generating a bot's 3 personality traits.

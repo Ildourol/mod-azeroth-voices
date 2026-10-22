@@ -512,12 +512,12 @@
 | [`AzerothVoices.Personality.UseInRandom`](#azerothvoicespersonalityuseinrandom) | Boolean (`0` or `1`) | `1` | Uses the persistent PlayerBot personality in random/ambient and generated-f... |
 | [`AzerothVoices.Personality.UseInEvents`](#azerothvoicespersonalityuseinevents) | Boolean (`0` or `1`) | `1` | Uses the persistent PlayerBot personality in automatic and adapter event pr... |
 | [`AzerothVoices.Personality.GenerationRetrySeconds`](#azerothvoicespersonalitygenerationretryseconds) | Integer (Seconds) | `300` | Sets the minimum delay after failed generation before the same bot can retr... |
-| [`AzerothVoices.Personality.BackstorySentences`](#azerothvoicespersonalitybackstorysentences) | Integer (`0-10`) | `0` | Target sentence count for generated backstories; 0 = unconstrained / auto; 1-2 = short/punchy; 3-4 = traditional. |
-| [`AzerothVoices.Personality.MaxTokens`](#azerothvoicespersonalitymaxtokens) | Integer (`0-2048`) | `0` | Hard output token limit sent to API for personality/backstory generation; 0 = auto budgeting from character budget. |
-| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-65535`) | `0` | Hard maximum character limit stored in DB and displayed in UI; 0 = auto / unconstrained (full TEXT column capacity). |
-| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`0-2000`) | `0` | Bounds personality and background text inserted into each prompt; 0 = auto mode (full unclipped persona context). |
-| [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a concise Vanilla/Turtle WoW character backstory. Include lore-accurate birthplace, everyday occupation (craftsperson, guard, herbalist, traveler), and upbringing. Avoid tragic clichés (orphan, burned village, revenge). Return only backstory text.` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0). |
-| [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a realistic background for an authentic person: occupation, hometown, daily routines, and hobbies. Strictly do NOT mention WoW, gaming, or avatars—pure real-world life only. Avoid melodrama and divorce clichés. Return only backstory text.` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1), focused 100% on real-life details (occupation, routines, hobbies) with zero WoW mentions. |
+| [`AzerothVoices.Personality.BackstorySentences`](#azerothvoicespersonalitybackstorysentences) | Integer (`0-10`) | `3` | Target sentence count for generated backstories; default 3 for compact 3-sentence biographies (ideal for 3-4 sentence stories). |
+| [`AzerothVoices.Personality.MaxTokens`](#azerothvoicespersonalitymaxtokens) | Integer (`0-2048`) | `120` | Hard output token limit sent to API for personality/backstory generation; default 120 tokens for compact, non-rambling output. |
+| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-65535`) | `600` | Hard maximum character limit stored in DB and displayed in UI; default 600 chars to fit complete 3-4 sentence backstories without truncation. |
+| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`0-2000`) | `900` | Bounds personality and background text inserted into each prompt; default 900 chars to ensure full persona context without ellipsis truncation. |
+| [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0), strictly enforcing non-poetic plain facts. |
+| [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1), strictly enforcing non-poetic plain real-world facts with zero WoW mentions. |
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
 | [`AzerothVoices.Personality.Prompt.Tone`](#azerothvoicespersonalityprompttone) | String | `tone must be a concise speaking-style description derived from the traits...` | System guidance prompt used when generating a bot's persistent speaking style. |
 
@@ -581,44 +581,44 @@
 ### <a id="azerothvoicespersonalitybackstorysentences"></a>`AzerothVoices.Personality.BackstorySentences`
 
 - **Data Type**: Integer (`0-10`)
-- **Default Value**: `0`
-- **Description**: Target sentence count for generated backstories. Set to 1 or 2 for short, punchy backstories; 3 or 4 for traditional biographies; or 0 to disable sentence constraints entirely, letting token and character limits govern output length.
-- **Operator Guidance & Impact**: Provides direct sentence-level length control in system prompts. When set to `0` (auto mode), generation is unconstrained by sentence count, defaulting to token/character boundaries.
+- **Default Value**: `3`
+- **Description**: Target sentence count for generated backstories. Set to 3 for compact 3-sentence biographies (ideal for 3-4 sentence stories); 1 or 2 for ultra-short punchy stories; or 0 to disable sentence constraints entirely.
+- **Operator Guidance & Impact**: Provides direct sentence-level length control in system prompts. Default `3` produces clean, focused 3-sentence backstories without rambling.
 
 ### <a id="azerothvoicespersonalitymaxtokens"></a>`AzerothVoices.Personality.MaxTokens`
 
 - **Data Type**: Integer (`0-2048`)
-- **Default Value**: `0`
-- **Description**: Hard output token limit sent directly to the LLM API for personality and backstory generation calls. Set to 0 for automatic token budgeting based on the character limit. Set to a fixed number (e.g. 60-150) to strictly constrain tokens. Bypasses reasoning/thinking token inflation so the model cannot produce rambling output.
-- **Operator Guidance & Impact**: Overrides automatic budgeting (`charLimit / 3 + 64`) and prevents `Thinking.TokenReserve` from inflating personality generation payloads.
+- **Default Value**: `120`
+- **Description**: Hard output token limit sent directly to the LLM API for personality and backstory generation calls. Default 120 tokens ensures compact 3-4 sentence backstories without runaway generation or mid-sentence cuts.
+- **Operator Guidance & Impact**: Overrides automatic budgeting and prevents `Thinking.TokenReserve` from inflating personality generation payloads.
 
 ### <a id="azerothvoicespersonalitymaxbackgroundchars"></a>`AzerothVoices.Personality.MaxBackgroundChars`
 
 - **Data Type**: Integer (`0-65535`)
-- **Default Value**: `0`
-- **Description**: Hard maximum character limit stored in the database (`azeroth_voices_bot_personality.background` MySQL `TEXT` column) and displayed in the Chatter Companion UI. Clamps smoothly using sentence-boundary detection (`CleanHeadBounded`). Setting `0` enables automatic unconstrained mode (saves full generated backstory without artificial character capping).
-- **Operator Guidance & Impact**: Set to a specific character limit (e.g., 350-1500) if you wish to strictly cap database row size and UI preview text, or leave as `0` for unconstrained generation. When a non-zero limit is configured, stored DB rows exceeding this limit are cleanly trimmed to the nearest sentence punctuation.
+- **Default Value**: `600`
+- **Description**: Hard maximum character limit stored in the database (`azeroth_voices_bot_personality.background` MySQL `TEXT` column) and displayed in the Chatter / Azeroth Voices Companion UI. Default 600 characters comfortably accommodates complete 3-4 sentence backstories without mid-sentence truncation or ellipsis (`...`) in the database.
+- **Operator Guidance & Impact**: Clamps cleanly at complete sentence boundaries using `CleanHeadBounded` without ever appending ellipsis (`...`).
 
 ### <a id="azerothvoicespersonalitymaxpromptchars"></a>`AzerothVoices.Personality.MaxPromptChars`
 
 - **Data Type**: Integer (`0-2000`)
-- **Default Value**: `0`
-- **Description**: Bounds personality and background text inserted into each prompt. Set to 0 for automatic mode (accommodates the full persona voice and backstory without artificial prompt character capping). Set to a fixed number (100-2000) to strictly limit the maximum characters of personality context injected into LLM requests.
-- **Operator Guidance & Impact**: In auto mode (`0`), the prompt block is preserved intact, allowing whatever backstory is configured to fit alongside traits and tone without mid-sentence slicing. If token budgeting requires strict prompt headroom, set a fixed character bound (e.g. 500-750).
+- **Default Value**: `900`
+- **Description**: Bounds personality and background text inserted into each prompt. Default 900 characters ensures that the full voice persona (~180 chars) and complete 3-4 sentence backstory (~400-500 chars) are injected into requests 100% full without any ellipsis (`...`) truncation.
+- **Operator Guidance & Impact**: Sized to comfortably fit the complete persona context without clipping.
 
 ### <a id="azerothvoicespersonalitypromptroleplay"></a>`AzerothVoices.Personality.Prompt.Roleplay`
 
 - **Data Type**: String
-- **Default Value**: `Write a concise Vanilla/Turtle WoW character backstory. Include lore-accurate birthplace, everyday occupation (craftsperson, guard, herbalist, traveler), and upbringing. Avoid tragic clichés (orphan, burned village, revenge). Return only backstory text.`
-- **Description**: Compact guidance prompt used when generating backstories in Roleplay mode (`BackgroundMode=0`). Instructs the model to create concise, lore-accurate Vanilla/Turtle WoW character biographies without cliché tropes.
-- **Operator Guidance & Impact**: Highly compact token footprint (~32 words) keeping LLM system context dense, fast, and focused.
+- **Default Value**: `Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.`
+- **Description**: Compact guidance prompt used when generating backstories in Roleplay mode (`BackgroundMode=0`). Instructs the model to create simple, lore-accurate Vanilla/Turtle WoW character biographies with plain facts and zero poetic or flowery language.
+- **Operator Guidance & Impact**: Compact token footprint keeping LLM system context dense, fast, and strictly factual.
 
 ### <a id="azerothvoicespersonalitypromptnormal"></a>`AzerothVoices.Personality.Prompt.Normal`
 
 - **Data Type**: String
-- **Default Value**: `Write a realistic background for an authentic person: occupation, hometown, daily routines, and hobbies. Strictly do NOT mention WoW, gaming, or avatars—pure real-world life only. Avoid melodrama and divorce clichés. Return only backstory text.`
-- **Description**: Compact guidance prompt used when generating backstories in Normal mode (`BackgroundMode=1`). Instructs the model to create concise, authentic real-life biographical backgrounds (occupation, hometown, daily routines, hobbies) with zero mention of WoW or gaming.
-- **Operator Guidance & Impact**: Highly compact token footprint (~36 words) ensuring PlayerBots possess genuine, believable everyday human backgrounds without melodrama or cliché loops.
+- **Default Value**: `Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.`
+- **Description**: Compact guidance prompt used when generating backstories in Normal mode (`BackgroundMode=1`). Instructs the model to create simple, authentic real-life biographical backgrounds (occupation, hometown, simple routine) with zero poetic phrasing and zero mention of WoW.
+- **Operator Guidance & Impact**: Highly compact token footprint ensuring PlayerBots possess genuine, believable everyday human backgrounds without melodrama, poetry, or cliché loops.
 
 ### <a id="azerothvoicespersonalityprompttraits"></a>`AzerothVoices.Personality.Prompt.Traits`
 
