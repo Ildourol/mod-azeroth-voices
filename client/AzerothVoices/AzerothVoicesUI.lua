@@ -311,7 +311,7 @@ end
 function AzerothVoices:BuildEditor(panel)
     panel.currentMode = panel.currentMode or "full"
 
-    local title = createLabel(panel, "Chatter / Azeroth Voices", 16, -16)
+    local title = createLabel(panel, "Azeroth Voices", 16, -16)
     title:SetFontObject(GameFontNormalLarge)
 
     local hint = createLabel(panel,
@@ -478,13 +478,13 @@ function AzerothVoices:BuildEditor(panel)
 
     -- Background Story
     local lStory = createLabel(content, "Background Story", 0, -236)
-    panel.backstory = createBackstoryBox(content, 0, -254, contentWidth, 200)
+    panel.backstory = createBackstoryBox(content, 0, -254, contentWidth, 185)
 
     -- Regenerate Story Button
     local regenStoryBtn = button(content, "Generate Story", 120, function()
         AzerothVoices:RegenBackstory()
     end, 24)
-    regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -466)
+    regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -451)
     regenStoryBtn:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_TOP")
         GameTooltip:ClearLines()
@@ -508,19 +508,19 @@ function AzerothVoices:BuildEditor(panel)
     panel.regenAllBtn = regenAllBtn
 
     -- Sentiment Section Header & Reset Button
-    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -504)
+    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -489)
     panel.sentimentLabel = lSentiment
 
     local resetSentimentBtn = button(content, "Reset Sentiment", 130, function()
         AzerothVoices:ResetSentiment()
     end, 22)
-    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -500)
+    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -485)
     resetSentimentBtn:Disable()
     panel.resetSentimentBtn = resetSentimentBtn
 
     -- Sentiment Status Bar (low -100 to high +100)
     local barHolder = CreateFrame("Frame", nil, content)
-    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -528)
+    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -513)
     barHolder:SetWidth(contentWidth)
     barHolder:SetHeight(18)
     barHolder:SetBackdrop({
@@ -596,7 +596,7 @@ function AzerothVoices:BuildEditor(panel)
     scaleHigh:SetTextColor(0.3, 0.85, 0.4)
     panel.sentimentScaleHigh = scaleHigh
 
-    content:SetHeight(585)
+    content:SetHeight(550)
 
     -- Status label at bottom
     local status = createLabel(panel, "", 16, 10)
@@ -656,7 +656,7 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Show(); scaleMid:Show(); scaleHigh:Show()
             forgetBtn:Show()
             all:Show(); clear:Show()
-            content:SetHeight(585)
+            content:SetHeight(550)
         end
         updateEditorScroll()
         AzerothVoices:UpdateSaveButton()

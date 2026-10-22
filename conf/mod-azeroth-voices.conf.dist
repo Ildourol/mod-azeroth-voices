@@ -398,19 +398,19 @@ AzerothVoices.Personality.UseInEvents = 1
 #     Description: Sets the minimum delay after failed generation before the same bot
 #                  can retry; accepted range 10-86400 seconds; default 300.
 #     Default:     300
-AzerothVoices.Personality.GenerationRetrySeconds = 15
+AzerothVoices.Personality.GenerationRetrySeconds = 300
 
 # AzerothVoices.Personality.MaxBackgroundChars
 #     Description: Bounds a generated stored background; accepted range 100-600
-#                  characters; default 350.
-#     Default:     350
-AzerothVoices.Personality.MaxBackgroundChars = 350
+#                  characters; default 600.
+#     Default:     600
+AzerothVoices.Personality.MaxBackgroundChars = 600
 
 # AzerothVoices.Personality.MaxPromptChars
 #     Description: Bounds personality and background text inserted into each prompt;
-#                  accepted range 100-1000 characters; default 500.
-#     Default:     500
-AzerothVoices.Personality.MaxPromptChars = 500
+#                  accepted range 100-1000 characters; default 750.
+#     Default:     750
+AzerothVoices.Personality.MaxPromptChars = 750
 
 
 # AzerothVoices.Personality.Prompt.Roleplay
