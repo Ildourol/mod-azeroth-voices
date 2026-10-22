@@ -68,6 +68,24 @@ namespace AzerothVoices
             return static_cast<uint32_t>(value);
         }
 
+        uint32_t Clamped(char const* key, uint32_t fallback, uint32_t minimum, uint32_t maximum)
+        {
+            int32 value = sConfig.GetIntDefault(key, static_cast<int32>(fallback));
+            if (value < static_cast<int32>(minimum))
+            {
+                sLog.outError("[AzerothVoices][CONFIG] %s=%d is below minimum %u; clamping to %u.",
+                    key, value, minimum, minimum);
+                return minimum;
+            }
+            if (value > static_cast<int32>(maximum))
+            {
+                sLog.outError("[AzerothVoices][CONFIG] %s=%d exceeds maximum %u; clamping to %u.",
+                    key, value, maximum, maximum);
+                return maximum;
+            }
+            return static_cast<uint32_t>(value);
+        }
+
         std::set<uint32_t> UnsignedSet(char const* key, char const* fallback,
                                        uint32_t maximum = std::numeric_limits<uint32_t>::max())
         {
@@ -237,20 +255,24 @@ namespace AzerothVoices
             "AzerothVoices.Personality.UseInEvents", 1, 0, 1) != 0;
         c.personalityGenerationRetrySeconds = Bounded(
             "AzerothVoices.Personality.GenerationRetrySeconds", 300, 10, 86400);
-        c.personalityMaxBackgroundCharacters = Bounded(
-            "AzerothVoices.Personality.MaxBackgroundChars", 350, 100, 600);
-        c.personalityMaxPromptCharacters = Bounded(
-            "AzerothVoices.Personality.MaxPromptChars", 500, 100, 1000);
+        c.personalityBackstorySentences = Clamped(
+            "AzerothVoices.Personality.BackstorySentences", 0, 0, 10);
+        c.personalityMaxTokens = Clamped(
+            "AzerothVoices.Personality.MaxTokens", 0, 0, 2048);
+        c.personalityMaxBackgroundCharacters = Clamped(
+            "AzerothVoices.Personality.MaxBackgroundChars", 0, 0, 1500);
+        c.personalityMaxPromptCharacters = Clamped(
+            "AzerothVoices.Personality.MaxPromptChars", 750, 100, 2000);
 
         std::string const defaultPersonalityRoleplayPrompt =
-            "Write a concise, immersive 3-4 sentence backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "
+            "Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "
             "Include a birthplace appropriate to their race and Warcraft lore, a brief mention of their upbringing, and 1-2 formative "
             "events that shaped them. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. "
             "Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. "
             "Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions.";
 
         std::string const defaultPersonalityNormalPrompt =
-            "Write a concise, realistic 3-4 sentence backstory for a fictional person who plays World of Warcraft. "
+            "Write a concise, realistic backstory for a fictional person who plays World of Warcraft. "
             "Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, "
             "everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction "
             "enthusiasts, lore fans, or nostalgic veterans). "

@@ -512,8 +512,10 @@
 | [`AzerothVoices.Personality.UseInRandom`](#azerothvoicespersonalityuseinrandom) | Boolean (`0` or `1`) | `1` | Uses the persistent PlayerBot personality in random/ambient and generated-f... |
 | [`AzerothVoices.Personality.UseInEvents`](#azerothvoicespersonalityuseinevents) | Boolean (`0` or `1`) | `1` | Uses the persistent PlayerBot personality in automatic and adapter event pr... |
 | [`AzerothVoices.Personality.GenerationRetrySeconds`](#azerothvoicespersonalitygenerationretryseconds) | Integer (Seconds) | `300` | Sets the minimum delay after failed generation before the same bot can retr... |
-| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer | `600` | Bounds a generated stored background; accepted range 100-600 characters; de... |
-| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer | `750` | Bounds personality and background text inserted into each prompt; accepted ... |
+| [`AzerothVoices.Personality.BackstorySentences`](#azerothvoicespersonalitybackstorysentences) | Integer (`0-10`) | `0` | Target sentence count for generated backstories; 0 = unconstrained / auto; 1-2 = short/punchy; 3-4 = traditional. |
+| [`AzerothVoices.Personality.MaxTokens`](#azerothvoicespersonalitymaxtokens) | Integer (`0-2048`) | `0` | Hard output token limit sent to API for personality/backstory generation; 0 = auto budgeting from character budget. |
+| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-1500`) | `0` | Hard maximum character limit stored in DB and displayed in UI; 0 = auto / full column capacity (1500 characters). |
+| [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`100-2000`) | `750` | Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 750. |
 | [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth...` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0). |
 | [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a concise, realistic backstory for a fictional person who plays World of Warcraft...` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1). |
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
@@ -576,18 +578,32 @@
 - **Description**: Sets the minimum delay after failed generation before the same bot can retry; accepted range 10-86400 seconds; default 300.
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
+### <a id="azerothvoicespersonalitybackstorysentences"></a>`AzerothVoices.Personality.BackstorySentences`
+
+- **Data Type**: Integer (`0-10`)
+- **Default Value**: `0`
+- **Description**: Target sentence count for generated backstories. Set to 1 or 2 for short, punchy backstories; 3 or 4 for traditional biographies; or 0 to disable sentence constraints entirely, letting token and character limits govern output length.
+- **Operator Guidance & Impact**: Provides direct sentence-level length control in system prompts. When set to `0` (auto mode), generation is unconstrained by sentence count, defaulting to token/character boundaries.
+
+### <a id="azerothvoicespersonalitymaxtokens"></a>`AzerothVoices.Personality.MaxTokens`
+
+- **Data Type**: Integer (`0-2048`)
+- **Default Value**: `0`
+- **Description**: Hard output token limit sent directly to the LLM API for personality and backstory generation calls. Set to 0 for automatic token budgeting based on the character limit. Set to a fixed number (e.g. 60-150) to strictly constrain tokens. Bypasses reasoning/thinking token inflation so the model cannot produce rambling output.
+- **Operator Guidance & Impact**: Overrides automatic budgeting (`charLimit / 3 + 64`) and prevents `Thinking.TokenReserve` from inflating personality generation payloads.
+
 ### <a id="azerothvoicespersonalitymaxbackgroundchars"></a>`AzerothVoices.Personality.MaxBackgroundChars`
 
-- **Data Type**: Integer
-- **Default Value**: `350`
-- **Description**: Bounds a generated stored background; accepted range 100-600 characters; default 350.
-- **Operator Guidance & Impact**: Restricts backstories to compact, concise 3–4 sentence origins (~50–70 tokens). Fits within the 500-character total prompt budget without mid-sentence truncation.
+- **Data Type**: Integer (`0-1500`)
+- **Default Value**: `0`
+- **Description**: Hard maximum character limit stored in the database (`azeroth_voices_bot_personality.background`) and displayed in the Chatter Companion UI. Clamps smoothly using sentence-boundary detection (`CleanHeadBounded`). Setting `0` enables automatic full capacity (1500 characters, matching the MySQL column).
+- **Operator Guidance & Impact**: Set to a specific character limit (e.g., 300-500) if you wish to strictly cap database row size and UI preview text, or leave as `0` for full 1500-character capacity. Stored DB rows exceeding this limit are cleanly trimmed to the nearest sentence punctuation.
 
 ### <a id="azerothvoicespersonalitymaxpromptchars"></a>`AzerothVoices.Personality.MaxPromptChars`
 
-- **Data Type**: Integer
-- **Default Value**: `500`
-- **Description**: Bounds personality and background text inserted into each prompt; accepted range 100-1000 characters; default 500.
+- **Data Type**: Integer (`100-2000`)
+- **Default Value**: `750`
+- **Description**: Bounds personality and background text inserted into each prompt; accepted range 100-2000 characters; default 750.
 - **Operator Guidance & Impact**: Limits combined persona context (traits + tone + contextually gated backstory) injected into LLM requests. Strictly prevents token bloat while ensuring complete descriptions are never sliced.
 
 ### <a id="azerothvoicespersonalitypromptroleplay"></a>`AzerothVoices.Personality.Prompt.Roleplay`

@@ -60,6 +60,44 @@ namespace AzerothVoices
             value += "...";
             return value;
         }
+    }
+
+    std::string CleanHeadBounded(std::string value, size_t maximum)
+    {
+        if (value.size() <= maximum)
+            return value;
+        if (maximum <= 3)
+            return value.substr(0, maximum);
+
+        size_t const searchLimit = maximum - 1;
+        size_t lastPunct = std::string::npos;
+        for (size_t i = searchLimit; i > 0; --i)
+        {
+            char c = value[i];
+            if (c == '.' || c == '!' || c == '?')
+            {
+                if (i + 1 == value.size() || value[i + 1] == ' ' || value[i + 1] == '"' || value[i + 1] == '\'')
+                {
+                    lastPunct = i;
+                    break;
+                }
+            }
+            if (searchLimit - i > 120)
+                break;
+        }
+
+        if (lastPunct != std::string::npos && lastPunct >= (maximum / 2))
+        {
+            return value.substr(0, lastPunct + 1);
+        }
+
+        value.resize(maximum - 3);
+        value += "...";
+        return value;
+    }
+
+    namespace
+    {
 
         bool TryParseEmbeddedJsonObject(std::string const& value, Json& parsed)
         {
@@ -178,9 +216,21 @@ namespace AzerothVoices
             else
                 prompt << "background must follow this guidance: " << config.personalityPromptNormal << " ";
 
+            if (config.personalityBackstorySentences > 0)
+            {
+                prompt << "background must be exactly " << config.personalityBackstorySentences
+                       << (config.personalityBackstorySentences == 1 ? " sentence. " : " sentences. ");
+            }
+
             prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
-                      "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. "
-                   << "Keep background at or below " << config.personalityMaxBackgroundCharacters << " characters. ";
+                      "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. ";
+
+            uint32_t const charLimit = config.personalityMaxBackgroundCharacters == 0
+                ? 1500 : config.personalityMaxBackgroundCharacters;
+            if (config.personalityMaxBackgroundCharacters > 0)
+                prompt << "Keep background at or below " << charLimit << " characters. ";
+            else
+                prompt << "Keep background concise and at or below 1500 characters. ";
         }
         switch (mode)
         {
@@ -237,11 +287,16 @@ namespace AzerothVoices
 
     uint32_t PersonalityGenerationTokenBudget(Config const& config, PersonalityGenerationMode mode)
     {
+        if (config.personalityMaxTokens > 0)
+            return config.personalityMaxTokens;
+
+        uint32_t const charLimit = config.personalityMaxBackgroundCharacters == 0
+            ? 1500 : config.personalityMaxBackgroundCharacters;
         bool const writesBackground = mode != PersonalityGenerationMode::ToneOnly &&
             (config.personalityGenerateBackground || mode == PersonalityGenerationMode::BackgroundOnly);
         uint32_t estimate = writesBackground
-            ? config.personalityMaxBackgroundCharacters / 3 + 128 : 128;
-        return std::min<uint32_t>(1024, std::max<uint32_t>(128, estimate));
+            ? charLimit / 3 + 64 : 64;
+        return std::min<uint32_t>(1024, std::max<uint32_t>(64, estimate));
     }
 
     bool ValidatePersonalityTraits(std::vector<std::string> const& traits, std::string& error)
@@ -414,9 +469,11 @@ namespace AzerothVoices
                 error = "personality background is empty";
                 return false;
             }
-            if (expectBackground && background.size() > config.personalityMaxBackgroundCharacters)
+            uint32_t const charLimit = config.personalityMaxBackgroundCharacters == 0
+                ? 1500 : config.personalityMaxBackgroundCharacters;
+            if (expectBackground && background.size() > charLimit)
             {
-                background = HeadBounded(background, config.personalityMaxBackgroundCharacters);
+                background = CleanHeadBounded(background, charLimit);
             }
             personality = BotPersonality();
             personality.characterGuid = actor.guid;

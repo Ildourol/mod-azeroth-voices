@@ -9,7 +9,7 @@ This is a community server module, not an official Turtle WoW service or client 
 ## Features
 
 - **Direct dialogue:** configurable responses in whisper, say, yell, party, raid, guild, and world/custom-channel contexts, subject to configured gates and speaker eligibility.
-- **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, backed by SQL persistence. Features a dual-layer lightweight architecture: an active voice layer (Traits + Tone + Priority Rule, ~25 tokens) always present, paired with context-gated backstory sampling (~60 tokens in `<backstory>` tags with soft negative steering) and guaranteed 100% backstory inclusion on direct inquiries.
+- **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, backed by SQL persistence. Features dedicated length and sentence controls (`AzerothVoices.Personality.BackstorySentences`, `AzerothVoices.Personality.MaxTokens`, and `AzerothVoices.Personality.MaxBackgroundChars` with auto-0 full capacity) and a dual-layer lightweight architecture: an active voice layer (Traits + Tone + Priority Rule, ~25 tokens) always present, paired with context-gated backstory sampling (~60 tokens in `<backstory>` tags with soft negative steering) and guaranteed 100% backstory inclusion on direct inquiries.
 - **Conversation context:** bounded history, snapshots, player sentiment, and a deterministic memory ledger for more consistent interactions.
 - **Ambient dialogue:** optional nearby, proximity, guild, world-channel, party, and raid chatter with separate probabilities, cooldowns, and pacing.
 - **Event reactions:** contextual lines for supported combat, group, quest, loot, and environmental events.
@@ -83,6 +83,9 @@ The complete, setting-by-setting reference is the [Configuration and Tuning Guid
 | `AzerothVoices.QueueMaximum` | `128` | Queued request capacity |
 | `AzerothVoices.GlobalRequestsPerMinute` | `60` | Shared request rate cap |
 | `AzerothVoices.GlobalMode` | `Normal` | Default PlayerBot dialogue style |
+| `AzerothVoices.Personality.BackstorySentences` | `0` | Target sentences for backstories (0 = auto) |
+| `AzerothVoices.Personality.MaxTokens` | `0` | Generation token budget (0 = auto) |
+| `AzerothVoices.Personality.MaxBackgroundChars` | `0` | Backstory DB/UI character cap (0 = 1500) |
 
 In `Thinking.Mode=Auto`, reasoning controls are conditional on the recognized official provider/model and `AzerothVoices.Thinking.AutoKinds` (default: `PersonalityGeneration,EventChat`). Some reasoning models cannot fully disable reasoning. For conversational latency and cost, consider output limits, request rates, the selected provider, and ambient trigger frequency together.
 

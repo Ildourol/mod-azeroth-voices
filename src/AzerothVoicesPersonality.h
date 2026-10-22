@@ -16,6 +16,7 @@ namespace AzerothVoices
     constexpr uint32_t PersonalityTraitCount = 3;
     constexpr size_t PersonalityTraitMaximumCharacters = 64;
 
+    std::string CleanHeadBounded(std::string value, size_t maximum);
     std::string BuildPersonalityGenerationSystemPrompt(Config const& config,
                                                        PersonalityGenerationMode mode);
     std::string BuildPersonalityGenerationUserPrompt(Config const& config, ActorSnapshot const& actor,

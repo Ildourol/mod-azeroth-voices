@@ -606,7 +606,10 @@ namespace AzerothVoices
                 ThinkingApplication const thinking =
                     ApplyThinking(body, config, prepared, false, true);
                 if (thinking.applied)
-                    ApplyTokenReserve(body, config.thinkingTokenReserve);
+                {
+                    if (!(prepared.kind == RequestKind::PersonalityGeneration && config.personalityMaxTokens > 0))
+                        ApplyTokenReserve(body, config.thinkingTokenReserve);
+                }
             }
             else if (Lower(config.providerMode) == "responses")
             {
@@ -617,8 +620,16 @@ namespace AzerothVoices
                 body["input"] = prepared.context.empty() ? prepared.userPrompt : prepared.context + "\n\n" + prepared.userPrompt;
                 ThinkingApplication const thinking =
                     ApplyThinking(body, config, prepared, true, false);
-                body["max_output_tokens"] = Reasoning::ReservedOutputTokens(baseTokens,
-                    config.thinkingTokenReserve, thinking.applied);
+                uint32_t finalTokens = baseTokens;
+                if (thinking.applied)
+                {
+                    if (prepared.kind == RequestKind::PersonalityGeneration && config.personalityMaxTokens > 0)
+                        finalTokens = baseTokens;
+                    else
+                        finalTokens = Reasoning::ReservedOutputTokens(baseTokens,
+                            config.thinkingTokenReserve, true);
+                }
+                body["max_output_tokens"] = finalTokens;
             }
             else
             {
@@ -632,8 +643,16 @@ namespace AzerothVoices
                 body["messages"].push_back({ { "role", "user" }, { "content", prepared.userPrompt } });
                 ThinkingApplication const thinking =
                     ApplyThinking(body, config, prepared, false, false);
-                body[TokenLimitField(config)] = Reasoning::ReservedOutputTokens(baseTokens,
-                    config.thinkingTokenReserve, thinking.applied);
+                uint32_t finalTokens = baseTokens;
+                if (thinking.applied)
+                {
+                    if (prepared.kind == RequestKind::PersonalityGeneration && config.personalityMaxTokens > 0)
+                        finalTokens = baseTokens;
+                    else
+                        finalTokens = Reasoning::ReservedOutputTokens(baseTokens,
+                            config.thinkingTokenReserve, true);
+                }
+                body[TokenLimitField(config)] = finalTokens;
                 if (SupportsLegacySamplingControls(config))
                 {
                     body["temperature"] = config.temperature;

@@ -400,15 +400,45 @@ AzerothVoices.Personality.UseInEvents = 1
 #     Default:     300
 AzerothVoices.Personality.GenerationRetrySeconds = 300
 
+# ---------------------------------------------------------------------------
+# BACKGROUND STORY LENGTH & GENERATION CONTROLS
+# ---------------------------------------------------------------------------
+
+# AzerothVoices.Personality.BackstorySentences
+#     Description: Target sentence count for generated backstories.
+#                  - Set to 1 or 2 for short, punchy backstories.
+#                  - Set to 3 or 4 for traditional biographies.
+#                  - Set to 0 to disable sentence constraints entirely, letting
+#                    token and character limits govern the output.
+#     Accepted:    0 - 10 (0 = no sentence constraint / auto)
+#     Default:     0
+AzerothVoices.Personality.BackstorySentences = 0
+
+# AzerothVoices.Personality.MaxTokens
+#     Description: Hard output token limit sent directly to the LLM API for
+#                  personality & backstory generation calls.
+#                  - Set to 0 for automatic token budgeting based on characters.
+#                  - Set to a fixed number (e.g. 60-150) to strictly constrain
+#                    how many tokens the model is allowed to generate.
+#                  - Bypasses reasoning/thinking token inflation so the model
+#                    cannot generate long, rambling stories.
+#     Accepted:    0 - 2048 (0 = auto)
+#     Default:     0
+AzerothVoices.Personality.MaxTokens = 0
+
 # AzerothVoices.Personality.MaxBackgroundChars
-#     Description: Bounds a generated stored background; accepted range 100-600
-#                  characters; default 600.
-#     Default:     600
-AzerothVoices.Personality.MaxBackgroundChars = 600
+#     Description: Hard maximum character limit stored in the database and
+#                  displayed in the Chatter Companion UI.
+#                  - Set to 0 to allow up to the full database capacity (1500 chars).
+#                  - Unlocked range up to 1500 (matching the MySQL DB column).
+#                  - Clamps smoothly instead of resetting to default.
+#     Accepted:    0 - 1500 (0 = auto DB limit 1500)
+#     Default:     0
+AzerothVoices.Personality.MaxBackgroundChars = 0
 
 # AzerothVoices.Personality.MaxPromptChars
 #     Description: Bounds personality and background text inserted into each prompt;
-#                  accepted range 100-1000 characters; default 750.
+#                  accepted range 100-2000 characters; default 750.
 #     Default:     750
 AzerothVoices.Personality.MaxPromptChars = 750
 
@@ -419,7 +449,7 @@ AzerothVoices.Personality.MaxPromptChars = 750
 #                  in-world Vanilla/Turtle WoW lore-appropriate character biographies
 #                  without cliché tropes. (Text.)
 #     Default:     Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions. Return only the backstory text.
-AzerothVoices.Personality.Prompt.Roleplay = Write a concise, immersive 3-4 sentence backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. Include a birthplace appropriate to their race and Warcraft lore, a brief mention of their upbringing, and 1-2 formative events that shaped them. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions.
+AzerothVoices.Personality.Prompt.Roleplay = Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. Include a birthplace appropriate to their race and Warcraft lore, a brief mention of their upbringing, and 1-2 formative events that shaped them. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions.
 
 # AzerothVoices.Personality.Prompt.Normal
 #     Description: System guidance prompt used when generating backstories in Normal
@@ -427,7 +457,7 @@ AzerothVoices.Personality.Prompt.Roleplay = Write a concise, immersive 3-4 sente
 #                  fictional real-world player personas behind the bot avatars, strictly
 #                  forbidding repetitive trauma/divorce/escapism tropes. (Text.)
 #     Default:     Write a concise, realistic backstory for a fictional person who plays World of Warcraft. Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction enthusiasts, lore fans, or nostalgic veterans). Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity. Return only the backstory text.
-AzerothVoices.Personality.Prompt.Normal = Write a concise, realistic 3-4 sentence backstory for a fictional person who plays World of Warcraft. Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction enthusiasts, lore fans, or nostalgic veterans). Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity.
+AzerothVoices.Personality.Prompt.Normal = Write a concise, realistic backstory for a fictional person who plays World of Warcraft. Vary the start and structure: do not start with formulaic phrases like 'At [age]...'. Focus on in-game habits, everyday life, or diverse player archetypes (e.g. students, tradesworkers, parents playing late, economy/auction enthusiasts, lore fans, or nostalgic veterans). Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', or 'tumultuous divorce'. Do not treat WoW as trauma therapy. Treat in-game race and class as avatar choices, not real-life identity.
 
 # AzerothVoices.Personality.Prompt.Traits
 #     Description: System guidance prompt used when generating a bot's 3 personality traits.

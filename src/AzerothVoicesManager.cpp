@@ -3547,6 +3547,10 @@ namespace AzerothVoices
             (personality.background.empty() ||
              personality.backgroundMode != m_config->personalityBackgroundMode))
             return false;
+        uint32_t const effectiveMaxChars = m_config->personalityMaxBackgroundCharacters == 0
+            ? 1500 : m_config->personalityMaxBackgroundCharacters;
+        if (personality.background.size() > effectiveMaxChars)
+            return false;
         return true;
     }
 
@@ -3620,6 +3624,12 @@ namespace AzerothVoices
         loaded.generationVersion = fields[5].GetUInt32();
         loaded.createdUnix = fields[6].GetUInt64();
         loaded.updatedUnix = fields[7].GetUInt64();
+        uint32_t const effectiveMaxChars = m_config->personalityMaxBackgroundCharacters == 0
+            ? 1500 : m_config->personalityMaxBackgroundCharacters;
+        if (loaded.background.size() > effectiveMaxChars)
+        {
+            loaded.background = CleanHeadBounded(loaded.background, effectiveMaxChars);
+        }
         if (requireCurrent && !IsPersonalityCurrent(loaded))
             return false;
         CachePersonality(loaded);
