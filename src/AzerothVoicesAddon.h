@@ -24,8 +24,8 @@ namespace AzerothVoices
         constexpr char const* NativePrefix = "AZEROTH_VOICES";
         constexpr char const* NativeCommandPrefix = ".avaddon";
         constexpr size_t MaxWireLength = 255;
-        constexpr size_t MaxRequestParts = 8;
-        constexpr size_t MaxRequestBytes = 2048;
+        constexpr size_t MaxRequestParts = 32;
+        constexpr size_t MaxRequestBytes = 8192;
         constexpr uint32_t RequestTimeoutMs = 10000;
 
         constexpr size_t TraitCount = 3;
