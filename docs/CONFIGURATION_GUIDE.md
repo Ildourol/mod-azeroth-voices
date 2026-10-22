@@ -514,7 +514,7 @@
 | [`AzerothVoices.Personality.GenerationRetrySeconds`](#azerothvoicespersonalitygenerationretryseconds) | Integer (Seconds) | `300` | Sets the minimum delay after failed generation before the same bot can retr... |
 | [`AzerothVoices.Personality.BackstorySentences`](#azerothvoicespersonalitybackstorysentences) | Integer (`0-10`) | `0` | Target sentence count for generated backstories; 0 = unconstrained / auto; 1-2 = short/punchy; 3-4 = traditional. |
 | [`AzerothVoices.Personality.MaxTokens`](#azerothvoicespersonalitymaxtokens) | Integer (`0-2048`) | `0` | Hard output token limit sent to API for personality/backstory generation; 0 = auto budgeting from character budget. |
-| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-1500`) | `0` | Hard maximum character limit stored in DB and displayed in UI; 0 = auto / full column capacity (1500 characters). |
+| [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-65535`) | `0` | Hard maximum character limit stored in DB and displayed in UI; 0 = auto / unconstrained (full TEXT column capacity). |
 | [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`0-2000`) | `0` | Bounds personality and background text inserted into each prompt; 0 = auto mode (full unclipped persona context). |
 | [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth...` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0). |
 | [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a concise, realistic backstory for a fictional person who plays World of Warcraft...` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1). |
@@ -594,10 +594,10 @@
 
 ### <a id="azerothvoicespersonalitymaxbackgroundchars"></a>`AzerothVoices.Personality.MaxBackgroundChars`
 
-- **Data Type**: Integer (`0-1500`)
+- **Data Type**: Integer (`0-65535`)
 - **Default Value**: `0`
-- **Description**: Hard maximum character limit stored in the database (`azeroth_voices_bot_personality.background`) and displayed in the Chatter Companion UI. Clamps smoothly using sentence-boundary detection (`CleanHeadBounded`). Setting `0` enables automatic full capacity (1500 characters, matching the MySQL column).
-- **Operator Guidance & Impact**: Set to a specific character limit (e.g., 300-500) if you wish to strictly cap database row size and UI preview text, or leave as `0` for full 1500-character capacity. Stored DB rows exceeding this limit are cleanly trimmed to the nearest sentence punctuation.
+- **Description**: Hard maximum character limit stored in the database (`azeroth_voices_bot_personality.background` MySQL `TEXT` column) and displayed in the Chatter Companion UI. Clamps smoothly using sentence-boundary detection (`CleanHeadBounded`). Setting `0` enables automatic unconstrained mode (saves full generated backstory without artificial character capping).
+- **Operator Guidance & Impact**: Set to a specific character limit (e.g., 350-1500) if you wish to strictly cap database row size and UI preview text, or leave as `0` for unconstrained generation. When a non-zero limit is configured, stored DB rows exceeding this limit are cleanly trimmed to the nearest sentence punctuation.
 
 ### <a id="azerothvoicespersonalitymaxpromptchars"></a>`AzerothVoices.Personality.MaxPromptChars`
 

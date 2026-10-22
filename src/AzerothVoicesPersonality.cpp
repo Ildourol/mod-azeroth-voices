@@ -225,12 +225,8 @@ namespace AzerothVoices
             prompt << "Vary premise, structure, and emphasis naturally instead of forcing every identity into the same "
                       "biographical sequence. Do not mention randomness, generation, prompts, or these instructions. ";
 
-            uint32_t const charLimit = config.personalityMaxBackgroundCharacters == 0
-                ? 1500 : config.personalityMaxBackgroundCharacters;
             if (config.personalityMaxBackgroundCharacters > 0)
-                prompt << "Keep background at or below " << charLimit << " characters. ";
-            else
-                prompt << "Keep background concise and at or below 1500 characters. ";
+                prompt << "Keep background at or below " << config.personalityMaxBackgroundCharacters << " characters. ";
         }
         switch (mode)
         {
@@ -290,13 +286,20 @@ namespace AzerothVoices
         if (config.personalityMaxTokens > 0)
             return config.personalityMaxTokens;
 
-        uint32_t const charLimit = config.personalityMaxBackgroundCharacters == 0
-            ? 1500 : config.personalityMaxBackgroundCharacters;
         bool const writesBackground = mode != PersonalityGenerationMode::ToneOnly &&
             (config.personalityGenerateBackground || mode == PersonalityGenerationMode::BackgroundOnly);
-        uint32_t estimate = writesBackground
-            ? charLimit / 3 + 64 : 64;
-        return std::min<uint32_t>(1024, std::max<uint32_t>(64, estimate));
+
+        if (!writesBackground)
+            return 64;
+
+        if (config.personalityMaxBackgroundCharacters > 0)
+        {
+            uint32_t estimate = config.personalityMaxBackgroundCharacters / 3 + 64;
+            return std::min<uint32_t>(2048, std::max<uint32_t>(64, estimate));
+        }
+
+        // Auto mode (0 = unconstrained): default budget allowing natural rich backstories
+        return 512;
     }
 
     bool ValidatePersonalityTraits(std::vector<std::string> const& traits, std::string& error)
@@ -469,11 +472,10 @@ namespace AzerothVoices
                 error = "personality background is empty";
                 return false;
             }
-            uint32_t const charLimit = config.personalityMaxBackgroundCharacters == 0
-                ? 1500 : config.personalityMaxBackgroundCharacters;
-            if (expectBackground && background.size() > charLimit)
+            if (expectBackground && config.personalityMaxBackgroundCharacters > 0 &&
+                background.size() > config.personalityMaxBackgroundCharacters)
             {
-                background = CleanHeadBounded(background, charLimit);
+                background = CleanHeadBounded(background, config.personalityMaxBackgroundCharacters);
             }
             personality = BotPersonality();
             personality.characterGuid = actor.guid;

@@ -429,10 +429,12 @@ AzerothVoices.Personality.MaxTokens = 0
 # AzerothVoices.Personality.MaxBackgroundChars
 #     Description: Hard maximum character limit stored in the database and
 #                  displayed in the Chatter Companion UI.
-#                  - Set to 0 to allow up to the full database capacity (1500 chars).
-#                  - Unlocked range up to 1500 (matching the MySQL DB column).
-#                  - Clamps smoothly instead of resetting to default.
-#     Accepted:    0 - 1500 (0 = auto DB limit 1500)
+#                  - Set to 0 for automatic / unconstrained mode (saves full
+#                    generated backstory into the database without character capping).
+#                  - Set to a fixed number (e.g. 350 - 5000) to strictly constrain
+#                    how many characters of backstory are stored in the database.
+#                  - Clamps smoothly instead of resetting to fallback defaults.
+#     Accepted:    0 - 65535 (0 = auto / unconstrained)
 #     Default:     0
 AzerothVoices.Personality.MaxBackgroundChars = 0
 

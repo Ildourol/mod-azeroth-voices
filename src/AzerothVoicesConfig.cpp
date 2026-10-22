@@ -260,7 +260,7 @@ namespace AzerothVoices
         c.personalityMaxTokens = Clamped(
             "AzerothVoices.Personality.MaxTokens", 0, 0, 2048);
         c.personalityMaxBackgroundCharacters = Clamped(
-            "AzerothVoices.Personality.MaxBackgroundChars", 0, 0, 1500);
+            "AzerothVoices.Personality.MaxBackgroundChars", 0, 0, 65535);
         c.personalityMaxPromptCharacters = Clamped(
             "AzerothVoices.Personality.MaxPromptChars", 0, 0, 2000);
 
