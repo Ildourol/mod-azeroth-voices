@@ -595,11 +595,12 @@ function AzerothVoices:ApplyProfile(profile)
             self:StopTonePoll()
             local bName = profile.name or self:GetSelectedBotName() or "bot"
             if self.generatingAllInfo then
-                self:SetStatus("Tone generated! Generating backstory...", 1, 0.82, 0)
+                self.generatingAllInfo = nil
+                self:SetRegenStoryEnabled(true)
+                self:SetStatus("All info generated for " .. bName .. "!", 0.3, 1, 0.3)
                 if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generated tone for |cff00ff00" .. bName .. "|r: \"" .. profile.tone .. "\". Now generating backstory...")
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r All info generated for |cff00ff00" .. bName .. "|r (Traits -> Backstory -> Tone).")
                 end
-                self:RegenBackstory()
             else
                 self:SetStatus("Generated tone for " .. bName .. ".", 0.3, 1, 0.3)
             end
@@ -898,9 +899,9 @@ function AzerothVoices:RegenAll()
     self.generatingAllInfo = true
     self:SetRegenStoryEnabled(false)
     local bName = self:GetSelectedBotName() or "bot"
-    self:SetStatus("Generating all info for " .. bName .. "...", 1, 0.82, 0)
+    self:SetStatus("Generating all info for " .. bName .. " (1/3: Traits)...", 1, 0.82, 0)
     if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generating all info for |cff00ff00" .. bName .. "|r: rolling traits, then tone & backstory...")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generating all info for |cff00ff00" .. bName .. "|r sequentially (Traits -> Backstory -> Tone)...")
     end
     self:RegenTraits()
 end
@@ -1041,11 +1042,11 @@ function AzerothVoices:HandleBackstoryPayload(rest)
             self:StopBackstoryPoll()
             local bName = self:GetSelectedBotName() or "bot"
             if self.generatingAllInfo then
-                self.generatingAllInfo = nil
-                self:SetStatus("All info generated for " .. bName .. "!", 0.3, 1, 0.3)
+                self:SetStatus("Backstory generated! Generating tone via LLM (step 3/3)...", 1, 0.82, 0)
                 if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r All info generated for |cff00ff00" .. bName .. "|r (Traits + Tone + Backstory).")
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generated background story for |cff00ff00" .. bName .. "|r. Now generating tone...")
                 end
+                self:RegenTone()
             else
                 self:SetStatus("Backstory generated for " .. bName .. ".", 0.3, 1, 0.3)
                 if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
@@ -1078,8 +1079,11 @@ function AzerothVoices:HandleUpdatedPayload(rest)
         self:SetSaveEnabled(false)
 
         if self.generatingAllInfo then
-            self:SetStatus("Traits saved. Generating tone via LLM...", 1, 0.82, 0)
-            self:RegenTone()
+            self:SetStatus("Traits saved! Generating background story via LLM (step 2/3)...", 1, 0.82, 0)
+            if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+                DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Traits saved for |cff00ff00" .. botName .. "|r. Now generating background story...")
+            end
+            self:RegenBackstory()
         else
             if not self.pendingToneGuid then
                 self:StopTonePoll()
