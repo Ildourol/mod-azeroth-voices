@@ -158,7 +158,10 @@ local function createToneBox(parent, x, y, width, height)
 
     local function updateScroll()
         local strHeight = getTextHeight(text, width - 28)
-        local viewHeight = scroll:GetHeight() or (height - 12)
+        local viewHeight = scroll:GetHeight()
+        if not viewHeight or viewHeight <= 0 then
+            viewHeight = height - 12
+        end
         local contentHeight = math.max(viewHeight, strHeight + 6)
         content:SetHeight(contentHeight)
         local maxScroll = math.max(0, contentHeight - viewHeight)
@@ -251,7 +254,10 @@ local function createBackstoryBox(parent, x, y, width, height)
 
     local function updateScroll()
         local strHeight = getTextHeight(text, width - 28)
-        local viewHeight = scroll:GetHeight() or (height - 12)
+        local viewHeight = scroll:GetHeight()
+        if not viewHeight or viewHeight <= 0 then
+            viewHeight = height - 12
+        end
         local contentHeight = math.max(viewHeight, strHeight + 16)
         content:SetHeight(contentHeight)
         text:SetHeight(contentHeight)
@@ -321,7 +327,7 @@ function AzerothVoices:BuildEditor(panel)
     -- Left Column: Roster, Search & Forget (Width 144, Height 530)
     local left = CreateFrame("Frame", nil, panel)
     left:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -76)
-    left:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 16, 72)
+    left:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 16, 68)
     left:SetWidth(144)
 
     createLabel(left, "Search known bots", 0, 0)
@@ -372,8 +378,8 @@ function AzerothVoices:BuildEditor(panel)
 
     local forgetBtn = button(panel, "Forget selected", 144, function()
         AzerothVoices:ConfirmForget()
-    end, 24)
-    forgetBtn:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 16, 44)
+    end, 22)
+    forgetBtn:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 16, 40)
     panel.forgetBtn = forgetBtn
 
     -- Right Column Header Controls
@@ -387,14 +393,14 @@ function AzerothVoices:BuildEditor(panel)
     selected:SetHeight(16)
     selected:SetFontObject(GameFontNormalLarge)
 
-    -- Right Column Scrollable Content Frame (exact 172, -104 to -34, 76)
+    -- Right Column Scrollable Content Frame (exact 172, -102 to -34, 42)
     local scroll = CreateFrame("ScrollFrame", nil, panel)
-    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 172, -104)
-    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -34, 76)
+    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 172, -102)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -34, 42)
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(470)
-    content:SetHeight(454)
+    content:SetHeight(488)
     scroll:SetScrollChild(content)
 
     local editorBar = slider(panel)
@@ -404,17 +410,15 @@ function AzerothVoices:BuildEditor(panel)
         scroll:SetVerticalScroll(this:GetValue() or 0)
     end)
 
-    scroll:EnableMouseWheel(true)
-    scroll:SetScript("OnMouseWheel", function()
-        local delta = arg1 or 0
-        local _, maximum = editorBar:GetMinMaxValues()
-        local cur = editorBar:GetValue() or 0
-        editorBar:SetValue(math.max(0, math.min(maximum, cur - delta * 28)))
-    end)
-
     local function updateEditorScroll()
-        local viewHeight = scroll:GetHeight() or 460
-        local cHeight = content:GetHeight() or 454
+        local viewHeight = scroll:GetHeight()
+        if not viewHeight or viewHeight <= 0 then
+            viewHeight = 496
+        end
+        local cHeight = content:GetHeight()
+        if not cHeight or cHeight <= 0 then
+            cHeight = 488
+        end
         local maximum = math.max(0, cHeight - viewHeight)
         editorBar:SetMinMaxValues(0, maximum)
         local cur = math.min(editorBar:GetValue() or 0, maximum)
@@ -426,6 +430,18 @@ function AzerothVoices:BuildEditor(panel)
             editorBar:Hide()
         end
     end
+
+    scroll:SetScript("OnSizeChanged", function()
+        updateEditorScroll()
+    end)
+
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function()
+        local delta = arg1 or 0
+        local _, maximum = editorBar:GetMinMaxValues()
+        local cur = editorBar:GetValue() or 0
+        editorBar:SetValue(math.max(0, math.min(maximum, cur - delta * 20)))
+    end)
 
     local contentWidth = 460
 
@@ -442,13 +458,13 @@ function AzerothVoices:BuildEditor(panel)
     panel.trait1 = t1
 
     -- Trait 2
-    local l2 = createLabel(content, "Trait 2", 0, -48)
-    local t2 = createEditBox(content, "AzerothVoicesTrait2", 0, -66, contentWidth, 24)
+    local l2 = createLabel(content, "Trait 2", 0, -46)
+    local t2 = createEditBox(content, "AzerothVoicesTrait2", 0, -64, contentWidth, 24)
     panel.trait2 = t2
 
     -- Trait 3
-    local l3 = createLabel(content, "Trait 3", 0, -96)
-    local t3 = createEditBox(content, "AzerothVoicesTrait3", 0, -114, contentWidth, 24)
+    local l3 = createLabel(content, "Trait 3", 0, -92)
+    local t3 = createEditBox(content, "AzerothVoicesTrait3", 0, -110, contentWidth, 24)
     panel.trait3 = t3
 
     local traitBoxes = { t1, t2, t3 }
@@ -466,25 +482,25 @@ function AzerothVoices:BuildEditor(panel)
     end
 
     -- Tone
-    local lTone = createLabel(content, "Tone (generated)", 0, -148)
+    local lTone = createLabel(content, "Tone (generated)", 0, -140)
     local regenToneBtn = button(content, "Generate Tone", 114, function()
         AzerothVoices:RegenTone()
     end, 20)
-    regenToneBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -146)
+    regenToneBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -138)
     regenToneBtn:Disable()
     panel.regenToneBtn = regenToneBtn
 
-    panel.tone = createToneBox(content, 0, -166, contentWidth, 58)
+    panel.tone = createToneBox(content, 0, -158, contentWidth, 50)
 
     -- Background Story
-    local lStory = createLabel(content, "Background Story", 0, -236)
-    panel.backstory = createBackstoryBox(content, 0, -254, contentWidth, 185)
+    local lStory = createLabel(content, "Background Story", 0, -216)
+    panel.backstory = createBackstoryBox(content, 0, -232, contentWidth, 160)
 
     -- Regenerate Story Button
     local regenStoryBtn = button(content, "Generate Story", 120, function()
         AzerothVoices:RegenBackstory()
-    end, 24)
-    regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -451)
+    end, 22)
+    regenStoryBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -400)
     regenStoryBtn:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_TOP")
         GameTooltip:ClearLines()
@@ -502,7 +518,7 @@ function AzerothVoices:BuildEditor(panel)
     -- Generate All Info Button
     local regenAllBtn = button(content, "Generate All Info", 140, function()
         AzerothVoices:RegenAll()
-    end, 24)
+    end, 22)
     regenAllBtn:SetPoint("LEFT", regenStoryBtn, "RIGHT", 8, 0)
     regenAllBtn:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
@@ -517,19 +533,19 @@ function AzerothVoices:BuildEditor(panel)
     panel.regenAllBtn = regenAllBtn
 
     -- Sentiment Section Header & Reset Button
-    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -489)
+    local lSentiment = createLabel(content, "Sentiment Indicator", 0, -430)
     panel.sentimentLabel = lSentiment
 
     local resetSentimentBtn = button(content, "Reset Sentiment", 130, function()
         AzerothVoices:ResetSentiment()
-    end, 22)
-    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -485)
+    end, 20)
+    resetSentimentBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -428)
     resetSentimentBtn:Disable()
     panel.resetSentimentBtn = resetSentimentBtn
 
     -- Sentiment Status Bar (low -100 to high +100)
     local barHolder = CreateFrame("Frame", nil, content)
-    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -513)
+    barHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -450)
     barHolder:SetWidth(contentWidth)
     barHolder:SetHeight(18)
     barHolder:SetBackdrop({
@@ -585,35 +601,42 @@ function AzerothVoices:BuildEditor(panel)
     barHolder:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+    barHolder:EnableMouseWheel(true)
+    barHolder:SetScript("OnMouseWheel", function()
+        local delta = arg1 or 0
+        local _, maximum = editorBar:GetMinMaxValues()
+        local cur = editorBar:GetValue() or 0
+        editorBar:SetValue(math.max(0, math.min(maximum, cur - delta * 20)))
+    end)
 
     -- Scale Labels below the bar
     local scaleLow = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    scaleLow:SetPoint("TOPLEFT", barHolder, "BOTTOMLEFT", 2, -3)
+    scaleLow:SetPoint("TOPLEFT", barHolder, "BOTTOMLEFT", 2, -2)
     scaleLow:SetText("-100 (Hostile)")
     scaleLow:SetTextColor(0.85, 0.3, 0.3)
     panel.sentimentScaleLow = scaleLow
 
     local scaleMid = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    scaleMid:SetPoint("TOP", barHolder, "BOTTOM", 0, -3)
+    scaleMid:SetPoint("TOP", barHolder, "BOTTOM", 0, -2)
     scaleMid:SetText("0 (Neutral)")
     scaleMid:SetTextColor(0.9, 0.82, 0.2)
     panel.sentimentScaleMid = scaleMid
 
     local scaleHigh = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    scaleHigh:SetPoint("TOPRIGHT", barHolder, "BOTTOMRIGHT", -2, -3)
+    scaleHigh:SetPoint("TOPRIGHT", barHolder, "BOTTOMRIGHT", -2, -2)
     scaleHigh:SetText("+100 (Trusted)")
     scaleHigh:SetTextColor(0.3, 0.85, 0.4)
     panel.sentimentScaleHigh = scaleHigh
 
-    content:SetHeight(550)
+    content:SetHeight(488)
 
     -- Status label at bottom
-    local status = createLabel(panel, "", 16, 10)
+    local status = createLabel(panel, "", 16, 8)
     status:ClearAllPoints()
-    status:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 16, 10)
-    status:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 10)
+    status:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 16, 8)
+    status:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 8)
     status:SetFontObject(GameFontNormalSmall)
-    status:SetHeight(28)
+    status:SetHeight(26)
     panel.status = status
 
     -- Top Mode Tabs (Full Overview, Bot Traits, Background Stories)
@@ -649,7 +672,7 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Hide(); scaleMid:Hide(); scaleHigh:Hide()
             forgetBtn:Hide()
             all:Hide(); clear:Hide()
-            content:SetHeight(440)
+            content:SetHeight(380)
         else
             -- "full" mode
             l1:Show(); t1.holder:Show()
@@ -665,7 +688,7 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Show(); scaleMid:Show(); scaleHigh:Show()
             forgetBtn:Show()
             all:Show(); clear:Show()
-            content:SetHeight(550)
+            content:SetHeight(488)
         end
         updateEditorScroll()
         AzerothVoices:UpdateSaveButton()
