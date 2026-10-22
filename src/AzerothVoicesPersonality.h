@@ -30,8 +30,8 @@ namespace AzerothVoices
     std::string BuildVoicePromptBlock(Config const& config, BotPersonality const& personality);
     std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality,
                                           bool isDirectInquiry = false);
-    bool IsBackstoryInquiry(std::string const& message);
-    bool IsBriefCasualMessage(std::string const& message);
+    bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
+                                std::string const& trigger);
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
                                 ChatScope scope, std::string const& trigger,
                                 std::string const& message, bool directConversation, bool ambient);

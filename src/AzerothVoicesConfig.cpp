@@ -265,22 +265,10 @@ namespace AzerothVoices
             "AzerothVoices.Personality.MaxPromptChars", 0, 0, 2000);
 
         std::string const defaultPersonalityRoleplayPrompt =
-            "Write a concise, immersive backstory for an authentic character living in Vanilla/Turtle WoW-era Azeroth. "
-            "Include a birthplace appropriate to their race and Warcraft lore, a brief mention of their upbringing, and 1-2 formative "
-            "events that shaped them. Vary premise and origin: avoid the tragic orphan, burned village, or revenge cliché. "
-            "Draw from everyday lived experiences: craftspeople, caravan guards, herbalists, militia recruits, or wandering tradesfolk. "
-            "Keep traditions, culture, and tone consistent with race, class, and faction without later-expansion assumptions.";
+            "Write a concise Vanilla/Turtle WoW character backstory. Include lore-accurate birthplace, everyday occupation (craftsperson, guard, herbalist, traveler), and upbringing. Avoid tragic clichés (orphan, burned village, revenge). Return only backstory text.";
 
         std::string const defaultPersonalityNormalPrompt =
-            "Write a realistic personal background for an authentic, everyday person. "
-            "Vary the start and structure naturally: do not start with formulaic phrases like 'At [age]...'. "
-            "Focus purely on real-life details: their occupation, trade, career, or studies (such as a carpenter, nurse, "
-            "mechanic, graphic designer, teacher, chef, electrician, or university student); their hometown, region, or living "
-            "situation; and their genuine daily routines, quirks, and hobbies outside of work (such as weekend hiking, fixing up an "
-            "old car, cooking, local sports, woodworking, gardening, or music). "
-            "Strictly do NOT mention World of Warcraft, Azeroth, video games, gaming habits, or avatars—this is purely a real-world "
-            "biographical background. Strictly avoid clichés like 'found solace in', 'refuge', 'sanctuary', 'escape from reality', "
-            "or 'tumultuous divorce'. Avoid melodrama or trauma therapy. Return only the backstory text.";
+            "Write a realistic background for an authentic person: occupation, hometown, daily routines, and hobbies. Strictly do NOT mention WoW, gaming, or avatars—pure real-world life only. Avoid melodrama and divorce clichés. Return only backstory text.";
 
         c.personalityPromptRoleplay = Trim(sConfig.GetStringDefault(
             "AzerothVoices.Personality.Prompt.Roleplay", defaultPersonalityRoleplayPrompt.c_str()));
