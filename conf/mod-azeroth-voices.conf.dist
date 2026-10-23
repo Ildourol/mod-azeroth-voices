@@ -235,8 +235,8 @@ AzerothVoices.RequestTTLSeconds = 90
 
 # AzerothVoices.AmbientActorCooldownSeconds
 #     Description: Longer per-actor random-chatter cooldown. (Seconds, minimum 0.)
-#     Default:     120
-AzerothVoices.AmbientActorCooldownSeconds = 120
+#     Default:     300
+AzerothVoices.AmbientActorCooldownSeconds = 300
 
 # AzerothVoices.BotSpeakerCooldownSeconds
 #     Description: Per-bot cooldown (seconds) for General channel speech. After a bot
@@ -275,16 +275,18 @@ AzerothVoices.GlobalMode = Normal
 # AzerothVoices.GlobalPrompt.Roleplay
 #     Description: System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots
 #                  and NPCs inside Azeroth and forbids real-world player/meta framing.
-#                  (Text.)
-AzerothVoices.GlobalPrompt.Roleplay = You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.
+#                  Structured and compact rules enforce authentic, in-world immersion
+#                  without meta concepts, real life, or action narration. (Text.)
+AzerothVoices.GlobalPrompt.Roleplay = You are a character living in the fantasy world of Azeroth. Speak naturally and in-character. Rules: 1. IMMERSIVE RP: Speak strictly in-world with lived experience. Never mention real life, computers, gaming, AI, or meta concepts. 2. NATURAL DIALOGUE: Keep speech concise, grounded, and believable; never narrate actions or stage directions. 3. IN-WORLD REALITY: Treat danger, zones, quests, and factions as authentic everyday life. 4. FORMAT: Return only spoken words. No names, quotes, or dialogue tags.
 
 # AzerothVoices.GlobalPrompt.Normal
 #     Description: System prompt selected by GlobalMode=Normal for PlayerBot-to-real-
 #                  player and PlayerBot-to-PlayerBot dialogue; NPC-involved dialogue is
 #                  switched to GlobalPrompt.Roleplay by C++ before provider
 #                  serialization, so customizing this prompt cannot opt NPCs into Normal
-#                  mode. (Text.)
-AzerothVoices.GlobalPrompt.Normal = You write short, natural WoW chat. Context: speaker=<bot type>; counterpart=<other type>; counterpart-race=<other race>. If speaker or counterpart is NPC, speak strictly in-world as a fantasy character. Otherwise, speak casually as a real human playing WoW without forced slang. Never add name prefixes or dialogue tags. Return only the spoken chat.
+#                  mode. Structured and compact rules enforce authentic, casual human
+#                  player chat without poetic, fantasy, or roleplaying dialogue. (Text.)
+AzerothVoices.GlobalPrompt.Normal = You are a real human playing an online game. Rules: 1. NO ROLEPLAY: No fantasy talk, in-character acting, or abstract themes. 2. NO POETICS: No poetic, flowery, or theatrical phrasing. 3. CASUAL GAMER: Short, natural, grounded chat like an ordinary person playing; do not over-mention the game. 4. FORMAT: Return only the spoken text. No names or dialogue tags.
 
 # AiPlayerbot.LLMPrePrompt
 #     Description: Describes a PlayerBot before a normal response. (Text template.)
@@ -737,8 +739,8 @@ AzerothVoices.Say.ConversationMaxTurns = 5
 #     Description: Score penalty applied to the bot that spoke last in party or raid
 #                  chat when multiple bots are eligible and none was explicitly named,
 #                  ensuring diverse cooperative replies. (Percentage, 0-100.)
-#     Default:     40
-AzerothVoices.Party.SpeakerRotationPenalty = 40
+#     Default:     60
+AzerothVoices.Party.SpeakerRotationPenalty = 60
 
 # AzerothVoices.PlayerReplyChance.Say
 #     Description: Bot response chance to a real player's say/yell. (Percentage.)
@@ -788,8 +790,8 @@ AzerothVoices.PlayerReplyChance.TargetActive.Chance = 60
 #     Description: Bot response chance to another bot in party/raid. Bot-originated
 #                  replies also require a real member in the party subgroup or raid.
 #                  (Percentage.)
-#     Default:     10
-AzerothVoices.BotReplyChance.Party = 10
+#     Default:     5
+AzerothVoices.BotReplyChance.Party = 5
 
 # AzerothVoices.PlayerReplyChance.Guild
 #     Description: Bot response chance to a real player in guild/officer chat.
@@ -1252,8 +1254,8 @@ AzerothVoices.GroupChatter.Enable = 1
 # AzerothVoices.GroupChatter.ScanSeconds
 #     Description: Delay between group scans that evaluate the periodic triggers.
 #                  (Seconds, 5-3600.)
-#     Default:     120
-AzerothVoices.GroupChatter.ScanSeconds = 120
+#     Default:     300
+AzerothVoices.GroupChatter.ScanSeconds = 300
 
 # AzerothVoices.GroupChatter.IdleChance
 #     Description: Chance a scan produces an ordinary casual group remark. (Percentage.)
@@ -1262,8 +1264,8 @@ AzerothVoices.GroupChatter.IdleChance = 2
 
 # AzerothVoices.GroupChatter.IdleCooldownSeconds
 #     Description: Cooldown after an idle remark. (Seconds, 0-86400.)
-#     Default:     300
-AzerothVoices.GroupChatter.IdleCooldownSeconds = 300
+#     Default:     600
+AzerothVoices.GroupChatter.IdleCooldownSeconds = 600
 
 # AzerothVoices.GroupChatter.DungeonEntryChance
 #     Description: Chance the group comments when a real player enters a dungeon or
@@ -1283,8 +1285,8 @@ AzerothVoices.GroupChatter.ZoneChangeChance = 15
 
 # AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds
 #     Description: Cooldown after a zone-change line. (Seconds, 0-86400.)
-#     Default:     180
-AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds = 180
+#     Default:     300
+AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds = 300
 
 # AzerothVoices.GroupChatter.KillChance
 #     Description: Chance the group reacts to an ordinary creature kill. (Percentage.)
@@ -1293,8 +1295,8 @@ AzerothVoices.GroupChatter.KillChance = 4
 
 # AzerothVoices.GroupChatter.KillCooldownSeconds
 #     Description: Cooldown after a trash-kill line. (Seconds, 0-86400.)
-#     Default:     300
-AzerothVoices.GroupChatter.KillCooldownSeconds = 300
+#     Default:     600
+AzerothVoices.GroupChatter.KillCooldownSeconds = 600
 
 # AzerothVoices.GroupChatter.BossPullChance
 #     Description: Chance the group reacts when a classified dungeon/raid boss is
@@ -1406,14 +1408,14 @@ AzerothVoices.GroupChatter.QuestCompleteChance = 20
 
 # AzerothVoices.GroupChatter.QuestCooldownSeconds
 #     Description: Cooldown for quest accept/complete lines. (Seconds, 0-86400.)
-#     Default:     120
-AzerothVoices.GroupChatter.QuestCooldownSeconds = 120
+#     Default:     300
+AzerothVoices.GroupChatter.QuestCooldownSeconds = 300
 
 # AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds
 #     Description: Minimum gap between objective-progress lines, which are otherwise the
 #                  chattiest trigger. (Seconds, 0-3600.)
-#     Default:     120
-AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds = 120
+#     Default:     300
+AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds = 300
 
 # AzerothVoices.GroupChatter.SpellCastChance
 #     Description: Chance the group comments on a member's spell cast. This hook fires
@@ -1440,8 +1442,8 @@ AzerothVoices.GroupChatter.LowHealthThresholdPercent = 35
 
 # AzerothVoices.GroupChatter.LowHealthCooldownSeconds
 #     Description: Cooldown after a low-health callout. (Seconds, 0-86400.)
-#     Default:     180
-AzerothVoices.GroupChatter.LowHealthCooldownSeconds = 180
+#     Default:     300
+AzerothVoices.GroupChatter.LowHealthCooldownSeconds = 300
 
 # AzerothVoices.GroupChatter.LowManaChance
 #     Description: Chance a member calls out low mana, once per drop below the
@@ -1457,8 +1459,8 @@ AzerothVoices.GroupChatter.LowManaThresholdPercent = 20
 
 # AzerothVoices.GroupChatter.LowManaCooldownSeconds
 #     Description: Cooldown after a low-mana callout. (Seconds, 0-86400.)
-#     Default:     180
-AzerothVoices.GroupChatter.LowManaCooldownSeconds = 180
+#     Default:     300
+AzerothVoices.GroupChatter.LowManaCooldownSeconds = 300
 
 # AzerothVoices.GroupChatter.NearbyObjectChance
 #     Description: Chance the group comments on a nearby visible game object.
@@ -1484,13 +1486,13 @@ AzerothVoices.GroupChatter.BotQuestionChance = 1
 
 # AzerothVoices.GroupChatter.BotQuestionScanSeconds
 #     Description: Delay between bot-question checks. (Seconds, 5-3600.)
-#     Default:     60
-AzerothVoices.GroupChatter.BotQuestionScanSeconds = 60
+#     Default:     300
+AzerothVoices.GroupChatter.BotQuestionScanSeconds = 300
 
 # AzerothVoices.GroupChatter.BotQuestionCooldownSeconds
 #     Description: Cooldown after a bot question. (Seconds, 0-86400.)
-#     Default:     300
-AzerothVoices.GroupChatter.BotQuestionCooldownSeconds = 300
+#     Default:     600
+AzerothVoices.GroupChatter.BotQuestionCooldownSeconds = 600
 
 # AzerothVoices.GroupChatter.PlayerFollowupChance
 #     Description: Chance one other grouped bot adds a second line after a bot's reply
@@ -1500,14 +1502,14 @@ AzerothVoices.GroupChatter.PlayerFollowupChance = 25
 
 # AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds
 #     Description: Cooldown after such a second line. (Seconds, 0-86400.)
-#     Default:     30
-AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds = 30
+#     Default:     60
+AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds = 60
 
 # AzerothVoices.GroupChatter.ConversationChance
 #     Description: Chance a group line becomes a short multi-line conversation instead
 #                  of one line. (Percentage.)
-#     Default:     25
-AzerothVoices.GroupChatter.ConversationChance = 25
+#     Default:     10
+AzerothVoices.GroupChatter.ConversationChance = 10
 
 # AzerothVoices.GroupChatter.ConversationMaximumLines
 #     Description: Lines a group conversation may deliver. (Lines, 1-12.)
@@ -1523,8 +1525,8 @@ AzerothVoices.GroupChatter.ConversationMaximumParticipants = 2
 # AzerothVoices.GroupChatter.ConversationTurnGapSeconds
 #     Description: Minimum gap between delivered lines of one group conversation.
 #                  (Seconds, 0-600.)
-#     Default:     4
-AzerothVoices.GroupChatter.ConversationTurnGapSeconds = 4
+#     Default:     8
+AzerothVoices.GroupChatter.ConversationTurnGapSeconds = 8
 
 # AzerothVoices.GroupChatter.ConversationReplyWindowSeconds
 #     Description: Window in which a group conversation may continue after its first
@@ -1926,13 +1928,13 @@ AzerothVoices.Random.Enable = 1
 
 # AzerothVoices.Random.MinimumIntervalSeconds
 #     Description: Lower bound before the next ambient attempt. (Seconds, minimum 5.)
-#     Default:     90
-AzerothVoices.Random.MinimumIntervalSeconds = 90
+#     Default:     300
+AzerothVoices.Random.MinimumIntervalSeconds = 300
 
 # AzerothVoices.Random.MaximumIntervalSeconds
 #     Description: Upper interval bound. (Seconds, at least MinimumIntervalSeconds.)
-#     Default:     240
-AzerothVoices.Random.MaximumIntervalSeconds = 240
+#     Default:     600
+AzerothVoices.Random.MaximumIntervalSeconds = 600
 
 # AzerothVoices.Random.FollowupChance
 #     Description: Chance another actor replies after ambient chatter, a bot-originated
@@ -1940,8 +1942,8 @@ AzerothVoices.Random.MaximumIntervalSeconds = 240
 #                  corresponding bot-to-bot or RPG interaction cap is then applied.
 #                  Every follow-up repeats the selected scope's real-audience rule.
 #                  (Percentage.)
-#     Default:     15
-AzerothVoices.Random.FollowupChance = 15
+#     Default:     10
+AzerothVoices.Random.FollowupChance = 10
 
 # AzerothVoices.Random.MaximumActors
 #     Description: Generated conversation chain cap; 1 disables follow-ups. (Generated
@@ -2074,20 +2076,20 @@ AzerothVoices.PartyGate.Enable = 1
 # AzerothVoices.PartyGate.FillerMinGapSeconds
 #     Description: Minimum gap between filler chatter messages in the same party.
 #                  (Seconds, 0-300.)
-#     Default:     12
-AzerothVoices.PartyGate.FillerMinGapSeconds = 12
+#     Default:     30
+AzerothVoices.PartyGate.FillerMinGapSeconds = 30
 
 # AzerothVoices.PartyGate.ContextualMinGapSeconds
 #     Description: Minimum gap between contextual event chatter messages in the same
 #                  party. (Seconds, 0-300.)
-#     Default:     8
-AzerothVoices.PartyGate.ContextualMinGapSeconds = 8
+#     Default:     20
+AzerothVoices.PartyGate.ContextualMinGapSeconds = 20
 
 # AzerothVoices.PartyGate.ResponsiveMinGapSeconds
 #     Description: Minimum gap between direct/responsive chatter messages in the same
 #                  party. (Seconds, 0-300.)
-#     Default:     2
-AzerothVoices.PartyGate.ResponsiveMinGapSeconds = 2
+#     Default:     4
+AzerothVoices.PartyGate.ResponsiveMinGapSeconds = 4
 
 # AzerothVoices.PartyGate.UrgentMinGapSeconds
 #     Description: Minimum gap between urgent callout messages in the same party.
@@ -2173,8 +2175,8 @@ AzerothVoices.Events.Enable = 1
 # AzerothVoices.Events.ResponderChance
 #     Description: Second-stage chance that other actors react after the selected
 #                  scope's real-audience check passes. (Percentage.)
-#     Default:     25
-AzerothVoices.Events.ResponderChance = 25
+#     Default:     15
+AzerothVoices.Events.ResponderChance = 15
 
 # AzerothVoices.Events.SelfCommentChance
 #     Description: Chance an AI PlayerBot comments on its own event through Guild,
@@ -2190,8 +2192,8 @@ AzerothVoices.Events.MaximumResponders = 2
 
 # AzerothVoices.Events.CooldownSeconds
 #     Description: Per-subject/per-event repeat cooldown. (Seconds, minimum 0.)
-#     Default:     60
-AzerothVoices.Events.CooldownSeconds = 60
+#     Default:     300
+AzerothVoices.Events.CooldownSeconds = 300
 
 # AzerothVoices.Events.Chance.CreatureDefeated
 #     Description: Initial chance for an automatic creature-kill event. (Percentage.)

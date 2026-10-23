@@ -393,24 +393,19 @@ function AzerothVoices:BuildEditor(panel)
     selected:SetHeight(16)
     selected:SetFontObject(GameFontNormalLarge)
 
-    -- Right Column Scrollable Content Frame (exact 172, -102 to -34, 42)
+    -- Right Column Scrollable Content Frame (exact 172, -102 to -16, 42)
     local scroll = CreateFrame("ScrollFrame", nil, panel)
     scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 172, -102)
-    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -34, 42)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 42)
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(470)
     content:SetHeight(488)
     scroll:SetScrollChild(content)
 
-    local editorBar = slider(panel)
-    editorBar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 4, 0)
-    editorBar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 4, 0)
-    editorBar:SetScript("OnValueChanged", function()
-        scroll:SetVerticalScroll(this:GetValue() or 0)
-    end)
+    local scrollOffset = 0
 
-    local function updateEditorScroll()
+    local function getEditorMaxScroll()
         local viewHeight = scroll:GetHeight()
         if not viewHeight or viewHeight <= 0 then
             viewHeight = 496
@@ -419,16 +414,22 @@ function AzerothVoices:BuildEditor(panel)
         if not cHeight or cHeight <= 0 then
             cHeight = 488
         end
-        local maximum = math.max(0, cHeight - viewHeight)
-        editorBar:SetMinMaxValues(0, maximum)
-        local cur = math.min(editorBar:GetValue() or 0, maximum)
-        editorBar:SetValue(cur)
-        scroll:SetVerticalScroll(cur)
-        if maximum > 0 then
-            editorBar:Show()
-        else
-            editorBar:Hide()
-        end
+        return math.max(0, cHeight - viewHeight)
+    end
+
+    local function applyEditorScroll(newOffset)
+        local maximum = getEditorMaxScroll()
+        scrollOffset = math.max(0, math.min(maximum, newOffset))
+        scroll:SetVerticalScroll(scrollOffset)
+    end
+
+    local function updateEditorScroll()
+        applyEditorScroll(scrollOffset)
+    end
+
+    local function onEditorMouseWheel()
+        local delta = arg1 or 0
+        applyEditorScroll(scrollOffset - delta * 20)
     end
 
     scroll:SetScript("OnSizeChanged", function()
@@ -436,12 +437,9 @@ function AzerothVoices:BuildEditor(panel)
     end)
 
     scroll:EnableMouseWheel(true)
-    scroll:SetScript("OnMouseWheel", function()
-        local delta = arg1 or 0
-        local _, maximum = editorBar:GetMinMaxValues()
-        local cur = editorBar:GetValue() or 0
-        editorBar:SetValue(math.max(0, math.min(maximum, cur - delta * 20)))
-    end)
+    scroll:SetScript("OnMouseWheel", onEditorMouseWheel)
+    content:EnableMouseWheel(true)
+    content:SetScript("OnMouseWheel", onEditorMouseWheel)
 
     local contentWidth = 460
 
@@ -602,12 +600,7 @@ function AzerothVoices:BuildEditor(panel)
         GameTooltip:Hide()
     end)
     barHolder:EnableMouseWheel(true)
-    barHolder:SetScript("OnMouseWheel", function()
-        local delta = arg1 or 0
-        local _, maximum = editorBar:GetMinMaxValues()
-        local cur = editorBar:GetValue() or 0
-        editorBar:SetValue(math.max(0, math.min(maximum, cur - delta * 20)))
-    end)
+    barHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
 
     -- Scale Labels below the bar
     local scaleLow = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
