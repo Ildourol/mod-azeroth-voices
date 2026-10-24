@@ -623,7 +623,7 @@
 ### <a id="azerothvoicespersonalityprompttraits"></a>`AzerothVoices.Personality.Prompt.Traits`
 
 - **Data Type**: String
-- **Default Value**: `traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). Do not use a fixed checklist, and do not merely restate race or class.`
+- **Default Value**: `traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as toxic, elitist, troll, sarcastic, salty, memelord, shitposter, conspiracy theorist, hot-headed, boastful, deadpan, blunt, or reckless). Do not use a fixed checklist, and do not merely restate race or class.`
 - **Description**: System guidance prompt used when generating a bot's 3 personality traits. Instructs the model to select diverse, distinctive quirks and flaws rather than repetitive generic adjectives.
 - **Operator Guidance & Impact**: Customizing this prompt allows injecting specific behavioral profiles, quirks, and flaws across your server's bots, completely preventing the repetitive "strategic/thoughtful" archetype collapse.
 
@@ -2570,7 +2570,7 @@ Forget button and `.av memory forget` delete them.
 | [`AzerothVoices.Random.Questions`](#azerothvoicesrandomquestions) | String (Pipe-separated choices) | `Ask whether anyone wants to group.|Ask for an opinion about the current zone.|Ask which dungeon people like.|Ask what people are farming.|Ask about professions, gear, or PvP.` | Question-style ambient instructions. (Pipe-separated text choices.) |
 | [`AzerothVoices.Random.EnvironmentPrompts`](#azerothvoicesrandomenvironmentprompts) | String (Pipe-separated choices) | `React to something nearby.|Comment on the weather or surroundings.|Mention a creature, object, quest, spell, item, vendor, dungeon, or unfinished task that fits the location.` | Instructions that use live surroundings. (Pipe-separated text choices.) |
 | [`AzerothVoices.Random.GuildPrompts`](#azerothvoicesrandomguildprompts) | String (Pipe-separated choices) | `Ask whether guild members want a dungeon group.|Congratulate the guild on recent progress.|Talk about raids, PvP, professions, loot, the guild bank, or helping another member.` | Topics used for guild ambient chatter. (Pipe-separated text choices.) |
-| [`AzerothVoices.Random.WorldPrompts`](#azerothvoicesrandomworldprompts) | String (Pipe-separated choices) | `Start a short world-chat topic about zones, dungeons, loot, professions, PvP, quests, travel, or server life.|Ask world chat a brief useful question.|Make a short public observation that could start a conversation.` | Topics used for world/channel ambient chatter. (Pipe-separated text choices... |
+| [`AzerothVoices.Random.WorldPrompts`](#azerothvoicesrandomworldprompts) | String (Pipe-separated choices) | `Start a short topic about zones, dungeons, loot, PvP, quests, or server life.|Ask world chat a quick question or make a casual observation.|Drop a salty remark, banter, or roast bad players with gamer toxicity.|Say something absurd, off-topic nonsense, or comment on real-world news.` | Topics used for world/channel ambient chatter. (Pipe-separated text choices... |
 
 
 ### <a id="azerothvoicesrandomenable"></a>`AzerothVoices.Random.Enable`
@@ -2646,7 +2646,7 @@ Forget button and `.av memory forget` delete them.
 ### <a id="azerothvoicesrandomworldprompts"></a>`AzerothVoices.Random.WorldPrompts`
 
 - **Data Type**: String (Pipe-separated choices)
-- **Default Value**: `Start a short world-chat topic about zones, dungeons, loot, professions, PvP, quests, travel, or server life.|Ask world chat a brief useful question.|Make a short public observation that could start a conversation.`
+- **Default Value**: `Start a short topic about zones, dungeons, loot, PvP, quests, or server life.|Ask world chat a quick question or make a casual observation.|Drop a salty remark, banter, or roast bad players with gamer toxicity.|Say something absurd, off-topic nonsense, or comment on real-world news.`
 - **Description**: Topics used for world/channel ambient chatter. (Pipe-separated text choices.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 

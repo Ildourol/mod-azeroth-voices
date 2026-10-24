@@ -469,8 +469,8 @@ AzerothVoices.Personality.Prompt.Normal = Write a simple, compact real-world bac
 #     Description: System guidance prompt used when generating a bot's 3 personality traits.
 #                  Instructs the model to select diverse, distinctive quirks and flaws rather
 #                  than repetitive generic adjectives. (Text.)
-#     Default:     traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). Do not use a fixed checklist, and do not merely restate race or class.
-AzerothVoices.Personality.Prompt.Traits = traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). Do not use a fixed checklist, and do not merely restate race or class.
+#     Default:     traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as toxic, elitist, troll, sarcastic, salty, memelord, shitposter, conspiracy theorist, hot-headed, boastful, deadpan, blunt, or reckless). Do not use a fixed checklist, and do not merely restate race or class.
+AzerothVoices.Personality.Prompt.Traits = traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as toxic, elitist, troll, sarcastic, salty, memelord, shitposter, conspiracy theorist, hot-headed, boastful, deadpan, blunt, or reckless). Do not use a fixed checklist, and do not merely restate race or class.
 
 # AzerothVoices.Personality.Prompt.Tone
 #     Description: System guidance prompt used when generating a bot's persistent speaking style.
@@ -1986,7 +1986,7 @@ AzerothVoices.Random.GuildPrompts = Ask whether guild members want a dungeon gro
 # AzerothVoices.Random.WorldPrompts
 #     Description: Topics used for world/channel ambient chatter. (Pipe-separated text
 #                  choices.)
-AzerothVoices.Random.WorldPrompts = Start a short world-chat topic about zones, dungeons, loot, professions, PvP, quests, travel, or server life.|Ask world chat a brief useful question.|Make a short public observation that could start a conversation.
+AzerothVoices.Random.WorldPrompts = Start a short topic about zones, dungeons, loot, PvP, quests, or server life.|Ask world chat a quick question or make a casual observation.|Drop a salty remark, banter, or roast bad players with gamer toxicity.|Say something absurd, off-topic nonsense, or comment on real-world news.
 
 # --------------------------------------------
 # 15. AUTOMATED WORLD/CUSTOM-CHANNEL PACING

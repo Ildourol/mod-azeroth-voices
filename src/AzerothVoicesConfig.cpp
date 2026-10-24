@@ -275,8 +275,8 @@ namespace AzerothVoices
         std::string const defaultPersonalityTraitsPrompt =
             "traits must be an array of exactly 3 distinct concise descriptors chosen freely so their combination feels "
             "specific, varied, and internally coherent. Avoid repetitive clichés like 'strategic', 'thoughtful', 'introverted', "
-            "or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as hot-headed, "
-            "boastful, superstitious, thrifty, deadpan, clumsy, blunt, fiercely loyal, sarcastic, or reckless). "
+            "or 'mischievous'. Draw from a wide spectrum of quirks, flaws, temperaments, and social styles (such as toxic, "
+            "elitist, troll, sarcastic, salty, memelord, shitposter, conspiracy theorist, hot-headed, boastful, deadpan, blunt, or reckless). "
             "Do not use a fixed checklist, and do not merely restate race or class.";
 
         std::string const defaultPersonalityTonePrompt =
@@ -610,8 +610,10 @@ namespace AzerothVoices
             "Ask whether guild members want a dungeon group.|Congratulate the guild on recent progress.|"
             "Talk about raids, PvP, professions, loot, the guild bank, or helping another member."), '|');
         c.worldPrompts = Split(sConfig.GetStringDefault("AzerothVoices.Random.WorldPrompts",
-            "Start a short world-chat topic about zones, dungeons, loot, professions, PvP, quests, travel, or server life.|"
-            "Ask world chat a brief useful question.|Make a short public observation that could start a conversation."), '|');
+            "Start a short topic about zones, dungeons, loot, PvP, quests, or server life.|"
+            "Ask world chat a quick question or make a casual observation.|"
+            "Drop a salty remark, banter, or roast bad players with gamer toxicity.|"
+            "Say something absurd, off-topic nonsense, or comment on real-world news."), '|');
 
         c.generalChatPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.GeneralChat.Pacing.Enable", true);
         c.generalChatMinimumGapSeconds = Bounded("AzerothVoices.GeneralChat.MinimumGapSeconds", 15, 0, 86400);
