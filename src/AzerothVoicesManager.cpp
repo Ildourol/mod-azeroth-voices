@@ -1950,6 +1950,9 @@ namespace AzerothVoices
     {
         ChatRequest request;
         request.id = m_nextRequestId++;
+        DynamicLengthPlan const lengthPlan = ResolveDynamicLengthPlan(*m_config);
+        request.maxTokensOverride = lengthPlan.tokens;
+        request.maxLinesOverride = lengthPlan.maxLines;
         request.priority = priority;
         request.actor = actor;
         if (targetedNpc)
@@ -2145,6 +2148,8 @@ namespace AzerothVoices
             "as authoritative. Older conversation, snapshot history, and retrieved lore are optional context: "
             "use only details directly relevant to the current reply, do not assume old state is still true, and "
             "do not invent facts to reconcile stale or conflicting context.";
+        if (!lengthPlan.guidance.empty() && !boss && !scene)
+            request.systemPrompt += "\nLength guidance: " + lengthPlan.guidance;
 
         if (trigger == "boss-directed")
             request.userPrompt = "Respond in character to this player line: " + message;
@@ -4455,7 +4460,7 @@ namespace AzerothVoices
                 completion.request.sentimentDelta = sentimentDelta;
             }
             std::vector<std::string> lines = Provider::SplitReply(*m_config, completion.responseText,
-                completion.request.actor.name);
+                completion.request.actor.name, completion.request.maxLinesOverride);
             if (completion.request.bossLine && !lines.empty())
             {
                 // One yell per opportunity, and only if it satisfies the

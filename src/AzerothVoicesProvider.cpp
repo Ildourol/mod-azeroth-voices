@@ -773,8 +773,9 @@ namespace AzerothVoices
         return finish();
     }
 
-    std::vector<std::string> Provider::SplitReply(Config const& config, std::string text, std::string const& speakerName)
+    std::vector<std::string> Provider::SplitReply(Config const& config, std::string text, std::string const& speakerName, uint32_t maxLinesOverride)
     {
+        uint32_t const effectiveMaxLines = (maxLinesOverride > 0) ? maxLinesOverride : config.maximumReplyLines;
         text = StripSpeakerPrefix(text, speakerName);
         std::vector<std::string> rawLines;
         if (Lower(config.parserMode) == "legacyregex" && !config.responseSplitPattern.empty())
@@ -797,17 +798,17 @@ namespace AzerothVoices
                 text,
                 speakerName,
                 config.maximumReplyCharacters,
-                config.maximumReplyLines,
+                effectiveMaxLines,
                 config.sentenceAwareSplitting);
         }
 
         std::vector<std::string> result;
         for (std::string const& raw : rawLines)
         {
-            if (result.size() >= config.maximumReplyLines)
+            if (result.size() >= effectiveMaxLines)
                 break;
 
-            size_t remainingLines = config.maximumReplyLines - result.size();
+            size_t remainingLines = effectiveMaxLines - result.size();
             std::vector<std::string> parts = SplitReplyLinesStructured(
                 raw,
                 speakerName,
@@ -818,7 +819,7 @@ namespace AzerothVoices
             for (std::string& p : parts)
             {
                 result.push_back(std::move(p));
-                if (result.size() >= config.maximumReplyLines)
+                if (result.size() >= effectiveMaxLines)
                     break;
             }
         }

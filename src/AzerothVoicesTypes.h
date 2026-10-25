@@ -251,6 +251,7 @@ namespace AzerothVoices
         PersonalityGenerationMode personalityMode = PersonalityGenerationMode::Full;
         BotPersonality personalityFixed;
         uint32_t maxTokensOverride = 0;
+        uint32_t maxLinesOverride = 0;
         uint32_t sentimentDeltaLimit = 0;
         int32_t sentimentDelta = 0;
         bool personalityGenerationNeeded = false;

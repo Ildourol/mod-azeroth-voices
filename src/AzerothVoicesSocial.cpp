@@ -1,4 +1,8 @@
 #include "AzerothVoicesSocial.h"
+#include "AzerothVoicesConfig.h"
+
+#include <cmath>
+#include <random>
 
 #include <algorithm>
 #include <cctype>
@@ -1540,6 +1544,90 @@ namespace AzerothVoices
             resLine = StripSpeakerPrefix(resLine, speakerName);
 
         return result;
+    }
+
+    LengthTier ClassifyLengthTier(uint32_t tokens, uint32_t minTokens, uint32_t maxTokens)
+    {
+        uint32_t const low = std::min(minTokens, maxTokens);
+        uint32_t const high = std::max(minTokens, maxTokens);
+        uint32_t const span = high - low;
+        if (span == 0)
+            return LengthTier::Medium;
+
+        double const step = static_cast<double>(span) / 3.0;
+        uint32_t const shortThreshold = low + static_cast<uint32_t>(std::round(step));
+        uint32_t const mediumThreshold = low + static_cast<uint32_t>(std::round(step * 2.0));
+
+        if (tokens <= shortThreshold)
+            return LengthTier::Short;
+        if (tokens <= mediumThreshold)
+            return LengthTier::Medium;
+        return LengthTier::Long;
+    }
+
+    static uint32_t SocialRandomUInt(uint32_t minimum, uint32_t maximum)
+    {
+        if (minimum >= maximum)
+            return minimum;
+        static thread_local std::mt19937 engine(std::random_device{}());
+        return std::uniform_int_distribution<uint32_t>(minimum, maximum)(engine);
+    }
+
+    DynamicLengthPlan ResolveDynamicLengthPlan(Config const& config, uint32_t tokenRollOverride)
+    {
+        DynamicLengthPlan plan;
+        uint32_t const minTokens = std::max<uint32_t>(1, config.minTokens);
+        uint32_t const maxTokens = std::max<uint32_t>(minTokens, config.maxTokens);
+
+        if (tokenRollOverride > 0)
+        {
+            plan.tokens = tokenRollOverride;
+        }
+        else if (config.tokenRangeMode == 1) // 1 = Fixed MaxTokens mode
+        {
+            plan.tokens = maxTokens;
+        }
+        else // 2 = Dynamic range mode (default)
+        {
+            plan.tokens = SocialRandomUInt(minTokens, maxTokens);
+        }
+
+        plan.tier = ClassifyLengthTier(plan.tokens, minTokens, maxTokens);
+
+        if (config.adaptiveLengthGuidanceEnabled)
+        {
+            switch (plan.tier)
+            {
+                case LengthTier::Short:
+                    plan.guidance = config.adaptiveLengthGuidanceShort;
+                    break;
+                case LengthTier::Medium:
+                    plan.guidance = config.adaptiveLengthGuidanceMedium;
+                    break;
+                case LengthTier::Long:
+                    plan.guidance = config.adaptiveLengthGuidanceLong;
+                    break;
+            }
+        }
+
+        uint32_t const maxReplyLines = std::max<uint32_t>(1, config.maximumReplyLines);
+        switch (plan.tier)
+        {
+            case LengthTier::Short:
+                // When tokens are low, strictly cap to 1 line so low tokens never force/produce multiple fragmented messages
+                plan.maxLines = 1;
+                break;
+            case LengthTier::Medium:
+                // When tokens are medium, cap to at most 2 lines (or config maximum if lower)
+                plan.maxLines = std::min<uint32_t>(2, maxReplyLines);
+                break;
+            case LengthTier::Long:
+                // When tokens are long, allow up to the full configured maximum reply lines
+                plan.maxLines = maxReplyLines;
+                break;
+        }
+
+        return plan;
     }
 }
 

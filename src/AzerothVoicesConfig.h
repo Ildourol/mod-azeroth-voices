@@ -62,7 +62,13 @@ namespace AzerothVoices
         uint32_t connectTimeoutSeconds = 10;
         uint32_t requestTimeoutSeconds = 60;
         uint32_t maxResponseBytes = 65536;
-        uint32_t maxTokens = 512;
+        uint32_t tokenRangeMode = 2; // 1 = Fixed (MaxTokens), 2 = Dynamic Range (MinTokens..MaxTokens)
+        uint32_t minTokens = 20;
+        uint32_t maxTokens = 100;
+        bool adaptiveLengthGuidanceEnabled = true;
+        std::string adaptiveLengthGuidanceShort = "Keep it very brief: one short, punchy sentence or quip.";
+        std::string adaptiveLengthGuidanceMedium = "Say one or two natural sentences.";
+        std::string adaptiveLengthGuidanceLong = "Feel free to share two or three sentences to elaborate.";
         std::string thinkingMode = "auto";
         bool thinkingAutoDetect = true;
         std::string thinkingEffort = "low";

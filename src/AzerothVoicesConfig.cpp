@@ -140,7 +140,21 @@ namespace AzerothVoices
         c.connectTimeoutSeconds = Positive("AzerothVoices.ConnectTimeoutSeconds", 10, 1);
         c.requestTimeoutSeconds = Positive("AiPlayerbot.LLMGenerationTimeout", 60, 1);
         c.maxResponseBytes = Positive("AzerothVoices.MaxResponseBytes", 65536, 1024);
-        c.maxTokens = Positive("AzerothVoices.MaxTokens", 512, 1);
+        c.tokenRangeMode = Positive("AzerothVoices.TokenRange.Mode", 2, 1);
+        if (sConfig.GetIntDefault("AzerothVoices.MinTokens.Enable", -1) != -1)
+            c.tokenRangeMode = sConfig.GetBoolDefault("AzerothVoices.MinTokens.Enable", true) ? 2 : 1;
+        c.minTokens = Positive("AzerothVoices.MinTokens", 20, 1);
+        c.maxTokens = Positive("AzerothVoices.MaxTokens", 100, 1);
+        if (c.minTokens > c.maxTokens)
+            std::swap(c.minTokens, c.maxTokens);
+
+        c.adaptiveLengthGuidanceEnabled = sConfig.GetBoolDefault("AzerothVoices.AdaptiveLengthGuidance.Enable", true);
+        c.adaptiveLengthGuidanceShort = Trim(sConfig.GetStringDefault("AzerothVoices.AdaptiveLengthGuidance.Short",
+            "Keep it very brief: one short, punchy sentence or quip."));
+        c.adaptiveLengthGuidanceMedium = Trim(sConfig.GetStringDefault("AzerothVoices.AdaptiveLengthGuidance.Medium",
+            "Say one or two natural sentences."));
+        c.adaptiveLengthGuidanceLong = Trim(sConfig.GetStringDefault("AzerothVoices.AdaptiveLengthGuidance.Long",
+            "Feel free to share two or three sentences to elaborate."));
         c.thinkingMode = Trim(sConfig.GetStringDefault("AzerothVoices.Thinking.Mode", "Auto"));
         std::transform(c.thinkingMode.begin(), c.thinkingMode.end(), c.thinkingMode.begin(), [](unsigned char value) {
             return static_cast<char>(std::tolower(value));

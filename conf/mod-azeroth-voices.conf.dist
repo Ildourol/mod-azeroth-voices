@@ -113,9 +113,25 @@ AiPlayerbot.LLMGenerationTimeout = 60
 #     Default:     65536
 AzerothVoices.MaxResponseBytes = 65536
 
+# AzerothVoices.TokenRange.Mode
+#     Description: Controls how token budgets are assigned per dialogue request.
+#                  1 = Fixed token budget (always uses AzerothVoices.MaxTokens).
+#                  2 = Dynamic token range (randomly rolls a token budget between
+#                      AzerothVoices.MinTokens and AzerothVoices.MaxTokens per turn).
+#                  (Mode 1/2.)
+#     Default:     2
+AzerothVoices.TokenRange.Mode = 2
+
+# AzerothVoices.MinTokens
+#     Description: Minimum token budget rolled per dialogue request when TokenRange.Mode = 2.
+#                  (Tokens, minimum 1.)
+#     Default:     20
+AzerothVoices.MinTokens = 20
+
 # AzerothVoices.MaxTokens
-#     Description: Requested output limit in generated provider JSON. (Tokens, minimum
-#                  1.)
+#     Description: Maximum token budget rolled per dialogue request. In TokenRange.Mode = 1,
+#                  all requests use this fixed ceiling. In TokenRange.Mode = 2, this is the upper
+#                  bound of the random roll. (Tokens, minimum 1.)
 #     Default:     100
 #
 #     IMPORTANT: this cap covers reasoning AND the reply. On a reasoning model
@@ -133,6 +149,31 @@ AzerothVoices.MaxResponseBytes = 65536
 #     |     75     |   ~50–60      | Long quest/lore text             |
 #     |    100+    |   70–80+      | Multi-paragraph (not typical)    |
 AzerothVoices.MaxTokens = 100
+
+# AzerothVoices.AdaptiveLengthGuidance.Enable
+#     Description: Dynamically adds length guidance to the internal system prompt based on
+#                  the rolled token budget to prevent models from being cut off mid-sentence
+#                  on low rolls, and encourage fuller thoughts on higher rolls. Proportional
+#                  dynamic thresholds cover the full span even if min/max are stretched.
+#                  Additionally, low token rolls automatically restrict the line cap to 1 line,
+#                  preventing models from spreading brief thoughts across multiple fragmented messages.
+#     Default:     1
+AzerothVoices.AdaptiveLengthGuidance.Enable = 1
+
+# AzerothVoices.AdaptiveLengthGuidance.Short
+#     Description: Internal length prompt directive for the lower third of the token span.
+#     Default:     Keep it very brief: one short, punchy sentence or quip.
+AzerothVoices.AdaptiveLengthGuidance.Short = Keep it very brief: one short, punchy sentence or quip.
+
+# AzerothVoices.AdaptiveLengthGuidance.Medium
+#     Description: Internal length prompt directive for the middle third of the token span.
+#     Default:     Say one or two natural sentences.
+AzerothVoices.AdaptiveLengthGuidance.Medium = Say one or two natural sentences.
+
+# AzerothVoices.AdaptiveLengthGuidance.Long
+#     Description: Internal length prompt directive for the upper third of the token span.
+#     Default:     Feel free to share two or three sentences to elaborate.
+AzerothVoices.AdaptiveLengthGuidance.Long = Feel free to share two or three sentences to elaborate.
 
 # AzerothVoices.Thinking.Mode
 #     Description: Official-endpoint Thinking policy. Only api.openai.com and

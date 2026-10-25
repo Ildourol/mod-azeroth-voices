@@ -10,6 +10,7 @@
 
 namespace AzerothVoices
 {
+    struct Config;
     // Party/raid/guild chatter decisions, kept free of game headers so they can be
     // unit tested without a worldserver.
     enum class GroupTrigger : uint8_t
@@ -369,5 +370,28 @@ namespace AzerothVoices
         size_t maximumCharacters,
         size_t maximumLines,
         bool sentenceAware = true);
+
+    // Proportional length tier used for adaptive length guidance and line capping
+    enum class LengthTier : uint8_t
+    {
+        Short,
+        Medium,
+        Long
+    };
+
+    struct DynamicLengthPlan
+    {
+        uint32_t tokens = 0;
+        LengthTier tier = LengthTier::Medium;
+        std::string guidance;
+        uint32_t maxLines = 0;
+    };
+
+    // Classifies a token budget into Short/Medium/Long proportionally across [minTokens, maxTokens]
+    LengthTier ClassifyLengthTier(uint32_t tokens, uint32_t minTokens, uint32_t maxTokens);
+
+    // Resolves token budget, proportional tier, internal prompt guidance, and line limit.
+    // If tokenRollOverride is > 0, it uses that token count directly (deterministic for unit tests).
+    DynamicLengthPlan ResolveDynamicLengthPlan(Config const& config, uint32_t tokenRollOverride = 0);
 }
 
