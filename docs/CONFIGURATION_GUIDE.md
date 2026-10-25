@@ -2,7 +2,7 @@
 
 > **Module**: `mod-azeroth-voices` (Autonomous Native C++ LLM Engine for Turtle WoW / vMaNGOS)
 
-> **Reference Configuration**: [`conf/mod-azeroth-voices.conf.dist`](file:///C:/Users/Admin/AntigravityProfiles/Projects%20Twow/Turtle%20wow%20modules/mod-azeroth-voices/conf/mod-azeroth-voices.conf.dist)
+> **Reference Configuration**: [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist)
 
 > **Runtime Module Path**: `Server/etc/modules/mod-azeroth-voices.conf`
 
@@ -34,13 +34,13 @@
 ## Table of Contents
 
 1. [Module ownership and diagnostics](#module-ownership-and-diagnostics) (5 settings)
-2. [Provider and HTTPS](#provider-and-https) (19 settings)
+2. [Provider and HTTPS](#provider-and-https) (25 settings)
 3. [Worker pool, queue, limits, and cooldowns](#worker-pool-queue-limits-and-cooldowns) (13 settings)
-4. [Shared prompts and PlayerBots-compatible prompt names](#shared-prompts-and-playerbots-compatible-prompt-names) (15 settings)
-5. [Persistent PlayerBot personalities](#persistent-playerbot-personalities) (10 settings)
+4. [Shared prompts and PlayerBots-compatible prompt names](#shared-prompts-and-playerbots-compatible-prompt-names) (14 settings)
+5. [Persistent PlayerBot personalities](#persistent-playerbot-personalities) (16 settings)
 6. [PlayerBot-to-real-player sentiment](#playerbot-to-real-player-sentiment) (11 settings)
-7. [PlayerBot delivery scopes, response selection, and distances](#playerbot-delivery-scopes-response-selection-and-distances) (36 settings)
-8. [NPC dialogue: reactions, combat-start, and the ordered /say reply chain](#npc-dialogue-reactions-combat-start-and-the-ordered-say-reply-chain) (18 settings)
+7. [PlayerBot delivery scopes, response selection, and distances](#playerbot-delivery-scopes-response-selection-and-distances) (41 settings)
+8. [NPC dialogue: reactions, combat-start, and the ordered /say reply chain](#npc-dialogue-reactions-combat-start-and-the-ordered-say-reply-chain) (22 settings)
 9. [Dedicated proximity chatter (ordinary Say)](#dedicated-proximity-chatter-ordinary-say) (19 settings)
 10. [Boss and miniboss pre-aggro dialogue (dungeons and raids only)](#boss-and-miniboss-pre-aggro-dialogue-dungeons-and-raids-only) (18 settings)
 11. [Party and raid chatter](#party-and-raid-chatter) (63 settings)
@@ -51,7 +51,7 @@
 16. [PartyGate per-party delivery pacing](#partygate-per-party-delivery-pacing) (8 settings)
 17. [Lightweight live environment context](#lightweight-live-environment-context) (6 settings)
 18. [Event chatter](#event-chatter) (27 settings)
-19. [Reply length and PlayerBots-compatible typing delay](#reply-length-and-playerbots-compatible-typing-delay) (7 settings)
+19. [Reply length and PlayerBots-compatible typing delay](#reply-length-and-playerbots-compatible-typing-delay) (8 settings)
 20. [Bounded conversation and surrounding-chat history](#bounded-conversation-and-surrounding-chat-history) (17 settings)
 21. [SNAPSHOT SYSTEM](#snapshot-system) (23 settings)
 22. [Structured local RAG (optional, no embeddings or extra provider call)](#structured-local-rag-optional-no-embeddings-or-extra-provider-call) (7 settings)
@@ -124,8 +124,14 @@
 | [`AzerothVoices.AllowLocalHttp`](#azerothvoicesallowlocalhttp) | Boolean (`0` or `1`) | `1` | Allows plain HTTP only for local/loopback providers, never remote HTTP. (De... |
 | [`AzerothVoices.ConnectTimeoutSeconds`](#azerothvoicesconnecttimeoutseconds) | Integer (Seconds, minimum 1; default 10.) | `10` | TCP/TLS connection timeout. (Seconds, minimum 1; default 10.) |
 | [`AiPlayerbot.LLMGenerationTimeout`](#aiplayerbotllmgenerationtimeout) | Integer (Seconds, minimum 1; default 60.) | `60` | Provider read/write generation timeout. (Seconds, minimum 1; default 60.) |
-| [`AzerothVoices.MaxResponseBytes`](#azerothvoicesmaxresponsebytes) | Integer | `65536` | Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536.) |
-| [`AzerothVoices.MaxTokens`](#azerothvoicesmaxtokens) | Integer (Tokens, minimum 1; default 512.) | `100` | Requested output limit in generated provider JSON. (Tokens, minimum 1; defa... |
+| [`AzerothVoices.MaxResponseBytes`](#azerothvoicesmaxresponsebytes) | Integer | `65536` | Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536) |
+| [`AzerothVoices.TokenRange.Mode`](#azerothvoicestokenrangemode) | Integer (`1` or `2`) | `2` | Controls whether dialogue requests use a fixed budget (1) or dynamic range (2). |
+| [`AzerothVoices.MinTokens`](#azerothvoicesmintokens) | Integer (Tokens, minimum 1; default 20) | `20` | Minimum token budget rolled per dialogue request when TokenRange.Mode = 2. |
+| [`AzerothVoices.MaxTokens`](#azerothvoicesmaxtokens) | Integer (Tokens, minimum 1; default 100) | `100` | Maximum token budget rolled (or fixed ceiling in TokenRange.Mode = 1). |
+| [`AzerothVoices.AdaptiveLengthGuidance.Enable`](#azerothvoicesadaptivelengthguidanceenable) | Boolean (`0` or `1`) | `1` | Dynamically injects length guidance prompt and caps low-token lines to 1. |
+| [`AzerothVoices.AdaptiveLengthGuidance.Short`](#azerothvoicesadaptivelengthguidanceshort) | String | `Keep it very brief: one short, punchy sentence or quip.` | Length prompt directive for the lower third of the token span. |
+| [`AzerothVoices.AdaptiveLengthGuidance.Medium`](#azerothvoicesadaptivelengthguidancemedium) | String | `Say one or two natural sentences.` | Length prompt directive for the middle third of the token span. |
+| [`AzerothVoices.AdaptiveLengthGuidance.Long`](#azerothvoicesadaptivelengthguidancelong) | String | `Feel free to share two or three sentences to elaborate.` | Length prompt directive for the upper third of the token span. |
 | [`AzerothVoices.Thinking.Mode`](#azerothvoicesthinkingmode) | Enum (`Auto/On/Off`) | `Auto` | Official-endpoint Thinking policy. Only api.openai.com and generativelangua... |
 | [`AzerothVoices.Thinking.AutoDetect`](#azerothvoicesthinkingautodetect) | Boolean (`0` or `1`) | `1` | Recognises the provider and model capability from the endpoint and model na... |
 | [`AzerothVoices.Thinking.Effort`](#azerothvoicesthinkingeffort) | Enum (`Minimal/Low/Medium/High`) | `Low` | Requested reasoning level. Minimal collapses to Low on the Responses API an... |
@@ -160,91 +166,145 @@
 
 - **Data Type**: String
 - **Default Value**: `gpt-4o-mini`
-- **Description**: Exact model identifier accepted by the selected endpoint. (String; default https://api.openai.com/v1/chat/completions)
+- **Description**: Exact model identifier accepted by the selected endpoint. (String; default gpt-4o-mini.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmapijson"></a>`AiPlayerbot.LLMApiJson`
 
 - **Data Type**: String (Template with placeholders)
-- **Default Value**: `# AzerothVoices.ParserMode`
-- **Description**: Empty lets the module generate provider-safe JSON; a custom legacy template may use <pre prompt>, <context>, <prompt>, <model>, and documented chat placeholders. (JSON template; default https://api.openai.com/v1/chat/completions)
+- **Default Value**: *(empty)*
+- **Description**: Empty lets the module generate provider-safe JSON; a custom legacy template may use `<pre prompt>`, `<context>`, `<prompt>`, `<model>`, and documented chat placeholders. (JSON template; default empty.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesparsermode"></a>`AzerothVoices.ParserMode`
 
 - **Data Type**: Enum (`ProviderJson/LegacyRegex`)
 - **Default Value**: `ProviderJson`
-- **Description**: ProviderJson parses OpenAI chat/Responses, Gemini candidates, and Ollama JSON; LegacyRegex uses the regex settings below. (Enum ProviderJson/LegacyRegex; default https://api.openai.com/v1/chat/completions)
+- **Description**: ProviderJson parses OpenAI chat/Responses, Gemini candidates, and Ollama JSON; LegacyRegex uses regex matchers. (Enum ProviderJson/LegacyRegex; default ProviderJson.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicescacertfile"></a>`AzerothVoices.CACertFile`
 
 - **Data Type**: String
-- **Default Value**: `# AzerothVoices.AllowLocalHttp`
-- **Description**: Empty uses system CAs; otherwise uses this custom CA bundle. (File path; default https://api.openai.com/v1/chat/completions)
+- **Default Value**: *(empty)*
+- **Description**: Empty uses system CAs; otherwise uses this custom CA bundle. (File path; default empty.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesallowlocalhttp"></a>`AzerothVoices.AllowLocalHttp`
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `1`
-- **Description**: Allows plain HTTP only for local/loopback providers, never remote HTTP. (Default https://api.openai.com/v1/chat/completions)
+- **Description**: Allows plain HTTP only for local/loopback providers, never remote HTTP. (Default 1.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesconnecttimeoutseconds"></a>`AzerothVoices.ConnectTimeoutSeconds`
 
-- **Data Type**: Integer (Seconds, minimum 1; default https://api.openai.com/v1/chat/completions)
+- **Data Type**: Integer (Seconds, minimum 1; default 10.)
 - **Default Value**: `10`
-- **Description**: TCP/TLS connection timeout. (Seconds, minimum 1; default https://api.openai.com/v1/chat/completions)
+- **Description**: TCP/TLS connection timeout. (Seconds, minimum 1; default 10.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmgenerationtimeout"></a>`AiPlayerbot.LLMGenerationTimeout`
 
-- **Data Type**: Integer (Seconds, minimum 1; default https://api.openai.com/v1/chat/completions)
+- **Data Type**: Integer (Seconds, minimum 1; default 60.)
 - **Default Value**: `60`
-- **Description**: Provider read/write generation timeout. (Seconds, minimum 1; default https://api.openai.com/v1/chat/completions)
+- **Description**: Provider read/write generation timeout. (Seconds, minimum 1; default 60.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesmaxresponsebytes"></a>`AzerothVoices.MaxResponseBytes`
 
 - **Data Type**: Integer
 - **Default Value**: `65536`
-- **Description**: Rejects oversized HTTP responses. (Bytes, minimum 1024; default https://api.openai.com/v1/chat/completions)
+- **Description**: Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+
+### <a id="azerothvoicestokenrangemode"></a>`AzerothVoices.TokenRange.Mode`
+
+- **Data Type**: Integer (`1` or `2`)
+- **Default Value**: `2`
+- **Description**: Controls how token budgets are assigned per dialogue request. 1 = Fixed token budget (always uses `AzerothVoices.MaxTokens`). 2 = Dynamic token range (randomly rolls a token budget between `AzerothVoices.MinTokens` and `AzerothVoices.MaxTokens` per turn). (Mode 1/2; default 2.)
+- **Operator Guidance & Impact**: Dynamic mode (`2`) produces varied, realistic conversational rhythms where some replies are brief quips and others are more detailed, rather than uniform-length output. Set to `1` for legacy fixed-ceiling behavior.
+
+### <a id="azerothvoicesmintokens"></a>`AzerothVoices.MinTokens`
+
+- **Data Type**: Integer (Tokens, minimum 1; default 20.)
+- **Default Value**: `20`
+- **Description**: Minimum token budget rolled per dialogue request when `TokenRange.Mode = 2`. (Tokens, minimum 1; default 20.)
+- **Operator Guidance & Impact**: Sets the floor for dynamic token rolls. Lower values (e.g. 15-20) produce punchy one-liners, snappy quips, and brief reactions. If set higher than `AzerothVoices.MaxTokens`, the values are safely swapped by the engine.
 
 ### <a id="azerothvoicesmaxtokens"></a>`AzerothVoices.MaxTokens`
 
-- **Data Type**: Integer (Tokens, minimum 1; default https://api.openai.com/v1/chat/completions)
+- **Data Type**: Integer (Tokens, minimum 1; default 100.)
 - **Default Value**: `100`
-- **Description**: Requested output limit in generated provider JSON. (Tokens, minimum 1; default https://api.openai.com/v1/chat/completions)
+- **Description**: Maximum token budget rolled per dialogue request. In `TokenRange.Mode = 1`, all requests use this fixed ceiling. In `TokenRange.Mode = 2`, this is the upper bound of the random roll. (Tokens, minimum 1; default 100.)
 - **Operator Guidance & Impact**: Directly limits output length. Lower values keep chat punchy and reduce API completion token costs; higher values allow more descriptive storytelling.
+
+  **IMPORTANT**: this cap covers reasoning AND the reply. On a reasoning model (o-series, DeepSeek-R1, Gemini Thinking) set this high enough to prevent the reasoning trace from consuming the entire budget before the reply begins (recommend: 1000+ for reasoning models; 50-100 for normal models).
+
+  **Word-to-token guidance (approximate for English dialogue):**
+
+  | MaxTokens | Typical words | Example output |
+  | :--- | :--- | :--- |
+  | `20` | 10–15 | One short sentence or quip |
+  | `40` | 25–30 | One or two sentences |
+  | `60` | 40–45 | Two sentences with detail |
+  | `80` | 55–65 | Paragraph (3–4 sentences) |
+  | `100+` | 70–80+ | Multi-paragraph (not typical) |
+
+### <a id="azerothvoicesadaptivelengthguidanceenable"></a>`AzerothVoices.AdaptiveLengthGuidance.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Dynamically adds length guidance to the internal system prompt based on the rolled token budget to prevent models from being cut off mid-sentence on low rolls, and encourage fuller thoughts on higher rolls. Proportional dynamic thresholds cover the full span even if min/max are stretched. Additionally, low token rolls automatically restrict the line cap to 1 line, preventing models from spreading brief thoughts across multiple fragmented messages. (Default 1.)
+- **Operator Guidance & Impact**: Recommended enabled (`1`). Keeps models aware of their token budget before generating, avoiding mid-sentence truncation and eliminating awkward multi-line splits for brief 10-15 word quips.
+
+### <a id="azerothvoicesadaptivelengthguidanceshort"></a>`AzerothVoices.AdaptiveLengthGuidance.Short`
+
+- **Data Type**: String
+- **Default Value**: `Keep it very brief: one short, punchy sentence or quip.`
+- **Description**: Internal length prompt directive for the lower third of the token span.
+- **Operator Guidance & Impact**: Instructs the model to output a single punchy line for low token rolls. In this tier, the engine also enforces a strict 1-line delivery cap (`maxLines = 1`).
+
+### <a id="azerothvoicesadaptivelengthguidancemedium"></a>`AzerothVoices.AdaptiveLengthGuidance.Medium`
+
+- **Data Type**: String
+- **Default Value**: `Say one or two natural sentences.`
+- **Description**: Internal length prompt directive for the middle third of the token span.
+- **Operator Guidance & Impact**: Guides the model to produce standard conversational 1-2 sentence replies. In this tier, line delivery is capped at `min(2, MaximumReplyLines)`.
+
+### <a id="azerothvoicesadaptivelengthguidancelong"></a>`AzerothVoices.AdaptiveLengthGuidance.Long`
+
+- **Data Type**: String
+- **Default Value**: `Feel free to share two or three sentences to elaborate.`
+- **Description**: Internal length prompt directive for the upper third of the token span.
+- **Operator Guidance & Impact**: Active during higher token rolls, inviting the model to provide fuller explanations or observations up to the configured `MaximumReplyLines`.
 
 ### <a id="azerothvoicesthinkingmode"></a>`AzerothVoices.Thinking.Mode`
 
 - **Data Type**: Enum (`Auto/On/Off`)
 - **Default Value**: `Auto`
-- **Description**: Official-endpoint Thinking policy. Only api.openai.com and generativelanguage.googleapis.com receive Thinking fields; every proxy or other OpenAI-compatible provider stays a normal non-thinking provider. The former AzerothVoices.ReasoningEffort key is retired and ignored. Auto applies a control only for an officially recognised provider/model and an enabled AutoKind; On applies it for any recognised provider/model; Off omits the optional control and, for models whose reasoning cannot be disabled, sends the lowest documented level without pretending to disable reasoning. (Enum Auto/On/Off; default https://api.openai.com/v1/chat/completions)
+- **Description**: Official-endpoint Thinking policy. Only api.openai.com and generativelanguage.googleapis.com receive Thinking fields; every proxy or other OpenAI-compatible provider stays a normal non-thinking provider. The former AzerothVoices.ReasoningEffort key is retired and ignored. Auto applies a control only for an officially recognised provider/model and an enabled AutoKind; On applies it for any recognised provider/model; Off omits the optional control and, for models whose reasoning cannot be disabled, sends the lowest documented level without pretending to disable reasoning. (Enum Auto/On/Off; default Auto.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesthinkingautodetect"></a>`AzerothVoices.Thinking.AutoDetect`
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `1`
-- **Description**: Recognises the provider and model capability from the endpoint and model name without probing the provider. With 0 only an explicit Thinking.Mode = On applies a control; the module never guesses for an unrecognised model. (Accepted 0/1; default https://api.openai.com/v1/chat/completions)
+- **Description**: Recognises the provider and model capability from the endpoint and model name without probing the provider. With 0 only an explicit Thinking.Mode = On applies a control; the module never guesses for an unrecognised model. (Accepted 0/1; default 1.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesthinkingeffort"></a>`AzerothVoices.Thinking.Effort`
 
 - **Data Type**: Enum (`Minimal/Low/Medium/High`)
 - **Default Value**: `Low`
-- **Description**: Requested reasoning level. Minimal collapses to Low on the Responses API and on Gemini and always-on models. (Enum Minimal/Low/Medium/High; default https://api.openai.com/v1/chat/completions)
+- **Description**: Requested reasoning level. Minimal collapses to Low on the Responses API and on Gemini and always-on models. (Enum Minimal/Low/Medium/High; default Low.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesthinkingtokenreserve"></a>`AzerothVoices.Thinking.TokenReserve`
 
 - **Data Type**: Integer (Tokens, 0-100000; default https://api.openai.com/v1/chat/completions)
 - **Default Value**: `1024`
-- **Description**: Added to the active output-token field only when a Thinking control is actually applied, so a reasoning budget never truncates the visible reply. (Tokens, 0-100000; default https://api.openai.com/v1/chat/completions)
+- **Description**: Added to the active output-token field only when a Thinking control is actually applied, so a reasoning budget never truncates the visible reply. (Tokens, 0-100000; default 1024.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesthinkingautokinds"></a>`AzerothVoices.Thinking.AutoKinds`
@@ -256,16 +316,16 @@
 
 ### <a id="azerothvoicestemperature"></a>`AzerothVoices.Temperature`
 
-- **Data Type**: Decimal (Decimal 0.0-2.0; default https://api.openai.com/v1/chat/completions)
+- **Data Type**: Decimal (Decimal 0.0-2.0; default 0.8.)
 - **Default Value**: `0.8`
-- **Description**: Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default https://api.openai.com/v1/chat/completions)
+- **Description**: Sampling randomness; invalid values are clamped. (Decimal 0.0-2.0; default 0.8.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicestopp"></a>`AzerothVoices.TopP`
 
-- **Data Type**: Decimal (Decimal 0.0-1.0; default https://api.openai.com/v1/chat/completions)
+- **Data Type**: Decimal (Decimal 0.0-1.0; default 0.95.)
 - **Default Value**: `0.95`
-- **Description**: Nucleus sampling; invalid values are clamped. (Decimal 0.0-1.0; default https://api.openai.com/v1/chat/completions)
+- **Description**: Nucleus sampling; invalid values are clamped. (Decimal 0.0-1.0; default 0.95.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ---
@@ -280,7 +340,7 @@
 | [`AzerothVoices.HighPriorityReserve`](#azerothvoiceshighpriorityreserve) | Integer | `32` | Queue capacity reserved for direct/group replies. (0-QueueMaximum; default ... |
 | [`AzerothVoices.GlobalRequestsPerMinute`](#azerothvoicesglobalrequestsperminute) | Integer | `60` | Global budget shared by all workers. (Requests/minute, minimum 1; default 6... |
 | [`AzerothVoices.RequestTTLSeconds`](#azerothvoicesrequestttlseconds) | Integer (Seconds, minimum 1; default 90) | `90` | Drops queued requests that are no longer timely. (Seconds, minimum 1; defau... |
-| [`AzerothVoices.AmbientActorCooldownSeconds`](#azerothvoicesambientactorcooldownseconds) | Integer (Seconds, minimum 0; default 120) | `120` | Longer per-actor random-chatter cooldown. (Seconds, minimum 0; default 120.... |
+| [`AzerothVoices.AmbientActorCooldownSeconds`](#azerothvoicesambientactorcooldownseconds) | Integer (Seconds, minimum 0; default 300) | `300` | Longer per-actor random-chatter cooldown. (Seconds, minimum 0; default 300) |
 | [`AzerothVoices.BotSpeakerCooldownSeconds`](#azerothvoicesbotspeakercooldownseconds) | Integer (Seconds) | `900` | Per-bot cooldown (seconds) for General channel speech. After a bot speaks i... |
 | [`AzerothVoices.RetryMaximum`](#azerothvoicesretrymaximum) | Integer | `1` | Retries transient connection, 429, and 5xx failures. (Retries, minimum 0; d... |
 | [`AzerothVoices.RetryBackoffMilliseconds`](#azerothvoicesretrybackoffmilliseconds) | Integer (Milliseconds, minimum 0; default 500) | `500` | Base increasing delay between retries. (Milliseconds, minimum 0; default 50... |
@@ -362,7 +422,7 @@
 - **Default Value**: `3`
 - **Description**: Maximum number of consecutive lines to merge before forcing dispatch. (Count, minimum 2, default 900)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
- (feat(personality): lightweight dual-layer persona architecture and backstory gating)
+
 ### <a id="azerothvoicesretrymaximum"></a>`AzerothVoices.RetryMaximum`
 
 - **Data Type**: Integer
@@ -386,7 +446,7 @@
 | [`AzerothVoices.GlobalMode`](#azerothvoicesglobalmode) | Enum (`Roleplay/Normal`) | `Normal` | Selects PlayerBot conversation style for PlayerBot-to-real-player and Playe... |
 | [`AzerothVoices.GlobalPrompt.Roleplay`](#azerothvoicesglobalpromptroleplay) | String | `You are a character living in the fantasy world of Azeroth. Speak naturally and in-character. Rules: 1. IMMERSIVE RP: Speak strictly in-world with lived experience. Never mention real life, computers, gaming, AI, or meta concepts. 2. NATURAL DIALOGUE: Keep speech concise, grounded, and believable; never narrate actions or stage directions. 3. IN-WORLD REALITY: Treat danger, zones, quests, and factions as authentic everyday life. 4. FORMAT: Return only spoken words. No names, quotes, or dialogue tags.` | System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs... |
 | [`AzerothVoices.GlobalPrompt.Normal`](#azerothvoicesglobalpromptnormal) | String | `You are a real human playing an online game. Rules: 1. NO ROLEPLAY: No fantasy talk, in-character acting, or abstract themes. 2. NO POETICS: No poetic, flowery, or theatrical phrasing. 3. CASUAL GAMER: Short, natural, grounded chat like an ordinary person playing; do not over-mention the game. 4. FORMAT: Return only the spoken text. No names or dialogue tags.` | System prompt selected by GlobalMode=Normal for PlayerBot-to-real-player an... |
-| [`AzerothVoices.GlobalPrompt`](#azerothvoicesglobalprompt) | String | `You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.` | Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is ab... | (feat(personality): lightweight dual-layer persona architecture and backstory gating)
+| [`AzerothVoices.GlobalPrompt`](#azerothvoicesglobalprompt) | String | `You create short, natural in-game dialogue for World of Warcraft. Stay in the game world. Never mention AI, prompts, policies, APIs, or being a narrator. Never prefix your response with your name or dialogue tags. Return only what the speaker says.` | Legacy compatibility fallback for GlobalPrompt.Roleplay when that key is ab... |
 | [`AiPlayerbot.LLMPrePrompt`](#aiplayerbotllmpreprompt) | String (Template with placeholders) | `You are <bot name>, a level <bot level> <bot race> <bot class> in <bot subzone>, <bot zone>. <bot personality block>` | Describes a PlayerBot before a normal response. (Text template.) |
 | [`AiPlayerbot.LLMPrompt`](#aiplayerbotllmprompt) | String (Template with placeholders) | `<sender name>: <initial message>` | Formats incoming chat for the provider using the actual incoming speaker na... |
 | [`AiPlayerbot.LLMPostPrompt`](#aiplayerbotllmpostprompt) | String (Template with placeholders) | `# AiPlayerbot.LLMRpgPrompt` | Optional response cue appended after incoming chat; empty by default becaus... |
@@ -396,8 +456,8 @@
 | [`AiPlayerbot.LLMResponseStartPattern`](#aiplayerbotllmresponsestartpattern) | String | `("content":\s*")` | LegacyRegex-only response start matcher. (ECMAScript regex.) |
 | [`AiPlayerbot.LLMResponseEndPattern`](#aiplayerbotllmresponseendpattern) | String | `("|\b(?!<sender name>\b)(\w+):)` | LegacyRegex-only response end matcher. (ECMAScript regex.) |
 | [`AiPlayerbot.LLMResponseDeletePattern`](#aiplayerbotllmresponsedeletepattern) | String | `(\\n|<sender name>:|\\[^ ]+)` | LegacyRegex-only unwanted-fragment remover. (ECMAScript regex.) |
-| [`AiPlayerbot.LLMResponseSplitPattern`](#aiplayerbotllmresponsesplitpattern) | String | `# AiPlayerbot.LLMBlockedReplyChannels` | Optional LegacyRegex multi-line split matcher. (ECMAScript regex; default e... |
-| [`AiPlayerbot.LLMBlockedReplyChannels`](#aiplayerbotllmblockedreplychannels) | String (Comma-separated list) | `# --------------------------------------------` | Blocks matching replies, ignoring case. (Comma-separated scope/channel name... |
+| [`AiPlayerbot.LLMResponseSplitPattern`](#aiplayerbotllmresponsesplitpattern) | String | *(empty)* | Optional LegacyRegex multi-line split matcher. (ECMAScript regex; default empty) |
+| [`AiPlayerbot.LLMBlockedReplyChannels`](#aiplayerbotllmblockedreplychannels) | String (Comma-separated list) | *(empty)* | Blocks matching replies, ignoring case. (Comma-separated scope/channel names) |
 
 
 ### <a id="azerothvoicesglobalmode"></a>`AzerothVoices.GlobalMode`
@@ -411,7 +471,7 @@
 
 - **Data Type**: String
 - **Default Value**: `You are a character living in the fantasy world of Azeroth. Speak naturally and in-character. Rules: 1. IMMERSIVE RP: Speak strictly in-world with lived experience. Never mention real life, computers, gaming, AI, or meta concepts. 2. NATURAL DIALOGUE: Keep speech concise, grounded, and believable; never narrate actions or stage directions. 3. IN-WORLD REALITY: Treat danger, zones, quests, and factions as authentic everyday life. 4. FORMAT: Return only spoken words. No names, quotes, or dialogue tags.`
-- **Description**: System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text.) (feat(personality): lightweight dual-layer persona architecture and backstory gating)
+- **Description**: System prompt selected by GlobalMode=Roleplay; it keeps PlayerBots and NPCs inside Azeroth and forbids real-world player/meta framing. The older AzerothVoices.GlobalPrompt key is used only as a compatibility fallback when this key is absent. (Text.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="azerothvoicesglobalpromptnormal"></a>`AzerothVoices.GlobalPrompt.Normal`
@@ -438,8 +498,8 @@
 ### <a id="aiplayerbotllmpostprompt"></a>`AiPlayerbot.LLMPostPrompt`
 
 - **Data Type**: String (Template with placeholders)
-- **Default Value**: `# AiPlayerbot.LLMRpgPrompt`
-- **Description**: Optional response cue appended after incoming chat; empty by default because the system/pre-prompt already identifies the responding actor. (Text template; default You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.)
+- **Default Value**: *(empty)*
+- **Description**: Optional response cue appended after incoming chat; empty by default because the system/pre-prompt already identifies the responding actor. (Text template; default empty.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmrpgprompt"></a>`AiPlayerbot.LLMRpgPrompt`
@@ -451,16 +511,16 @@
 
 ### <a id="aiplayerbotllmcontextlength"></a>`AiPlayerbot.LLMContextLength`
 
-- **Data Type**: Integer (Characters, minimum 0; default You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.)
+- **Data Type**: Integer (Characters, minimum 0; default 4096.)
 - **Default Value**: `4096`
-- **Description**: Caps the combined personality, live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Characters, minimum 0; default You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.)
+- **Description**: Caps the combined personality, live environment, current/older snapshots, histories, surrounding chat, and RAG context added to a request. (Characters, minimum 0; default 4096.)
 - **Operator Guidance & Impact**: Limits prompt context injected into LLM requests. Keep balanced to ensure bot personalities, memories, and surrounding dialogue fit comfortably within LLM context windows without token bloat.
 
 ### <a id="aiplayerbotllmglobalcontext"></a>`AiPlayerbot.LLMGlobalContext`
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `0`
-- **Description**: 0 isolates history by speaker/scope; 1 shares actor-wide history. (Default You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.)
+- **Description**: 0 isolates history by speaker/scope; 1 shares actor-wide history. (Default 0.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmresponsestartpattern"></a>`AiPlayerbot.LLMResponseStartPattern`
@@ -487,18 +547,24 @@
 ### <a id="aiplayerbotllmresponsesplitpattern"></a>`AiPlayerbot.LLMResponseSplitPattern`
 
 - **Data Type**: String
-- **Default Value**: `# AiPlayerbot.LLMBlockedReplyChannels`
+- **Default Value**: *(empty)*
 - **Description**: Optional LegacyRegex multi-line split matcher. (ECMAScript regex; default You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmblockedreplychannels"></a>`AiPlayerbot.LLMBlockedReplyChannels`
 
 - **Data Type**: String (Comma-separated list)
-- **Default Value**: `# --------------------------------------------`
+- **Default Value**: *(empty)*
 - **Description**: Blocks matching replies, ignoring case. (Comma-separated scope/channel names; default You write short, natural in-world dialogue for Vanilla/Turtle WoW. Speak fully in character as an Azeroth resident with lived experience; do not narrate actions. Never mention AI, games, prompts, or real-world concepts. Never include dialogue tags or name prefixes (such as 'Name:'). Return only the spoken words.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ---
+
+> PlayerBot personalities operate on a lightweight dual-layer architecture:
+> 1. **Active Voice Layer**: Exactly three concise traits, tone, and the persona priority rule (~25 tokens) are always present in every request.
+> 2. **AI Self-Gating Backstory**: Backstories (~60 tokens) are encapsulated with a 19-word self-gating directive (`Keep private: only mention or draw from this if asked about who you are, what you do, or your life.`), letting LLM reasoning evaluate relevance natively in a single pass with 0 extra latency and zero string-matching loops. Backstories are automatically suppressed during combat/tactical triggers (0 token overhead).
+>
+> Backstory storage is backed by MySQL `TEXT NOT NULL` (via `20261022_01_azeroth_voices_personality_text.sql`), with clean sentence head-bounding (`CleanHeadBounded()`) and auto-0 unconstrained modes for `MaxBackgroundChars` and `MaxPromptChars`.
 
 ## 5. Persistent PlayerBot personalities
 
@@ -516,7 +582,7 @@
 | [`AzerothVoices.Personality.MaxTokens`](#azerothvoicespersonalitymaxtokens) | Integer (`0-2048`) | `120` | Hard output token limit sent to API for personality/backstory generation; default 120 tokens for compact, non-rambling output. |
 | [`AzerothVoices.Personality.MaxBackgroundChars`](#azerothvoicespersonalitymaxbackgroundchars) | Integer (`0-65535`) | `600` | Hard maximum character limit stored in DB and displayed in UI; default 600 chars to fit complete 3-4 sentence backstories without truncation. |
 | [`AzerothVoices.Personality.MaxPromptChars`](#azerothvoicespersonalitymaxpromptchars) | Integer (`0-2000`) | `900` | Bounds personality and background text inserted into each prompt; default 900 chars to ensure full persona context without ellipsis truncation. |
-| [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0), strictly enforcing non-poetic plain facts. |
+| [`AzerothVoices.Personality.Prompt.Roleplay`](#azerothvoicespersonalitypromptroleplay) | String | `Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic cliches. Return only backstory text.` | System guidance prompt used when generating backstories in Roleplay mode (BackgroundMode=0), strictly enforcing non-poetic plain facts. |
 | [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1), strictly enforcing non-poetic plain real-world facts with zero WoW mentions. |
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
 | [`AzerothVoices.Personality.Prompt.Tone`](#azerothvoicespersonalityprompttone) | String | `tone must be a concise speaking-style description derived from the traits...` | System guidance prompt used when generating a bot's persistent speaking style. |
@@ -609,7 +675,7 @@
 ### <a id="azerothvoicespersonalitypromptroleplay"></a>`AzerothVoices.Personality.Prompt.Roleplay`
 
 - **Data Type**: String
-- **Default Value**: `Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic clichés. Return only backstory text.`
+- **Default Value**: `Write a simple, compact Vanilla/Turtle WoW backstory with plain facts only. State birthplace, straightforward occupation, and upbringing. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details, and avoid tragic cliches. Return only backstory text.`
 - **Description**: Compact guidance prompt used when generating backstories in Roleplay mode (`BackgroundMode=0`). Instructs the model to create simple, lore-accurate Vanilla/Turtle WoW character biographies with plain facts and zero poetic or flowery language.
 - **Operator Guidance & Impact**: Compact token footprint keeping LLM system context dense, fast, and strictly factual.
 
@@ -2561,8 +2627,8 @@ Forget button and `.av memory forget` delete them.
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
 | [`AzerothVoices.Random.Enable`](#azerothvoicesrandomenable) | Boolean (`0` or `1`) | `1` | Enables scheduled ambient chatter around online real players. (Default 1) |
-| [`AzerothVoices.Random.MinimumIntervalSeconds`](#azerothvoicesrandomminimumintervalseconds) | Integer (Seconds, minimum 5; default 300) | `300` | Lower bound before the next ambient attempt. (Seconds, minimum 5; default 9... |
-| [`AzerothVoices.Random.MaximumIntervalSeconds`](#azerothvoicesrandommaximumintervalseconds) | Integer (Seconds, at least MinimumIntervalSeconds; default 600) | `600` | Upper interval bound. (Seconds, at least MinimumIntervalSeconds; default 24... |
+| [`AzerothVoices.Random.MinimumIntervalSeconds`](#azerothvoicesrandomminimumintervalseconds) | Integer (Seconds, minimum 5; default 300) | `300` | Lower bound before the next ambient attempt. (Seconds, minimum 5; default 300) |
+| [`AzerothVoices.Random.MaximumIntervalSeconds`](#azerothvoicesrandommaximumintervalseconds) | Integer (Seconds, at least MinimumIntervalSeconds; default 600) | `600` | Upper interval bound. (Seconds, at least MinimumIntervalSeconds; default 600) |
 | [`AzerothVoices.Random.FollowupChance`](#azerothvoicesrandomfollowupchance) | Percentage (`0` - `100`) | `10` | Chance another actor replies after ambient chatter, a bot-originated Say/Ye... |
 | [`AzerothVoices.Random.MaximumActors`](#azerothvoicesrandommaximumactors) | Integer | `2` | Generated conversation chain cap; 1 disables follow-ups. (Generated turns, ... |
 | [`AzerothVoices.Random.Scopes`](#azerothvoicesrandomscopes) | String (Comma-separated list) | `guild,world,party` | Chooses ambient-chat delivery scopes; a disabled or unavailable group scope... |
@@ -2895,7 +2961,7 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Events.ResponderChance`](#azerothvoiceseventsresponderchance) | Percentage (`0` - `100`) | `15` | Second-stage chance that other actors react after the selected scope's real... |
 | [`AzerothVoices.Events.SelfCommentChance`](#azerothvoiceseventsselfcommentchance) | Percentage (`0` - `100`) | `5` | Chance an AI PlayerBot comments on its own event through Guild, preferred P... |
 | [`AzerothVoices.Events.MaximumResponders`](#azerothvoiceseventsmaximumresponders) | Integer | `2` | Maximum other responders to one event. (Actors, minimum 1; default 2) |
-| [`AzerothVoices.Events.CooldownSeconds`](#azerothvoiceseventscooldownseconds) | Integer (Seconds, minimum 0; default 300) | `300` | Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 60) |
+| [`AzerothVoices.Events.CooldownSeconds`](#azerothvoiceseventscooldownseconds) | Integer (Seconds, minimum 0; default 300) | `300` | Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 300) |
 | [`AzerothVoices.Events.Chance.CreatureDefeated`](#azerothvoiceseventschancecreaturedefeated) | Percentage (`0` - `100`) | `8` | Initial chance for an automatic creature-kill event. (Percentage; default 8... |
 | [`AzerothVoices.Events.Chance.PlayerDefeated`](#azerothvoiceseventschanceplayerdefeated) | Percentage (`0` - `100`) | `40` | Initial chance for an automatic PvP-kill event. (Percentage; default 40) |
 | [`AzerothVoices.Events.Chance.Died`](#azerothvoiceseventschancedied) | Percentage (`0` - `100`) | `25` | Initial chance for automatic player-death event. (Percentage; default 25) |
@@ -3120,8 +3186,8 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Typing.MinimumDelayPerCharacterMilliseconds`](#azerothvoicestypingminimumdelaypercharactermilliseconds) | Integer | `100` | Minimum natural typing delay; one speed is randomly selected between the mi... |
 | [`AzerothVoices.Typing.MaximumDelayPerCharacterMilliseconds`](#azerothvoicestypingmaximumdelaypercharactermilliseconds) | Integer | `200` | Maximum natural typing delay; values below the minimum are swapped safely. ... |
 | [`AzerothVoices.Typing.SubtractGenerationTime`](#azerothvoicestypingsubtractgenerationtime) | Boolean (`0` or `1`) | `1` | Legacy compatibility: if both range keys above are absent, AzerothVoices.Ty... |
-| [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 120) | `120` | Cumulative total character budget across all delivered reply lines for a... | (feat(personality): lightweight dual-layer persona architecture and backstory gating)
-| [`AzerothVoices.Reply.MaximumLines`](#azerothvoicesreplymaximumlines) | Integer | `2` | Maximum delivered lines/parts per request. Limits the number of separate... |
+| [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 120) | `120` | Maximum character budget per delivered reply line. (Characters, default 120) |
+| [`AzerothVoices.Reply.MaximumLines`](#azerothvoicesreplymaximumlines) | Integer | `2` | Maximum delivered lines/parts per request (dynamically capped by length plan). |
 | [`AzerothVoices.Reply.SentenceAwareSplitting`](#azerothvoicesreplysentenceawaresplitting) | Boolean (`0` or `1`) | `1` | Enables structured, sentence-aware line breaking for delivered dialogue. Wh... |
 
 
@@ -3162,17 +3228,17 @@ human within SayDistance; Party actors require a real human in the same party su
 
 ### <a id="azerothvoicesreplymaximumcharacters"></a>`AzerothVoices.Reply.MaximumCharacters`
 
-- **Data Type**: Integer (Characters, minimum 1; default 80.)
-- **Default Value**: `80`
-- **Description**: Maximum character budget per delivered reply line. Messages are cleanly split on sentence and clause boundaries so each message fits within this character limit without sentence starvation. (Characters, minimum 1; default 80.)
-- **Operator Guidance & Impact**: Enforces the maximum character length for each individual delivered line. With per-line budgeting, Line 1 no longer cannibalizes Line 2. Values around 70-90 produce natural, believable WoW chat lines. (feat(personality): lightweight dual-layer persona architecture and backstory gating)
+- **Data Type**: Integer (Characters, minimum 1; default 120.)
+- **Default Value**: `120`
+- **Description**: Maximum character budget per delivered reply line. Messages are cleanly split on sentence and clause boundaries so each message fits within this character limit without sentence starvation. (Characters, minimum 1; default 120.)
+- **Operator Guidance & Impact**: Enforces the maximum character length for each individual delivered line. With per-line budgeting, Line 1 no longer cannibalizes Line 2. Values around 80-120 produce natural, believable WoW chat lines.
 
 ### <a id="azerothvoicesreplymaximumlines"></a>`AzerothVoices.Reply.MaximumLines`
 
 - **Data Type**: Integer
 - **Default Value**: `2`
 - **Description**: Maximum delivered lines/parts per request. Limits the number of separate chat messages a bot can send per response turn. (Lines, minimum 1; default 2)
-- **Operator Guidance & Impact**: Caps how many separate in-game chat messages/bubbles a bot can send for a single dialogue turn. Setting to 1 ensures single-line responses; setting to 2 allows short two-line responses when dialogue warrants it.
+- **Operator Guidance & Impact**: Caps how many separate in-game chat messages/bubbles a bot can send for a single dialogue turn. When `AzerothVoices.AdaptiveLengthGuidance.Enable = 1`, the effective line cap is dynamically scaled per turn based on the rolled token budget: low-token rolls (Short tier) are strictly capped to 1 line, medium-token rolls (Medium tier) are capped to at most 2 lines (or this setting if lower), and high-token rolls (Long tier) allow up to this configured maximum.
 
 ### <a id="azerothvoicesreplysentenceawaresplitting"></a>`AzerothVoices.Reply.SentenceAwareSplitting`
 
@@ -3613,4 +3679,4 @@ Start with the defaults in `conf/mod-azeroth-voices.conf.dist`. Adjust provider 
 
 ## Maintenance and updates
 
-The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference tracks the repository template as reviewed on 20 October 2026; runtime validation and fallback behavior depend on the installed module revision. (feat(personality): lightweight dual-layer persona architecture and backstory gating)
+The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference tracks the repository template as reviewed on 25 October 2026; runtime validation and fallback behavior depend on the installed module revision.

@@ -9,13 +9,14 @@ This is a community server module, not an official Turtle WoW service or client 
 ## Features
 
 - **Direct dialogue:** configurable responses in whisper, say, yell, party, raid, guild, and world/custom-channel contexts, subject to configured gates and speaker eligibility.
-- **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, backed by SQL persistence. Features dedicated length, prompt, and sentence controls (`AzerothVoices.Personality.BackstorySentences`, `AzerothVoices.Personality.MaxTokens`, `AzerothVoices.Personality.MaxBackgroundChars`, and `AzerothVoices.Personality.MaxPromptChars` with unconstrained auto-0 mode) and a dual-layer lightweight architecture: an active voice layer (Traits + Tone + Priority Rule, ~25 tokens) always present, paired with context-gated backstory sampling (~60 tokens in `<backstory>` tags with soft negative steering) and guaranteed 100% backstory inclusion on direct inquiries.
+- **Dynamic token budgeting & adaptive length guidance:** support for dynamic token ranges (`AzerothVoices.TokenRange.Mode = 2`, randomly rolling between `AzerothVoices.MinTokens` and `AzerothVoices.MaxTokens` per turn, or Mode 1 fixed budget) with proportional adaptive length prompt guidance (`AdaptiveLengthGuidance.Short`, `Medium`, `Long`) and low-token line capping so replies stay punchy and single-line on small rolls while naturally expanding on higher rolls.
+- **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, backed by SQL persistence (`TEXT` column). Features dedicated length, prompt, and sentence controls (`AzerothVoices.Personality.BackstorySentences`, `AzerothVoices.Personality.MaxTokens`, `AzerothVoices.Personality.MaxBackgroundChars`, and `AzerothVoices.Personality.MaxPromptChars` with unconstrained auto-0 mode) and a dual-layer lightweight architecture: an active voice layer (Traits + Tone + Priority Rule, ~25 tokens) always present, paired with an AI self-gating backstory directive (`Keep private: only mention or draw from this if asked about who you are, what you do, or your life.`) that evaluates conversational relevance natively in a single pass with zero extra latency and zero string-scanning overhead, automatically suppressing backstories during combat and tactical triggers.
 - **Conversation context:** bounded history, snapshots, player sentiment, and a deterministic memory ledger for more consistent interactions.
-- **Ambient dialogue:** optional nearby, proximity, guild, world-channel, party, and raid chatter with separate probabilities, cooldowns, and pacing.
-- **Event reactions:** contextual lines for supported combat, group, quest, loot, and environmental events.
+- **Ambient dialogue:** optional nearby, proximity, guild, world-channel, party, and raid chatter with separate probabilities, cooldowns, and anti-spam pacing.
+- **Event reactions:** contextual lines for supported combat, group, quest, loot, and environmental events with dedicated repeat cooldowns and responder pacing.
 - **NPC and encounter dialogue:** supported NPC interactions and configurable dungeon/raid pre-aggro boss speech.
 - **In-process provider client:** asynchronous requests to supported Chat Completions endpoints, with a separate OpenAI Responses mode, configurable timeouts, retries, workers, and token limits.
-- **Optional client addon:** contact and personality management interface for the compatible 1.12.1-based client. (feat(personality): lightweight dual-layer persona architecture and backstory gating)
+- **Optional client addon:** contact and personality management interface for the compatible 1.12.1-based client with sequenced personality generation (`Traits -> Backstory -> Tone`), smooth mouse wheel scrolling, and live status feedback.
 
 Feature activity depends on the configuration, available bots/NPCs, database setup, client support, and the server build.
 
@@ -46,7 +47,7 @@ Enable the module and PlayerBots in your target's CMake configuration as support
 
 ### 3. Initialize persistent storage
 
-Review and import the applicable files in `data/sql/character/` into the **characters** database, in filename order, after backing it up. Reconcile the files with any configured automatic database updater so that each migration is applied exactly once. Do not import these files into the world or logon database.
+Review and import the applicable files in `data/sql/character/` into the **characters** database, in filename order, after backing it up (including `20261022_01_azeroth_voices_personality_text.sql` which migrates backstory storage to `TEXT`). Reconcile the files with any configured automatic database updater so that each migration is applied exactly once. Do not import these files into the world or logon database.
 
 ### 4. Configure the server
 
@@ -76,17 +77,20 @@ The complete, setting-by-setting reference is the [Configuration and Tuning Guid
 | `AzerothVoices.Enable` | `1` | Module master switch |
 | `AzerothVoices.ProviderMode` | `ChatCompletions` | Provider request format |
 | `AzerothVoices.Model` | `gpt-4o-mini` | Model identifier |
-| `AzerothVoices.MaxTokens` | `100` | Output token limit |
+| `AzerothVoices.TokenRange.Mode` | `2` | Token budget assignment mode (1=fixed, 2=dynamic roll) |
+| `AzerothVoices.MinTokens` | `20` | Minimum token roll for dynamic range |
+| `AzerothVoices.MaxTokens` | `100` | Output token limit (fixed ceiling or dynamic roll upper bound) |
+| `AzerothVoices.AdaptiveLengthGuidance.Enable` | `1` | Proportional length guidance and low-token line capping |
 | `AzerothVoices.Thinking.Mode` | `Auto` | Reasoning-control policy |
 | `AzerothVoices.Thinking.TokenReserve` | `1024` | Conditional reasoning token headroom |
 | `AzerothVoices.WorkerThreads` | `8` | Background request worker count |
 | `AzerothVoices.QueueMaximum` | `128` | Queued request capacity |
 | `AzerothVoices.GlobalRequestsPerMinute` | `60` | Shared request rate cap |
 | `AzerothVoices.GlobalMode` | `Normal` | Default PlayerBot dialogue style |
-| `AzerothVoices.Personality.BackstorySentences` | `3` | Target sentences for backstories (default 3) |
-| `AzerothVoices.Personality.MaxTokens` | `120` | Generation token budget (default 120) |
-| `AzerothVoices.Personality.MaxBackgroundChars` | `600` | Backstory DB/UI character cap (default 600) |
-| `AzerothVoices.Personality.MaxPromptChars` | `900` | Persona prompt character cap (default 900) |
+| `AzerothVoices.Personality.BackstorySentences` | `3` | Target sentences for backstories |
+| `AzerothVoices.Personality.MaxTokens` | `120` | Generation token budget |
+| `AzerothVoices.Personality.MaxBackgroundChars` | `600` | Backstory DB/UI character cap |
+| `AzerothVoices.Personality.MaxPromptChars` | `900` | Persona prompt character cap |
 
 In `Thinking.Mode=Auto`, reasoning controls are conditional on the recognized official provider/model and `AzerothVoices.Thinking.AutoKinds` (default: `PersonalityGeneration,EventChat`). Some reasoning models cannot fully disable reasoning. For conversational latency and cost, consider output limits, request rates, the selected provider, and ambient trigger frequency together.
 
