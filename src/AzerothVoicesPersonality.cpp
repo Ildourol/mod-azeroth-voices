@@ -546,7 +546,7 @@ namespace AzerothVoices
     }
 
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
-                                std::string const& trigger)
+                                std::string const& trigger, bool ambient)
     {
         if (!config.personalityEnabled || personality.background.empty())
             return false;
@@ -558,19 +558,30 @@ namespace AzerothVoices
             trigger.compare(0, 5, "duel:") == 0 || trigger.compare(0, 4, "pvp:") == 0)
             return false;
 
+        // Optimization 1: Suppress backstory in ambient banter, event reactions, and companion question replies
+        if (config.personalitySuppressBackstoryInAmbient)
+        {
+            if (ambient)
+                return false;
+            if (trigger.compare(0, 6, "event:") == 0)
+                return false;
+            if (trigger == "group:bot-question-reply" || trigger == "world:bot-question-reply")
+                return false;
+        }
+
         return true;
     }
 
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
                                 ChatScope /*scope*/, std::string const& trigger,
-                                std::string const& /*message*/, bool /*directConversation*/, bool /*ambient*/)
+                                std::string const& /*message*/, bool /*directConversation*/, bool ambient)
     {
-        return ShouldIncludeBackstory(config, personality, trigger);
+        return ShouldIncludeBackstory(config, personality, trigger, ambient);
     }
 
     std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality,
                                             ChatScope /*scope*/, std::string const& trigger,
-                                            std::string const& /*message*/, bool /*directConversation*/, bool /*ambient*/)
+                                            std::string const& /*message*/, bool /*directConversation*/, bool ambient)
     {
         std::string voice = BuildVoicePromptBlock(config, personality);
         if (voice.empty())
@@ -579,7 +590,7 @@ namespace AzerothVoices
         std::ostringstream block;
         block << voice;
 
-        if (ShouldIncludeBackstory(config, personality, trigger))
+        if (ShouldIncludeBackstory(config, personality, trigger, ambient))
         {
             std::string backstory = BuildBackstoryPromptBlock(config, personality);
             if (!backstory.empty())

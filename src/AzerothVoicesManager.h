@@ -408,6 +408,7 @@ namespace AzerothVoices
         void RunAmbient();
         void ScheduleNextAmbient();
         void MaybeQueueFollowup(ChatRequest const& request, std::string const& reply);
+        void MaybeQueueBotQuestionAnswer(ChatRequest const& request, std::string const& questionText);
         void RunProximity();
         bool QueueProximityScene(Player* anchor, bool forced);
         void MaybeQueueProximityTurn(ChatRequest const& request, std::string const& reply);

@@ -1,9 +1,14 @@
-# Documentation and internal planning files
-docs/*
-!docs/CONFIGURATION_GUIDE.md
+# Workspace, agent, testing, and internal verification files (Local Only - Never Push to GitHub)
 AGENTS.md
+.agents/
 Addon/
 tests/
+t/
+test_*
+docs/*
+!docs/CONFIGURATION_GUIDE.md
+!docs/images/
+!docs/images/**
 
 # Build artifacts and IDE files
 build/

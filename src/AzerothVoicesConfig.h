@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -42,6 +43,48 @@ namespace AzerothVoices
         TypingDelayRange& operator=(uint32_t legacyDelayMilliseconds);
         operator uint32_t() const;
     };
+
+    struct CategoryWeight
+    {
+        std::string category;
+        uint32_t weight = 0;
+    };
+
+    std::vector<CategoryWeight> ParseCategoryWeights(std::string const& input);
+    std::string SampleCategory(std::vector<CategoryWeight> const& weights, std::string const& fallback);
+    std::string GetRandomPromptForCategory(std::string const& category, std::string const& scope);
+    inline bool IsShortGreetingMessage(std::string const& message)
+    {
+        if (message.empty())
+            return false;
+
+        std::string cleaned;
+        cleaned.reserve(message.size());
+        for (char c : message)
+        {
+            if (c == '.' || c == '!' || c == '?' || c == ',' || c == ':' || c == ';' || c == '~')
+                continue;
+            cleaned.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        }
+
+        size_t start = 0;
+        while (start < cleaned.size() && std::isspace(static_cast<unsigned char>(cleaned[start])))
+            ++start;
+        size_t end = cleaned.size();
+        while (end > start && std::isspace(static_cast<unsigned char>(cleaned[end - 1])))
+            --end;
+
+        if (start >= end)
+            return false;
+
+        std::string const token = cleaned.substr(start, end - start);
+        static std::set<std::string> const s_greetings = {
+            "hi", "hey", "yo", "sup", "hello", "hola", "wb", "re",
+            "ready", "rdy", "r", "o/", "\\o", "o7", "greetings", "salut"
+        };
+
+        return s_greetings.count(token) > 0;
+    }
 
     struct Config
     {
@@ -120,6 +163,7 @@ namespace AzerothVoices
         std::string personalityPromptNormal;
         std::string personalityPromptTraits;
         std::string personalityPromptTone;
+        bool personalitySuppressBackstoryInAmbient = true;
 
         bool sentimentEnabled = false;
         bool sentimentUseInRandom = false;
@@ -184,6 +228,7 @@ namespace AzerothVoices
         uint32_t botReplyChanceSay = 10;
         uint32_t playerReplyChanceChannel = 60;
         uint32_t botReplyChanceChannel = 3;
+        bool botReplyChanceChannelEarlyOut = true;
         uint32_t playerReplyChanceParty = 90;
         uint32_t botReplyChanceParty = 10;
         uint32_t playerReplyChanceGuild = 70;
@@ -236,6 +281,7 @@ namespace AzerothVoices
         bool groupChatterEnabled = true;
         bool raidChatterEnabled = true;
         uint32_t groupChatterScanSeconds = 120;
+        std::vector<CategoryWeight> groupCategoryWeights;
         uint32_t groupConversationChance = 10;
         uint32_t groupConversationMaximumLines = 3;
         uint32_t groupConversationMaximumParticipants = 2;
@@ -379,6 +425,7 @@ namespace AzerothVoices
         std::vector<std::string> environmentPrompts;
         std::vector<std::string> guildPrompts;
         std::vector<std::string> worldPrompts;
+        std::vector<CategoryWeight> randomCategoryWeights;
 
         bool generalChatPacingEnabled = true;
         uint32_t generalChatMinimumGapSeconds = 15;
@@ -406,6 +453,7 @@ namespace AzerothVoices
         uint32_t eventMaximumResponders = 2;
         uint32_t eventCooldownSeconds = 60;
         std::map<std::string, uint32_t> eventChances;
+        std::vector<CategoryWeight> eventCategoryWeights;
 
         bool typingSimulationEnabled = true;
         uint32_t typingBaseDelayMilliseconds = 0;
@@ -414,6 +462,9 @@ namespace AzerothVoices
         uint32_t maximumReplyCharacters = 80;
         uint32_t maximumReplyLines = 2;
         bool sentenceAwareSplitting = true;
+        uint32_t questionSelfAnswerChance = 5;
+        bool replyShortTurnTokenCapEnable = true;
+        uint32_t replyShortTurnTokenCapMaxTokens = 25;
 
         uint32_t historyStorageMode = 2;
         uint32_t historyRamMaximumTurns = 6;

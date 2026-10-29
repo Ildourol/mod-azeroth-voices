@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <limits>
+#include <random>
 #include <sstream>
 
 namespace AzerothVoices
@@ -113,6 +114,168 @@ namespace AzerothVoices
             return result;
         }
     }
+
+    std::vector<CategoryWeight> ParseCategoryWeights(std::string const& input)
+    {
+        std::vector<CategoryWeight> result;
+        std::vector<std::string> parts = Split(input, ',');
+        for (std::string const& part : parts)
+        {
+            size_t colon = part.find(':');
+            if (colon != std::string::npos)
+            {
+                std::string cat = Trim(part.substr(0, colon));
+                std::string wtStr = Trim(part.substr(colon + 1));
+                if (!cat.empty() && !wtStr.empty())
+                {
+                    uint32_t wt = static_cast<uint32_t>(std::max(0, std::atoi(wtStr.c_str())));
+                    if (wt > 0)
+                        result.push_back({ cat, wt });
+                }
+            }
+        }
+        return result;
+    }
+
+    std::string SampleCategory(std::vector<CategoryWeight> const& weights, std::string const& fallback)
+    {
+        if (weights.empty())
+            return fallback;
+
+        uint32_t totalWeight = 0;
+        for (auto const& entry : weights)
+            totalWeight += entry.weight;
+
+        if (totalWeight == 0)
+            return fallback;
+
+        static thread_local std::mt19937 gen(std::random_device{}());
+        std::uniform_int_distribution<uint32_t> dist(1, totalWeight);
+        uint32_t roll = dist(gen);
+
+        uint32_t accumulated = 0;
+        for (auto const& entry : weights)
+        {
+            accumulated += entry.weight;
+            if (roll <= accumulated)
+                return entry.category;
+        }
+        return weights.back().category;
+    }
+
+    std::string GetRandomPromptForCategory(std::string const& category, std::string const& scope)
+    {
+        static const std::vector<std::string> groupEntertainment = {
+            "Make a short funny joke or pun fitting for your class or this dungeon.",
+            "Playfully tease someone in the party or make a self-deprecating joke about your own gameplay.",
+            "Drop an absurd or hilarious observation about this dungeon or the creatures we are fighting.",
+            "Make a humorous remark about repair bills or bad loot luck."
+        };
+        static const std::vector<std::string> groupToxic = {
+            "Drop a salty or passive-aggressive gamer remark about someone's DPS, slow pace, or gear.",
+            "Complain about terrible pull coordination, lack of kicks/interrupts, or having to carry noobs.",
+            "Make a sarcastic roast about taking unnecessary damage or wiping to simple mechanics.",
+            "Complain bitterly about RNG and having terrible luck on greed/need rolls."
+        };
+        static const std::vector<std::string> groupRealLife = {
+            "Mention something casual from real life: grabbing food, spilled coffee, or being exhausted.",
+            "Complain about real life: cat stepped on keyboard, noise in the house, or early work/school tomorrow.",
+            "Mention taking a quick stretch or getting a drink between pulls.",
+            "Make a relatable remark about late-night gaming fatigue or background music."
+        };
+        static const std::vector<std::string> groupTactical = {
+            "Give a sharp tactical callout: mana check, buff reminder, or warning about an incoming patrol.",
+            "Remind the group to focus fire, use crowd control, or watch their threat and tank aggro.",
+            "Comment on pull strategy, boss mechanics, or dungeon shortcuts.",
+            "Check party readiness, dispel duties, or remind people to save major cooldowns."
+        };
+        static const std::vector<std::string> groupLore = {
+            "Make an in-character remark about the history or dark legends of this dungeon or zone.",
+            "Express deep racial pride or curse the opposing faction with authentic lore venom.",
+            "Mention a famous hero or ancient war relevant to this place."
+        };
+        static const std::vector<std::string> groupQuestions = {
+            "Ask the party a short practical question about tactics, quests, or where to go next.",
+            "Ask if anyone in the group needs food, water, reagents, or profession crafts.",
+            "Ask for an opinion on loot, talent specs, or which dungeon to run next.",
+            "Ask whether anyone in the group has done this dungeon or encounter before."
+        };
+
+        static const std::vector<std::string> worldEntertainment = {
+            "Share a witty joke, humorous remark, or playful banter fitting for World of Warcraft.",
+            "Make a funny observation about life in major cities or general channel culture.",
+            "Drop an absurd or funny fake trade advertisement or playful server meme."
+        };
+        static const std::vector<std::string> worldToxic = {
+            "Drop a salty remark about bad players on the server, ganking in Stranglethorn, or awful dungeon groups.",
+            "Roast people who don't know basic class mechanics or brag about your own main character.",
+            "Complain about auction house prices, bot inflation, or terrible dungeon groups."
+        };
+        static const std::vector<std::string> worldRealLife = {
+            "Comment casually on real-world news, crazy weather outside, or late-night gaming fatigue.",
+            "Mention eating snacks, cold pizza, or drinking coffee while grinding.",
+            "Make an everyday remark about work/school tomorrow or what you are listening to."
+        };
+        static const std::vector<std::string> worldLore = {
+            "Make an in-character comment referencing Warcraft lore, legends of Azeroth, or faction pride.",
+            "Mention famous historical battles or legendary leaders of your faction."
+        };
+        static const std::vector<std::string> worldQuestions = {
+            "Ask the channel an inquiry about directions, trade items, prices, or local quests.",
+            "Ask world chat which dungeon or leveling zone they recommend right now."
+        };
+
+        static const std::vector<std::string> eventEntertainment = {
+            "React with a playful joke or lighthearted meme to this in-game event.",
+            "Make a humorous tease or witty quip about what just happened."
+        };
+        static const std::vector<std::string> eventToxic = {
+            "React with classic gamer salt, frustration, or roast whoever caused or suffered this event.",
+            "Complain about bad play, terrible luck, or being held back by noobs."
+        };
+        static const std::vector<std::string> eventCelebratory = {
+            "React with cheerful praise, cheering, or celebration to this event.",
+            "Praise the group or congratulate the player enthusiastically."
+        };
+        static const std::vector<std::string> eventTactical = {
+            "React with a tactical observation, cooldown analysis, or advice following this event.",
+            "Diagnose what happened mechanically and what should be done next."
+        };
+
+        auto pickFrom = [](std::vector<std::string> const& pool) -> std::string {
+            if (pool.empty())
+                return "";
+            static thread_local std::mt19937 gen(std::random_device{}());
+            std::uniform_int_distribution<size_t> dist(0, pool.size() - 1);
+            return pool[dist(gen)];
+        };
+
+        if (scope == "group")
+        {
+            if (category == "toxic") return pickFrom(groupToxic);
+            if (category == "reallife") return pickFrom(groupRealLife);
+            if (category == "tactical") return pickFrom(groupTactical);
+            if (category == "lore") return pickFrom(groupLore);
+            if (category == "questions") return pickFrom(groupQuestions);
+            return pickFrom(groupEntertainment);
+        }
+        else if (scope == "event")
+        {
+            if (category == "toxic") return pickFrom(eventToxic);
+            if (category == "celebratory") return pickFrom(eventCelebratory);
+            if (category == "tactical") return pickFrom(eventTactical);
+            return pickFrom(eventEntertainment);
+        }
+        else // world / random
+        {
+            if (category == "toxic") return pickFrom(worldToxic);
+            if (category == "reallife") return pickFrom(worldRealLife);
+            if (category == "lore") return pickFrom(worldLore);
+            if (category == "questions") return pickFrom(worldQuestions);
+            return pickFrom(worldEntertainment);
+        }
+    }
+
 
     Config Config::Load()
     {
@@ -306,6 +469,8 @@ namespace AzerothVoices
             c.personalityPromptTraits = defaultPersonalityTraitsPrompt;
         if (c.personalityPromptTone.empty())
             c.personalityPromptTone = defaultPersonalityTonePrompt;
+        c.personalitySuppressBackstoryInAmbient = Bounded(
+            "AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents", 1, 0, 1) != 0;
 
         c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 0, 0, 1) != 0;
         c.sentimentUseInRandom = Bounded(
@@ -406,6 +571,7 @@ namespace AzerothVoices
         c.botReplyChanceSay = Percent("AzerothVoices.BotReplyChance.Say", 10);
         c.playerReplyChanceChannel = Percent("AzerothVoices.PlayerReplyChance.Channel", 60);
         c.botReplyChanceChannel = Percent("AzerothVoices.BotReplyChance.Channel", 3);
+        c.botReplyChanceChannelEarlyOut = Bounded("AzerothVoices.BotReplyChance.ChannelEarlyOut", 1, 0, 1) != 0;
         c.playerReplyChanceParty = Percent("AzerothVoices.PlayerReplyChance.Party", 90);
         c.botReplyChanceParty = Percent("AzerothVoices.BotReplyChance.Party", 5);
         c.playerReplyChanceGuild = Percent("AzerothVoices.PlayerReplyChance.Guild", 70);
@@ -463,6 +629,8 @@ namespace AzerothVoices
         c.groupChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.GroupChatter.Enable", true);
         c.raidChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.RaidChatter.Enable", true);
         c.groupChatterScanSeconds = Positive("AzerothVoices.GroupChatter.ScanSeconds", 300, 5);
+        c.groupCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
+            "AzerothVoices.GroupChatter.CategoryWeights", "entertainment:25,toxic:15,reallife:20,tactical:20,lore:10,questions:10"));
         c.groupConversationChance = Percent("AzerothVoices.GroupChatter.ConversationChance", 10);
         c.groupConversationMaximumLines = Bounded("AzerothVoices.GroupChatter.ConversationMaximumLines", 3, 1, 10);
         c.groupConversationMaximumParticipants = Bounded("AzerothVoices.GroupChatter.ConversationMaximumParticipants", 2, 1, 10);
@@ -628,6 +796,8 @@ namespace AzerothVoices
             "Ask world chat a quick question or make a casual observation.|"
             "Drop a salty remark, banter, or roast bad players with gamer toxicity.|"
             "Say something absurd, off-topic nonsense, or comment on real-world news."), '|');
+        c.randomCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
+            "AzerothVoices.Random.CategoryWeights", "entertainment:30,toxic:25,reallife:25,lore:10,questions:10"));
 
         c.generalChatPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.GeneralChat.Pacing.Enable", true);
         c.generalChatMinimumGapSeconds = Bounded("AzerothVoices.GeneralChat.MinimumGapSeconds", 15, 0, 86400);
@@ -682,6 +852,8 @@ namespace AzerothVoices
             { "game_event_started", Percent("AzerothVoices.Events.Chance.GameEventStarted", 50) },
             { "game_event_stopped", Percent("AzerothVoices.Events.Chance.GameEventStopped", 30) }
         };
+        c.eventCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
+            "AzerothVoices.Events.CategoryWeights", "entertainment:30,toxic:25,celebratory:25,tactical:20"));
 
         c.typingSimulationEnabled = sConfig.GetBoolDefault("AzerothVoices.Typing.Enable", true);
         c.typingBaseDelayMilliseconds = Positive("AzerothVoices.Typing.BaseDelayMilliseconds", 0);
@@ -690,6 +862,9 @@ namespace AzerothVoices
         c.maximumReplyCharacters = Positive("AzerothVoices.Reply.MaximumCharacters", 80, 1);
         c.maximumReplyLines = Positive("AzerothVoices.Reply.MaximumLines", 2, 1);
         c.sentenceAwareSplitting = sConfig.GetBoolDefault("AzerothVoices.Reply.SentenceAwareSplitting", true);
+        c.questionSelfAnswerChance = Percent("AzerothVoices.Reply.QuestionSelfAnswerChance", 5);
+        c.replyShortTurnTokenCapEnable = Bounded("AzerothVoices.Reply.ShortTurnTokenCap.Enable", 1, 0, 1) != 0;
+        c.replyShortTurnTokenCapMaxTokens = Clamped("AzerothVoices.Reply.ShortTurnTokenCap.MaxTokens", 25, 10, 50);
 
         bool const legacyHistoryEnabled = sConfig.GetBoolDefault("AzerothVoices.History.Enable", true);
         c.historyStorageMode = std::min<uint32_t>(2, Positive(

@@ -1953,6 +1953,14 @@ namespace AzerothVoices
         DynamicLengthPlan const lengthPlan = ResolveDynamicLengthPlan(*m_config);
         request.maxTokensOverride = lengthPlan.tokens;
         request.maxLinesOverride = lengthPlan.maxLines;
+        bool const isShortGreeting = m_config->replyShortTurnTokenCapEnable &&
+            IsShortGreetingMessage(message) && !ambient && trigger != "boss-directed" &&
+            trigger != "boss-automatic";
+        if (isShortGreeting)
+        {
+            request.maxTokensOverride = m_config->replyShortTurnTokenCapMaxTokens;
+            request.maxLinesOverride = 1;
+        }
         request.priority = priority;
         request.actor = actor;
         if (targetedNpc)
@@ -2148,8 +2156,13 @@ namespace AzerothVoices
             "as authoritative. Older conversation, snapshot history, and retrieved lore are optional context: "
             "use only details directly relevant to the current reply, do not assume old state is still true, and "
             "do not invent facts to reconcile stale or conflicting context.";
-        if (!lengthPlan.guidance.empty() && !boss && !scene)
-            request.systemPrompt += "\nLength guidance: " + lengthPlan.guidance;
+        if (!boss && !scene)
+        {
+            if (isShortGreeting)
+                request.systemPrompt += "\nLength guidance: Keep it very brief: one short, punchy sentence or quip.";
+            else if (!lengthPlan.guidance.empty())
+                request.systemPrompt += "\nLength guidance: " + lengthPlan.guidance;
+        }
 
         if (trigger == "boss-directed")
             request.userPrompt = "Respond in character to this player line: " + message;
@@ -2164,7 +2177,13 @@ namespace AzerothVoices
         else if (ambient)
             request.userPrompt = "Create one natural line now. Situation or topic: " + message;
         else if (trigger.compare(0, 6, "event:") == 0)
-            request.userPrompt = "React naturally to this in-game event: " + message;
+        {
+            std::string cat = SampleCategory(m_config->eventCategoryWeights, "entertainment");
+            std::string tone = GetRandomPromptForCategory(cat, "event");
+            if (tone.empty())
+                tone = "React naturally to this in-game event";
+            request.userPrompt = tone + ": " + message;
+        }
         else if (trigger == "targeted-npc-observer")
         {
             TargetedNpcObserverPromptInput promptInput;
@@ -2216,6 +2235,10 @@ namespace AzerothVoices
             request.userPrompt = "Respond naturally in guild chat to what your guildmate said: " + message;
         else if (trigger == "guild:login-greeting")
             request.userPrompt = "Respond naturally in guild chat to greet your guildmate: " + message;
+        else if (trigger == "group:bot-question-reply")
+            request.userPrompt = speaker.name + " asked the party: \"" + message + "\". Answer their question directly in character.";
+        else if (trigger == "world:bot-question-reply")
+            request.userPrompt = speaker.name + " asked in channel: \"" + message + "\". Answer their question directly in character.";
         else if (trigger == "targeted-npc-conversation-sequence" || trigger == "bot-say-conversation-sequence")
             request.userPrompt = "Continue the conversation naturally in character with this player: " + message;
         else
@@ -2321,6 +2344,16 @@ namespace AzerothVoices
             return result;
 
         bool const speakerIsBot = Script_IsAIControlled(speaker);
+        if (m_config->botReplyChanceChannelEarlyOut &&
+            (scope == ChatScope::Channel || scope == ChatScope::World) &&
+            !ambient && targetName.empty())
+        {
+            uint32_t const baseChance = speakerIsBot
+                ? m_config->botReplyChanceChannel
+                : m_config->playerReplyChanceChannel;
+            if (baseChance == 0 || !Roll(baseChance))
+                return result;
+        }
         ObjectGuid const selected = speaker->GetSelectionGuid();
         std::string const targetLower = Lower(targetName);
         float const nearbyDistance = scope == ChatScope::Yell
@@ -3272,6 +3305,11 @@ namespace AzerothVoices
             uint32_t category = RandomUInt(0, 2);
             if (scope == ChatScope::Guild)
                 topic = Pick(m_config->guildPrompts);
+            else if (!m_config->randomCategoryWeights.empty())
+            {
+                std::string cat = SampleCategory(m_config->randomCategoryWeights, "entertainment");
+                topic = GetRandomPromptForCategory(cat, "world");
+            }
             else if (scope == ChatScope::World || scope == ChatScope::Channel)
                 topic = Pick(m_config->worldPrompts);
             else if (category == 0)
@@ -3474,10 +3512,18 @@ namespace AzerothVoices
 
             if (subjectType == GeneralSubjectType::Plain || topic.empty())
             {
-                if (!m_config->worldPrompts.empty())
-                    topic = Pick(m_config->worldPrompts);
-                else
-                    topic = "Make a short public observation or comment about " + effectiveZone + " that could start a conversation.";
+                if (!m_config->randomCategoryWeights.empty())
+                {
+                    std::string cat = SampleCategory(m_config->randomCategoryWeights, "entertainment");
+                    topic = GetRandomPromptForCategory(cat, "world");
+                }
+                if (topic.empty())
+                {
+                    if (!m_config->worldPrompts.empty())
+                        topic = Pick(m_config->worldPrompts);
+                    else
+                        topic = "Make a short public observation or comment about " + effectiveZone + " that could start a conversation.";
+                }
             }
 
             m_generalSpeakerTracker.RecordSpeech(speaker1->GetObjectGuid().GetRawValue(), nowSec);
@@ -4400,6 +4446,70 @@ namespace AzerothVoices
         }
     }
 
+    void Manager::MaybeQueueBotQuestionAnswer(ChatRequest const& request, std::string const& questionText)
+    {
+        if (questionText.find('?') == std::string::npos || request.actor.kind != ActorKind::PlayerBot)
+            return;
+
+        bool const isPartyScope = (request.scope == ChatScope::Party || request.scope == ChatScope::Raid || request.groupChatter);
+        bool const isWorldScope = (request.scope == ChatScope::World || request.scope == ChatScope::Channel);
+
+        if (!isPartyScope && !isWorldScope)
+            return;
+
+        uint32_t replyChance = isPartyScope ? m_config->botReplyChanceParty : m_config->botReplyChanceChannel;
+        if (!Roll(replyChance))
+            return;
+
+        Player* askingBot = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.guid));
+        if (!askingBot || !askingBot->IsInWorld() || !askingBot->IsAlive())
+            return;
+
+        std::vector<Player*> eligibleBots;
+        if (isPartyScope)
+        {
+            Group* group = askingBot->GetGroup();
+            if (!group)
+                return;
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->getSource();
+                if (member && member != askingBot && member->IsInWorld() && member->IsAlive() && Script_IsAIControlled(member))
+                    eligibleBots.push_back(member);
+            }
+        }
+        else // isWorldScope
+        {
+            uint32_t const zoneId = askingBot->GetZoneId();
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+            {
+                Player* other = entry.second;
+                if (other && other != askingBot && other->IsInWorld() && other->IsAlive() &&
+                    Script_IsAIControlled(other) && other->GetZoneId() == zoneId)
+                {
+                    eligibleBots.push_back(other);
+                    if (eligibleBots.size() >= 10)
+                        break;
+                }
+            }
+        }
+
+        if (eligibleBots.empty())
+            return;
+
+        std::shuffle(eligibleBots.begin(), eligibleBots.end(), RandomEngine());
+        Player* answeringBot = eligibleBots.front();
+
+        std::string const trigger = isPartyScope ? "group:bot-question-reply" : "world:bot-question-reply";
+        ChatScope const scope = isPartyScope ? (askingBot->GetGroup() && askingBot->GetGroup()->IsRaidGroup() ? ChatScope::Raid : ChatScope::Party) : ChatScope::World;
+        std::string const channel = isWorldScope ? m_config->worldChannelName : "";
+
+        QueueDialogue(SnapshotBot(answeringBot), SnapshotSpeaker(askingBot), scope, channel,
+            trigger, questionText, isPartyScope ? RequestPriority::Group : RequestPriority::Ambient,
+            false, true);
+    }
+
     void Manager::DrainCompletions()
     {
         std::deque<ChatCompletion> completions;
@@ -4461,6 +4571,23 @@ namespace AzerothVoices
             }
             std::vector<std::string> lines = Provider::SplitReply(*m_config, completion.responseText,
                 completion.request.actor.name, completion.request.maxLinesOverride);
+
+            // Probabilistic question self-answering:
+            // When an LLM generates 2 lines and line 0 is a question, roll against questionSelfAnswerChance.
+            // When the roll fails (95% default), drop line 2 so only the question is delivered and others can answer.
+            // Non-questions (jokes, toxic banter, real-life observations, lore) are 100% two-line preserved.
+            if (lines.size() > 1 && !lines.empty())
+            {
+                bool const isQuestion = (lines[0].find('?') != std::string::npos);
+                if (isQuestion)
+                {
+                    uint32_t const selfAnswerChance = m_config->questionSelfAnswerChance;
+                    bool const allowSelfAnswer = (selfAnswerChance >= 100) ||
+                        (selfAnswerChance > 0 && Roll(selfAnswerChance));
+                    if (!allowSelfAnswer)
+                        lines.resize(1);
+                }
+            }
             if (completion.request.bossLine && !lines.empty())
             {
                 // One yell per opportunity, and only if it satisfies the
@@ -4698,6 +4825,8 @@ namespace AzerothVoices
                 RecordSurroundingChat(it->request.scope, it->request.channelName,
                     replyLocation, actorSpeaker, it->text);
                 MaybeQueueFollowup(it->request, it->text);
+                if (it->text.find('?') != std::string::npos)
+                    MaybeQueueBotQuestionAnswer(it->request, it->text);
                 if (it->request.bossLine)
                     NoteBossLineDelivered(it->request, it->text);
                 if (it->request.proximityScene)
@@ -7447,10 +7576,15 @@ namespace AzerothVoices
                 uint32_t const chance = raid ? m_config->raidIdleChance : m_config->groupIdleChance;
                 uint32_t const cooldown = raid ? m_config->raidIdleCooldownSeconds
                                                : m_config->groupIdleCooldownSeconds;
-                if (GroupTriggerReady(groupId, GroupTrigger::Idle, cooldown) && Roll(chance) &&
-                    QueueGroupChatter(GroupTrigger::Idle, player,
-                        "make a short casual remark to the group about what you are doing", true))
-                    NoteGroupTrigger(groupId, GroupTrigger::Idle, cooldown);
+                if (GroupTriggerReady(groupId, GroupTrigger::Idle, cooldown) && Roll(chance))
+                {
+                    std::string cat = SampleCategory(m_config->groupCategoryWeights, "entertainment");
+                    std::string prompt = GetRandomPromptForCategory(cat, "group");
+                    if (prompt.empty())
+                        prompt = "make a short casual remark to the group about what you are doing";
+                    if (QueueGroupChatter(GroupTrigger::Idle, player, prompt, true))
+                        NoteGroupTrigger(groupId, GroupTrigger::Idle, cooldown);
+                }
             }
             if (raid && now >= state.nextMorale)
             {

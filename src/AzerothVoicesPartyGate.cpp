@@ -57,7 +57,8 @@ namespace AzerothVoices
             t == "direct" || t == "direct-chat" || t == "direct_chat" ||
             t == "overheard-chat" || t == "overheard_chat" ||
             t == "targeted-npc-observer" || t == "npc-reply-observer" ||
-            t == "targeted-bot-observer" || t == "bot-reply-observer")
+            t == "targeted-bot-observer" || t == "bot-reply-observer" ||
+            t == "bot_question_reply" || t == "bot-question-reply")
             return PartyGatePolicy::Responsive;
 
         // Contextual: game progression events (dungeon entry, zone changes, kills, loot, quests, resurrections)

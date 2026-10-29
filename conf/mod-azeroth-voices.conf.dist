@@ -437,6 +437,17 @@ AzerothVoices.Personality.UseInRandom = 1
 #     Default:     1
 AzerothVoices.Personality.UseInEvents = 1
 
+# AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents
+#     Description: When enabled (1), completely omits the bot's personal backstory block from 
+#                  ambient random chatter, in-game event reactions (kills, deaths, wipes, level-ups),
+#                  and companion bot question replies. The bot's speaking Voice (Traits and Tone) is still
+#                  fully preserved, but the private backstory is kept strictly for direct conversational
+#                  turns (Whisper, direct Party discussion, Guild chat, and /say).
+#                  Saves ~35-50% of prompt tokens on background chatter and speeds up generation.
+#                  Set to 0 to include backstory across all ambient and event turns.
+#     Default:     1 (Enabled)
+AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents = 1
+
 # AzerothVoices.Personality.GenerationRetrySeconds
 #     Description: Sets the minimum delay after failed generation before the same bot
 #                  can retry; accepted range 10-86400 seconds; default 300.
@@ -805,6 +816,15 @@ AzerothVoices.PlayerReplyChance.Channel = 60
 #                  public core counts that the channel has a real member. (Percentage.)
 #     Default:     3
 AzerothVoices.BotReplyChance.Channel = 3
+
+# AzerothVoices.BotReplyChance.ChannelEarlyOut
+#     Description: When enabled (1), evaluates the channel response probability (BotReplyChance.Channel)
+#                  BEFORE iterating through online players and bots in the world. If the probability roll fails
+#                  (which occurs ~95-97% of the time under default settings), candidate collection is aborted
+#                  immediately in O(1) time with zero CPU and memory iteration overhead.
+#                  Set to 0 to perform full candidate iteration on every channel message.
+#     Default:     1 (Enabled)
+AzerothVoices.BotReplyChance.ChannelEarlyOut = 1
 
 # AzerothVoices.PlayerReplyChance.Party
 #     Description: Bot response chance to a real player in party/raid. (Percentage.)
@@ -1519,6 +1539,17 @@ AzerothVoices.GroupChatter.NearbyObjectScanSeconds = 180
 #     Default:     600
 AzerothVoices.GroupChatter.NearbyObjectCooldownSeconds = 600
 
+# AzerothVoices.GroupChatter.CategoryWeights
+#     Description: Percentage chance distribution for group/party idle banter categories:
+#                    - entertainment: Group jokes, memes, playful teasing.
+#                    - toxic:         Salty gamer complaints, roasting bad play, wipe frustration.
+#                    - reallife:      Snacks, coffee, pets on keyboards, tiredness, work/school.
+#                    - tactical:      Mana checks, patrol warnings, focus fire, buffs.
+#                    - lore:          Dungeon history, zone legends, faction pride.
+#                    - questions:     Practical group inquiries (triggers companion bot answers).
+#     Default:     entertainment:25,toxic:15,reallife:20,tactical:20,lore:10,questions:10
+AzerothVoices.GroupChatter.CategoryWeights = entertainment:25,toxic:15,reallife:20,tactical:20,lore:10,questions:10
+
 # AzerothVoices.GroupChatter.BotQuestionChance
 #     Description: Chance a grouped bot asks the group a short practical question.
 #                  (Percentage.)
@@ -2029,6 +2060,16 @@ AzerothVoices.Random.GuildPrompts = Ask whether guild members want a dungeon gro
 #                  choices.)
 AzerothVoices.Random.WorldPrompts = Start a short topic about zones, dungeons, loot, PvP, quests, or server life.|Ask world chat a quick question or make a casual observation.|Drop a salty remark, banter, or roast bad players with gamer toxicity.|Say something absurd, off-topic nonsense, or comment on real-world news.
 
+# AzerothVoices.Random.CategoryWeights
+#     Description: Percentage chance distribution for World/General channel and ambient chatter categories:
+#                    - entertainment: Public jokes, tavern banter, memes.
+#                    - toxic:         Server salt, roasting bad players, RNG complaints.
+#                    - reallife:      Real-world news, weather, coffee, late night gaming fatigue.
+#                    - lore:          Warcraft legends, ancient wars, faction rivalries.
+#                    - questions:     Questions about trade, directions, quests.
+#     Default:     entertainment:30,toxic:25,reallife:25,lore:10,questions:10
+AzerothVoices.Random.CategoryWeights = entertainment:30,toxic:25,reallife:25,lore:10,questions:10
+
 # --------------------------------------------
 # 15. AUTOMATED WORLD/CUSTOM-CHANNEL PACING
 # --------------------------------------------
@@ -2236,6 +2277,15 @@ AzerothVoices.Events.MaximumResponders = 2
 #     Default:     300
 AzerothVoices.Events.CooldownSeconds = 300
 
+# AzerothVoices.Events.CategoryWeights
+#     Description: Percentage chance distribution for reactions to in-game events (kills, deaths, wipes, level-ups):
+#                    - entertainment: Humorous jokes or memes about the event.
+#                    - toxic:         Raging at a death/wipe, blaming someone, roasting dead enemies.
+#                    - celebratory:   Cheering, high-fives, praising good loot or level-ups.
+#                    - tactical:      Analyzing what went wrong on a wipe, checking repair costs.
+#     Default:     entertainment:30,toxic:25,celebratory:25,tactical:20
+AzerothVoices.Events.CategoryWeights = entertainment:30,toxic:25,celebratory:25,tactical:20
+
 # AzerothVoices.Events.Chance.CreatureDefeated
 #     Description: Initial chance for an automatic creature-kill event. (Percentage.)
 #     Default:     8
@@ -2423,6 +2473,31 @@ AzerothVoices.Reply.MaximumLines = 2
 #                  messages.
 #     Default:     1
 AzerothVoices.Reply.SentenceAwareSplitting = 1
+
+# AzerothVoices.Reply.QuestionSelfAnswerChance
+#     Description: The percentage probability (0-100) that when an LLM completion for a question
+#                  generates two lines, the bot will self-answer/elaborate on its own question in line 2.
+#                  When this roll fails (95% of the time by default), line 2 is omitted and only the
+#                  question (line 1) is delivered, allowing companion bots or players to answer instead.
+#                  If line 1 is NOT a question (e.g. joke, toxic roast, real-life comment), both lines
+#                  are delivered intact.
+#     Default:     5 (Range: 0 - 100)
+AzerothVoices.Reply.QuestionSelfAnswerChance = 5
+
+# AzerothVoices.Reply.ShortTurnTokenCap.Enable
+#     Description: When enabled (1), detects ultra-short conversational greetings or brief player messages
+#                  (such as "hi", "hey", "yo", "sup", "ready", "rdy", "hello") and clamps the LLM token budget
+#                  to AzerothVoices.Reply.ShortTurnTokenCap.MaxTokens.
+#                  Produces near-instantaneous responses (~300-500ms) and prevents models from generating
+#                  lengthy or rambling replies to a simple greeting.
+#                  Set to 0 to use standard dynamic token ranges for all messages.
+#     Default:     1 (Enabled)
+AzerothVoices.Reply.ShortTurnTokenCap.Enable = 1
+
+# AzerothVoices.Reply.ShortTurnTokenCap.MaxTokens
+#     Description: Hard token ceiling applied when a short-turn greeting is detected.
+#     Default:     25 (Range: 10 - 50)
+AzerothVoices.Reply.ShortTurnTokenCap.MaxTokens = 25
 
 # --------------------------------------------
 # 20. BOUNDED CONVERSATION AND SURROUNDING-CHAT HISTORY

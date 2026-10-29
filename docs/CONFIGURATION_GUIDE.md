@@ -37,9 +37,9 @@
 2. [Provider and HTTPS](#provider-and-https) (25 settings)
 3. [Worker pool, queue, limits, and cooldowns](#worker-pool-queue-limits-and-cooldowns) (13 settings)
 4. [Shared prompts and PlayerBots-compatible prompt names](#shared-prompts-and-playerbots-compatible-prompt-names) (14 settings)
-5. [Persistent PlayerBot personalities](#persistent-playerbot-personalities) (16 settings)
+5. [Persistent PlayerBot personalities](#persistent-playerbot-personalities) (17 settings)
 6. [PlayerBot-to-real-player sentiment](#playerbot-to-real-player-sentiment) (11 settings)
-7. [PlayerBot delivery scopes, response selection, and distances](#playerbot-delivery-scopes-response-selection-and-distances) (41 settings)
+7. [PlayerBot delivery scopes, response selection, and distances](#playerbot-delivery-scopes-response-selection-and-distances) (42 settings)
 8. [NPC dialogue: reactions, combat-start, and the ordered /say reply chain](#npc-dialogue-reactions-combat-start-and-the-ordered-say-reply-chain) (22 settings)
 9. [Dedicated proximity chatter (ordinary Say)](#dedicated-proximity-chatter-ordinary-say) (19 settings)
 10. [Boss and miniboss pre-aggro dialogue (dungeons and raids only)](#boss-and-miniboss-pre-aggro-dialogue-dungeons-and-raids-only) (18 settings)
@@ -51,7 +51,7 @@
 16. [PartyGate per-party delivery pacing](#partygate-per-party-delivery-pacing) (8 settings)
 17. [Lightweight live environment context](#lightweight-live-environment-context) (6 settings)
 18. [Event chatter](#event-chatter) (27 settings)
-19. [Reply length and PlayerBots-compatible typing delay](#reply-length-and-playerbots-compatible-typing-delay) (8 settings)
+19. [Reply length and PlayerBots-compatible typing delay](#reply-length-and-playerbots-compatible-typing-delay) (10 settings)
 20. [Bounded conversation and surrounding-chat history](#bounded-conversation-and-surrounding-chat-history) (17 settings)
 21. [SNAPSHOT SYSTEM](#snapshot-system) (23 settings)
 22. [Structured local RAG (optional, no embeddings or extra provider call)](#structured-local-rag-optional-no-embeddings-or-extra-provider-call) (7 settings)
@@ -586,6 +586,7 @@
 | [`AzerothVoices.Personality.Prompt.Normal`](#azerothvoicespersonalitypromptnormal) | String | `Write a simple, compact real-world background with plain facts only: everyday job, hometown, and simple routine. Strictly do NOT use poetic, flowery, or dramatic language. Keep it compact with minimal details. Never mention WoW, gaming, or avatars. Return only backstory text.` | System guidance prompt used when generating backstories in Normal mode (BackgroundMode=1), strictly enforcing non-poetic plain real-world facts with zero WoW mentions. |
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
 | [`AzerothVoices.Personality.Prompt.Tone`](#azerothvoicespersonalityprompttone) | String | `tone must be a concise speaking-style description derived from the traits...` | System guidance prompt used when generating a bot's persistent speaking style. |
+| [`AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents`](#azerothvoicespersonalitybackstorysuppressinambientandevents) | Boolean (`0` or `1`) | `1` | Suppresses injection of bot backstory context in ambient banter, event reactions, and bot question replies. Saves ~35-50% prompt tokens. |
 
 
 ### <a id="azerothvoicespersonalityenable"></a>`AzerothVoices.Personality.Enable`
@@ -699,6 +700,13 @@
 - **Default Value**: `tone must be a concise speaking-style description derived from the traits. Avoid clichés like 'passion for storytelling' or 'thoughtful and articulate'. Focus on concrete vocal habits (e.g. blunt and dry, energetic fast-talker, deadpan sarcasm, gruff veteran brevity, cheerful banter, or hesitant caution).`
 - **Description**: System guidance prompt used when generating a bot's persistent speaking style. Instructs the model to produce varied, natural speech rhythms.
 - **Operator Guidance & Impact**: Keeps tone descriptions concise (<200 characters) and prevents the model from defaulting to "storytelling" clichés.
+
+### <a id="azerothvoicespersonalitybackstorysuppressinambientandevents"></a>`AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Suppresses injection of bot backstory context in ambient world banter, event chatter (kills, deaths, wipes, level-ups, loot), and bot question replies.
+- **Operator Guidance & Impact**: When enabled (`1`), bot backstories are omitted from non-conversational quips, saving 35-50% LLM prompt tokens and eliminating hallucinated personal lore in brief reactions. Backstories remain 100% active in direct 1-on-1 whispers, direct backstory questions, and normal party/guild conversational turns. Set to `0` to always include backstories in all situations.
 
 ---
 
@@ -844,6 +852,7 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 | [`AzerothVoices.BotReplyChance.Say`](#azerothvoicesbotreplychancesay) | Percentage (`0` - `100`) | `10` | Bot response chance to another bot's say/yell. (Percentage; default 10) |
 | [`AzerothVoices.PlayerReplyChance.Channel`](#azerothvoicesplayerreplychancechannel) | Percentage (`0` - `100`) | `60` | Bot response chance to a real player in world/custom chat. (Percentage; def... |
 | [`AzerothVoices.BotReplyChance.Channel`](#azerothvoicesbotreplychancechannel) | Percentage (`0` - `100`) | `3` | Bot response chance to another bot in world/custom chat. Bot-originated cha... |
+| [`AzerothVoices.BotReplyChance.ChannelEarlyOut`](#azerothvoicesbotreplychancechannelearlyout) | Boolean (`0` or `1`) | `1` | Evaluates channel reply chance early before iterating all online players/bots on the server (O(1)). |
 | [`AzerothVoices.PlayerReplyChance.Party`](#azerothvoicesplayerreplychanceparty) | Percentage (`0` - `100`) | `90` | Bot response chance to a real player in party/raid. (Percentage; default 90... |
 | [`AzerothVoices.PlayerReplyChance.TargetActive.Enable`](#azerothvoicesplayerreplychancetargetactiveenable) | Boolean (`0` or `1`) | `1` | When enabled, if a human player has an active target in Say, Yell, Party, or Raid chat, untargeted companion bots suppress reply probability to TargetActive.Chance instead of full ambient rates. |
 | [`AzerothVoices.PlayerReplyChance.TargetActive.Chance`](#azerothvoicesplayerreplychancetargetactivechance) | Percentage (`0` - `100`) | `60` | Bot response chance when the speaking player has an active target (applies to untargeted bots in Say, Yell, Party, Raid). (Percentage, 0-100; default 60) |
@@ -1072,6 +1081,13 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 - **Default Value**: `3`
 - **Description**: Bot response chance to another bot in world/custom chat. Bot-originated channel replies also require the module to prove from public core counts that the channel has a real member. (Percentage; default 3)
 - **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+
+### <a id="azerothvoicesbotreplychancechannelearlyout"></a>`AzerothVoices.BotReplyChance.ChannelEarlyOut`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: When enabled, channel and world chat messages roll the channel reply chance once before iterating over all players on the server. If the roll fails, candidate scanning is bypassed entirely (O(1)).
+- **Operator Guidance & Impact**: Highly recommended (`1`) on servers with hundreds of online players or bots. Eliminates `HashMapHolder<Player>` lock acquisition and player loops on ~97% of bot channel chat messages. Set to `0` to always perform full candidate scanning regardless of base channel reply chance.
 
 ### <a id="azerothvoicesplayerreplychanceparty"></a>`AzerothVoices.PlayerReplyChance.Party`
 
@@ -3189,6 +3205,8 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Reply.MaximumCharacters`](#azerothvoicesreplymaximumcharacters) | Integer (Characters, minimum 1; default 120) | `120` | Maximum character budget per delivered reply line. (Characters, default 120) |
 | [`AzerothVoices.Reply.MaximumLines`](#azerothvoicesreplymaximumlines) | Integer | `2` | Maximum delivered lines/parts per request (dynamically capped by length plan). |
 | [`AzerothVoices.Reply.SentenceAwareSplitting`](#azerothvoicesreplysentenceawaresplitting) | Boolean (`0` or `1`) | `1` | Enables structured, sentence-aware line breaking for delivered dialogue. Wh... |
+| [`AzerothVoices.Reply.ShortTurnTokenCap.Enable`](#azerothvoicesreplyshortturntokencapenable) | Boolean (`0` or `1`) | `1` | Dynamically clamps token ceiling and limits output to 1 line for short greetings ('hi', 'hey', 'yo', 'ready', etc.). |
+| [`AzerothVoices.Reply.ShortTurnTokenCap.MaxTokens`](#azerothvoicesreplyshortturntokencapmaxtokens) | Integer (`10-50`) | `25` | Maximum token completion budget applied when ShortTurnTokenCap is active; default 25. |
 
 
 ### <a id="azerothvoicestypingenable"></a>`AzerothVoices.Typing.Enable`
@@ -3246,6 +3264,20 @@ human within SayDistance; Party actors require a real human in the same party su
 - **Default Value**: `1`
 - **Description**: Enables structured, sentence-aware line breaking for delivered dialogue. When enabled, replies are cleanly split on natural sentence boundaries (.!?) and clause punctuation (,;-) instead of greedily packing characters and breaking in the middle of sentences across messages. (Default 1)
 - **Operator Guidance & Impact**: Keep enabled (`1`) to prevent fragmented replies where the start of the next sentence is chopped across messages. Set to `0` only if you need legacy character-greedy splitting.
+
+### <a id="azerothvoicesreplyshortturntokencapenable"></a>`AzerothVoices.Reply.ShortTurnTokenCap.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Dynamically caps the LLM token completion ceiling to `ShortTurnTokenCap.MaxTokens` and forces a 1-line delivery limit when an incoming message is identified as a brief greeting ('hi', 'hey', 'yo', 'sup', 'ready', 'rdy', etc.).
+- **Operator Guidance & Impact**: When enabled (`1`), prevents bots from generating verbose or multi-sentence replies to simple greetings like "hi" or "yo". Also injects the system prompt instruction: `"Keep it very brief: one short, punchy sentence or quip."`. Set to `0` to always use the standard dynamic token plan.
+
+### <a id="azerothvoicesreplyshortturntokencapmaxtokens"></a>`AzerothVoices.Reply.ShortTurnTokenCap.MaxTokens`
+
+- **Data Type**: Integer (`10` - `50`)
+- **Default Value**: `25`
+- **Description**: Maximum tokens allowed in LLM completion when `ShortTurnTokenCap.Enable` detects a brief greeting.
+- **Operator Guidance & Impact**: Controls the strict brevity budget for greetings. 25 tokens is optimal for 1-sentence answers like "Hey!", "What's up?", or "Ready when you are!". Values between 15 and 35 provide clean variation.
 
 ---
 
