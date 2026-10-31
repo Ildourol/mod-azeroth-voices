@@ -10236,7 +10236,7 @@ namespace AzerothVoices
             {
                 ++m_barrensPacingDeferrals;
                 scene.phase = BarrensScenePhase::Waiting;
-                scene.nextTurnTime = m_generalPacing.EarliestDelivery(pacingKey, now);
+                scene.nextTurnTime = m_generalPacing.NextEligible(pacingKey);
                 return;
             }
             ReserveGeneralPacing(ChatScope::World, m_config->worldChannelName, actor, 1);
@@ -10339,7 +10339,7 @@ namespace AzerothVoices
 
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
             now.time_since_epoch()).count());
-        m_generalSpeakerTracker.Record(request.actor.guid, nowSec);
+        m_generalSpeakerTracker.RecordSpeech(request.actor.guid, nowSec);
 
         scene.pendingRequestId = 0;
 

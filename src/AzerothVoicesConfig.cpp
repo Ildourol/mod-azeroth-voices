@@ -21,6 +21,13 @@ namespace AzerothVoices
 {
     namespace
     {
+        std::string Lower(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return value;
+        }
+
         std::string Trim(std::string value)
         {
             auto notSpace = [](unsigned char c) { return !std::isspace(c); };

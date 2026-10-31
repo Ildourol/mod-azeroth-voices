@@ -1190,7 +1190,7 @@ namespace AzerothVoices
             return false;
         }
 
-        if (!parsed.contains("family") || !parsed["family"].is_string())
+        if (parsed.find("family") == parsed.end() || !parsed["family"].is_string())
         {
             outError = "missing or non-string 'family' field";
             return false;
@@ -1203,7 +1203,7 @@ namespace AzerothVoices
             return false;
         }
 
-        if (!parsed.contains("premise") || !parsed["premise"].is_string())
+        if (parsed.find("premise") == parsed.end() || !parsed["premise"].is_string())
         {
             outError = "missing or non-string 'premise' field";
             return false;
@@ -1222,7 +1222,7 @@ namespace AzerothVoices
             return false;
         }
 
-        if (!parsed.contains("opening_intent") || !parsed["opening_intent"].is_string())
+        if (parsed.find("opening_intent") == parsed.end() || !parsed["opening_intent"].is_string())
         {
             outError = "missing or non-string 'opening_intent' field";
             return false;
