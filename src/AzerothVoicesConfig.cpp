@@ -799,6 +799,17 @@ namespace AzerothVoices
         c.randomCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
             "AzerothVoices.Random.CategoryWeights", "entertainment:30,toxic:25,reallife:25,lore:10,questions:10"));
 
+        // Section 3: If operator manually inserted 'barrens' into legacy weights, filter and warn
+        auto legacyBarrens = std::find_if(c.randomCategoryWeights.begin(), c.randomCategoryWeights.end(),
+            [](CategoryWeight const& cw) {
+                return cw.category == "barrens";
+            });
+        if (legacyBarrens != c.randomCategoryWeights.end())
+        {
+            sLog.outError("[AzerothVoices][CONFIG] 'barrens' found in AzerothVoices.Random.CategoryWeights. Barrens chatter is now managed as an independent category under AzerothVoices.WorldChat.Barrens.* and has been removed from Random weights.");
+            c.randomCategoryWeights.erase(legacyBarrens);
+        }
+
         c.generalChatPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.GeneralChat.Pacing.Enable", true);
         c.generalChatMinimumGapSeconds = Bounded("AzerothVoices.GeneralChat.MinimumGapSeconds", 15, 0, 86400);
 
@@ -942,6 +953,125 @@ namespace AzerothVoices
 
         c.addonEnabled = sConfig.GetBoolDefault("AzerothVoices.Addon.Enable", true);
         c.addonMaximumRosterEntries = Bounded("AzerothVoices.Addon.MaximumRosterEntries", 200, 1, 1000);
+
+        // Barrens World Chat conversation category configuration
+        c.barrensEnabled = sConfig.GetBoolDefault("AzerothVoices.WorldChat.Barrens.Enable", true);
+        c.barrensCheckIntervalSeconds = Bounded("AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds", 60, 5, 3600);
+        c.barrensStartChance = Percent("AzerothVoices.WorldChat.Barrens.StartChance", 12);
+        c.barrensCooldownMinSeconds = Bounded("AzerothVoices.WorldChat.Barrens.CooldownMinSeconds", 900, 0, 86400);
+        c.barrensCooldownMaxSeconds = Bounded("AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds", 1800, c.barrensCooldownMinSeconds, 86400);
+        c.barrensFailureBackoffSeconds = Bounded("AzerothVoices.WorldChat.Barrens.FailureBackoffSeconds", 120, 5, 3600);
+        c.barrensMinParticipants = Bounded("AzerothVoices.WorldChat.Barrens.MinParticipants", 3, 2, 8);
+        c.barrensMaxParticipants = Bounded("AzerothVoices.WorldChat.Barrens.MaxParticipants", 5, c.barrensMinParticipants, 8);
+        c.barrensMinMessages = Bounded("AzerothVoices.WorldChat.Barrens.MinMessages", 6, 2, 20);
+        c.barrensMaxMessages = Bounded("AzerothVoices.WorldChat.Barrens.MaxMessages", 10, c.barrensMinMessages, 20);
+        c.barrensReplyDelayMinSeconds = Bounded("AzerothVoices.WorldChat.Barrens.ReplyDelayMinSeconds", 5, 1, 120);
+        c.barrensReplyDelayMaxSeconds = Bounded("AzerothVoices.WorldChat.Barrens.ReplyDelayMaxSeconds", 14, c.barrensReplyDelayMinSeconds, 120);
+        c.barrensMaxDurationSeconds = Bounded("AzerothVoices.WorldChat.Barrens.MaxDurationSeconds", 240, 30, 1800);
+        c.barrensParticipantCooldownSeconds = Bounded("AzerothVoices.WorldChat.Barrens.ParticipantCooldownSeconds", 900, 0, 86400);
+        c.barrensTopicCooldownSeconds = Bounded("AzerothVoices.WorldChat.Barrens.TopicCooldownSeconds", 7200, 0, 604800);
+        c.barrensMaxConsecutiveMessagesPerBot = Bounded("AzerothVoices.WorldChat.Barrens.MaxConsecutiveMessagesPerBot", 1, 1, 2);
+
+        bool saltWarned = false;
+        c.barrensSaltLevel = BarrensTaggedLevel::FromString(
+            sConfig.GetStringDefault("AzerothVoices.WorldChat.Barrens.SaltLevel", "auto"),
+            BarrensTaggedLevel{ BarrensSelectorMode::Auto, 0 }, &saltWarned);
+        if (saltWarned)
+            sLog.outError("[AzerothVoices][CONFIG] Invalid value for AzerothVoices.WorldChat.Barrens.SaltLevel; defaulting to auto.");
+
+        bool sarcasmWarned = false;
+        c.barrensSarcasmLevel = BarrensTaggedLevel::FromString(
+            sConfig.GetStringDefault("AzerothVoices.WorldChat.Barrens.SarcasmLevel", "auto"),
+            BarrensTaggedLevel{ BarrensSelectorMode::Auto, 0 }, &sarcasmWarned);
+        if (sarcasmWarned)
+            sLog.outError("[AzerothVoices][CONFIG] Invalid value for AzerothVoices.WorldChat.Barrens.SarcasmLevel; defaulting to auto.");
+
+        bool toxWarned = false;
+        c.barrensToxicityLevel = BarrensTaggedLevel::FromString(
+            sConfig.GetStringDefault("AzerothVoices.WorldChat.Barrens.ToxicityLevel", "auto"),
+            BarrensTaggedLevel{ BarrensSelectorMode::Auto, 0 }, &toxWarned);
+        if (toxWarned)
+            sLog.outError("[AzerothVoices][CONFIG] Invalid value for AzerothVoices.WorldChat.Barrens.ToxicityLevel; defaulting to auto.");
+
+        std::string saltWeightsErr;
+        if (!BarrensLevelWeights::Parse(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.SaltWeights", "0:20,1:30,2:35,3:15"), c.barrensSaltWeights, &saltWeightsErr))
+        {
+            sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.WorldChat.Barrens.SaltWeights invalid: %s. Using default.",
+                saltWeightsErr.c_str());
+            c.barrensSaltWeights = BarrensLevelWeights::DefaultSalt();
+        }
+
+        std::string sarcasmWeightsErr;
+        if (!BarrensLevelWeights::Parse(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.SarcasmWeights", "0:15,1:30,2:35,3:20"), c.barrensSarcasmWeights, &sarcasmWeightsErr))
+        {
+            sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.WorldChat.Barrens.SarcasmWeights invalid: %s. Using default.",
+                sarcasmWeightsErr.c_str());
+            c.barrensSarcasmWeights = BarrensLevelWeights::DefaultSarcasm();
+        }
+
+        std::string toxWeightsErr;
+        if (!BarrensLevelWeights::Parse(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.ToxicityWeights", "0:30,1:35,2:25,3:10"), c.barrensToxicityWeights, &toxWeightsErr))
+        {
+            sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.WorldChat.Barrens.ToxicityWeights invalid: %s. Using default.",
+                toxWeightsErr.c_str());
+            c.barrensToxicityWeights = BarrensLevelWeights::DefaultToxicity();
+        }
+
+        c.barrensToneRerollChance = Percent("AzerothVoices.WorldChat.Barrens.ToneRerollChance", 35);
+
+        std::string const topicModeStr = Lower(Trim(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.TopicMode", "auto")));
+        if (topicModeStr == "auto" || IsValidBarrensTopicFamily(topicModeStr))
+            c.barrensTopicMode = topicModeStr;
+        else
+        {
+            sLog.outError("[AzerothVoices][CONFIG] Invalid AzerothVoices.WorldChat.Barrens.TopicMode '%s'. Using 'auto'.",
+                topicModeStr.c_str());
+            c.barrensTopicMode = "auto";
+        }
+
+        c.barrensTopicSource = ParseBarrensTopicSource(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.TopicSource", "hybrid"), BarrensTopicSource::Hybrid);
+        c.barrensAITopicChance = Percent("AzerothVoices.WorldChat.Barrens.AITopicChance", 75);
+        c.barrensAITopicFallbackToCurated = sConfig.GetBoolDefault("AzerothVoices.WorldChat.Barrens.AITopicFallbackToCurated", true);
+        c.barrensAITopicTimeoutSeconds = Bounded("AzerothVoices.WorldChat.Barrens.AITopicTimeoutSeconds", 15, 1, 60);
+        c.barrensAITopicMaxAttempts = Bounded("AzerothVoices.WorldChat.Barrens.AITopicMaxAttempts", 1, 1, 2);
+        c.barrensAITopicMaxTokens = Bounded("AzerothVoices.WorldChat.Barrens.AITopicMaxTokens", 160, 64, 512);
+        c.barrensAITopicRecentTopics = Bounded("AzerothVoices.WorldChat.Barrens.AITopicRecentTopics", 20, 0, 100);
+        c.barrensAITopicNoveltyWindowSeconds = Bounded("AzerothVoices.WorldChat.Barrens.AITopicNoveltyWindowSeconds", 7200, 0, 604800);
+
+        c.barrensBeatMode = ParseBarrensBeatMode(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.BeatMode", "auto"), BarrensBeatMode::Auto);
+
+        std::string beatWeightsErr;
+        if (!ParseBarrensBeatWeights(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.BeatWeights", "reply:50,reaction:25,derail:20,interruption:5"), c.barrensBeatWeights, &beatWeightsErr))
+        {
+            sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.WorldChat.Barrens.BeatWeights invalid: %s. Using default.",
+                beatWeightsErr.c_str());
+            c.barrensBeatWeights = DefaultBarrensBeatWeights();
+        }
+
+        c.barrensProfanityMode = ParseBarrensProfanityMode(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.ProfanityMode", "auto"), BarrensProfanityMode::Auto);
+        c.barrensProfanityChance = Percent("AzerothVoices.WorldChat.Barrens.ProfanityChance", 20);
+        c.barrensMaxMessageCharacters = Bounded("AzerothVoices.WorldChat.Barrens.MaxMessageCharacters", 180, 40, 240);
+        c.barrensMaxContextMessages = Bounded("AzerothVoices.WorldChat.Barrens.MaxContextMessages", 8, 2, 20);
+        c.barrensPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.WorldChat.Barrens.PauseDuringPlayerChatSeconds", 10, 0, 120);
+
+        std::string topicWeightsErr;
+        if (!ParseBarrensTopicWeights(sConfig.GetStringDefault(
+            "AzerothVoices.WorldChat.Barrens.TopicWeights",
+            "class_salt:25,absurd_bait:20,quest_memes:20,loot_drama:15,old_mmo_debate:10,server_life:10"),
+            c.barrensTopicWeights, &topicWeightsErr))
+        {
+            sLog.outError("[AzerothVoices][CONFIG] AzerothVoices.WorldChat.Barrens.TopicWeights invalid: %s. Using default.",
+                topicWeightsErr.c_str());
+            c.barrensTopicWeights = DefaultBarrensTopicWeights();
+        }
 
         return c;
     }

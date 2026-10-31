@@ -1260,6 +1260,7 @@ namespace AzerothVoices
             m_workers.emplace_back(&Manager::WorkerLoop, this);
         ScheduleNextAmbient();
         ScheduleNextGeneralTrigger();
+        ScheduleNextBarrensCheck();
 
         if (m_config->playerbotsLlmEnabled)
         {
@@ -1288,6 +1289,8 @@ namespace AzerothVoices
         }
         m_started = false;
         m_stopping = true;
+        ++m_barrensEpoch;
+        m_barrensScenes.clear();
         m_queueReady.notify_all();
         for (std::thread& worker : m_workers)
             if (worker.joinable())
@@ -1380,6 +1383,8 @@ namespace AzerothVoices
         PruneProximityScenes();
         PruneBossPresences();
         PruneGroupAndGuildState();
+        UpdateBarrensScenes();
+        PruneBarrensNovelty();
         ProcessPendingGuildGreetings();
         m_addonReassembler.ExpireStale(static_cast<uint32_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count()));
@@ -1433,6 +1438,11 @@ namespace AzerothVoices
             RunGeneralChatter();
             ScheduleNextGeneralTrigger();
         }
+        if (!m_paused && m_config->barrensEnabled && Clock::now() >= m_nextBarrensCheck)
+        {
+            RunBarrensChatter();
+            ScheduleNextBarrensCheck();
+        }
     }
 
     void Manager::ScheduleNextAmbient()
@@ -1484,6 +1494,8 @@ namespace AzerothVoices
                     queue.pop_front();
                     if (request.kind == RequestKind::PersonalityGeneration)
                         return true;
+                    if (request.kind == RequestKind::BarrensTopicGeneration)
+                        return true;
                     auto latest = m_latestRequestByActor.find(request.actor.guid);
                     if (latest != m_latestRequestByActor.end() && latest->second == request.id)
                         return true;
@@ -1500,11 +1512,12 @@ namespace AzerothVoices
         {
             if (Clock::now() > request.expires)
             {
-                if (request.kind == RequestKind::PersonalityGeneration)
+                if (request.kind == RequestKind::PersonalityGeneration ||
+                    request.kind == RequestKind::BarrensTopicGeneration)
                 {
                     ChatCompletion completion;
                     completion.request = std::move(request);
-                    completion.error = "personality generation expired in the request queue";
+                    completion.error = "request expired in the queue";
                     std::lock_guard<std::mutex> lock(m_completionMutex);
                     m_completions.push_back(std::move(completion));
                     continue;
@@ -2164,10 +2177,24 @@ namespace AzerothVoices
                 request.systemPrompt += "\nLength guidance: " + lengthPlan.guidance;
         }
 
+        if (trigger == "barrens-opener" || trigger == "barrens-reply")
+        {
+            if (!customContext.empty())
+                request.systemPrompt += "\n" + customContext;
+            request.maxLinesOverride = 1;
+            uint32_t const charCap = m_config->barrensMaxMessageCharacters;
+            if (charCap > 0)
+                request.maxTokensOverride = std::min(request.maxTokensOverride ? request.maxTokensOverride : 80, std::max<uint32_t>(30, charCap / 2));
+        }
+
         if (trigger == "boss-directed")
             request.userPrompt = "Respond in character to this player line: " + message;
         else if (trigger == "boss-automatic")
             request.userPrompt = "Speak one short pre-aggro line to the adventurers you can see approaching.";
+        else if (trigger == "barrens-opener")
+            request.userPrompt = "Start a chaotic public channel conversation on this topic: " + message;
+        else if (trigger == "barrens-reply")
+            request.userPrompt = "Reply naturally as a player in this World chat thread: " + message;
         else if (trigger == "proximity-followup")
             request.userPrompt = "Reply naturally to what the other nearby speaker just said: " + message;
         else if (trigger == "generated-followup")
@@ -2642,6 +2669,8 @@ namespace AzerothVoices
         }
 
         SpeakerSnapshot speakerSnapshot = SnapshotSpeaker(speaker);
+        if (scope == ChatScope::World && !Script_IsAIControlled(speaker))
+            NotePlayerWorldChat(channelName);
         if (scope != ChatScope::Whisper)
             RecordSurroundingChat(scope, channelName, SnapshotBot(speaker), speakerSnapshot, message);
 
@@ -3351,6 +3380,9 @@ namespace AzerothVoices
         std::string channel = (scope == ChatScope::World || scope == ChatScope::Channel)
             ? m_config->worldChannelName : "";
         if ((scope == ChatScope::World || scope == ChatScope::Channel) &&
+            HasActiveBarrensScene(channel))
+            return false;
+        if ((scope == ChatScope::World || scope == ChatScope::Channel) &&
             !ReserveGeneralPacing(scope, channel, SnapshotBot(anchor),
                 std::max<size_t>(1, m_config->maximumReplyLines)))
             return false;
@@ -3438,6 +3470,8 @@ namespace AzerothVoices
                 anchor = speaker1;
 
             std::string const channel = m_config->worldChannelName;
+            if (HasActiveBarrensScene(channel))
+                continue;
             ChatScope const scope = ChatScope::World;
             if (!ReserveGeneralPacing(scope, channel, SnapshotBot(speaker1), isConversation ? 2 : 1))
                 continue;
@@ -4332,6 +4366,8 @@ namespace AzerothVoices
 
     void Manager::MaybeQueueFollowup(ChatRequest const& request, std::string const& reply)
     {
+        if (request.barrensScene)
+            return;
         if (!request.allowFollowup || !m_config->randomChatterEnabled ||
             request.conversationDepth + 1 >= m_config->randomMaximumActors ||
             !Roll(m_config->randomFollowupChance))
@@ -4448,6 +4484,8 @@ namespace AzerothVoices
 
     void Manager::MaybeQueueBotQuestionAnswer(ChatRequest const& request, std::string const& questionText)
     {
+        if (request.barrensScene)
+            return;
         if (questionText.find('?') == std::string::npos || request.actor.kind != ActorKind::PlayerBot)
             return;
 
@@ -4527,6 +4565,11 @@ namespace AzerothVoices
                 HandlePersonalityCompletion(completion);
                 continue;
             }
+            if (completion.request.kind == RequestKind::BarrensTopicGeneration)
+            {
+                HandleBarrensTopicCompletion(completion);
+                continue;
+            }
             bool current = false;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -4537,12 +4580,16 @@ namespace AzerothVoices
             }
             if (!current || now > completion.request.expires)
             {
+                if (completion.request.barrensScene)
+                    HandleBarrensTerminalDrop(completion.request, "superseded_or_expired");
                 ++m_dropped;
                 continue;
             }
 
             if (!completion.success)
             {
+                if (completion.request.barrensScene)
+                    HandleBarrensTerminalDrop(completion.request, "provider_error");
                 ++m_failed;
                 if (m_config->debug || m_lastErrorLog == Clock::time_point() ||
                     now - m_lastErrorLog >= std::chrono::seconds(30))
@@ -4611,8 +4658,24 @@ namespace AzerothVoices
             }
             if (lines.empty())
             {
+                if (completion.request.barrensScene)
+                    HandleBarrensTerminalDrop(completion.request, "empty_lines");
                 ++m_failed;
                 continue;
+            }
+
+            if (completion.request.barrensScene)
+            {
+                std::string cleaned;
+                if (!ValidateBarrensMessage(lines[0], m_config->barrensMaxMessageCharacters, cleaned))
+                {
+                    HandleBarrensTerminalDrop(completion.request, "validation_failed");
+                    ++m_failed;
+                    continue;
+                }
+                lines[0] = std::move(cleaned);
+                if (lines.size() > 1)
+                    lines.resize(1);
             }
 
             RecordGeneratedMessage(completion, lines);
@@ -4803,9 +4866,16 @@ namespace AzerothVoices
             bool delivered = Deliver(*it);
             if (delivered && it->firstLine)
             {
-                ApplyDeliveredSentiment(it->request);
-                AddHistory(it->request, it->text);
-                AddSnapshotHistory(it->request, it->request.currentSnapshot);
+                if (it->request.barrensScene)
+                {
+                    OnBarrensDelivered(it->request, it->text);
+                }
+                else
+                {
+                    ApplyDeliveredSentiment(it->request);
+                    AddHistory(it->request, it->text);
+                    AddSnapshotHistory(it->request, it->request.currentSnapshot);
+                }
                 SpeakerSnapshot actorSpeaker;
                 actorSpeaker.guid = it->request.actor.guid;
                 actorSpeaker.name = it->request.actor.name;
@@ -4885,6 +4955,11 @@ namespace AzerothVoices
                         }
                     }
                 }
+            }
+            if (!delivered)
+            {
+                if (it->request.barrensScene)
+                    OnBarrensDeliveryFailed(it->request);
             }
             if (!delivered && m_config->debug)
                 sLog.outDebug("[AzerothVoices] Reply discarded because actor %s is unavailable.",
@@ -9503,6 +9578,11 @@ namespace AzerothVoices
     void Manager::SetPaused(bool paused)
     {
         m_paused = paused;
+        if (paused)
+        {
+            ++m_barrensEpoch;
+            m_barrensScenes.clear();
+        }
     }
 
     bool Manager::IsPaused() const
@@ -9610,6 +9690,802 @@ namespace AzerothVoices
             return static_cast<char>(std::tolower(c));
         });
         return a == b;
+    }
+
+    bool Manager::HasActiveBarrensScene(std::string const& channelName) const
+    {
+        if (!m_config || !m_config->barrensEnabled)
+            return false;
+
+        std::string ch = channelName.empty() ? m_config->worldChannelName : channelName;
+        std::transform(ch.begin(), ch.end(), ch.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        std::string const audienceKey = "world:" + ch;
+        auto it = m_barrensScenes.find(audienceKey);
+        return it != m_barrensScenes.end() && it->second.phase != BarrensScenePhase::Finished && it->second.phase != BarrensScenePhase::Cancelled;
+    }
+
+    void Manager::NotePlayerWorldChat(std::string const& channelName)
+    {
+        std::string ch = channelName.empty() ? (m_config ? m_config->worldChannelName : "world") : channelName;
+        std::transform(ch.begin(), ch.end(), ch.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        m_barrensLastPlayerChat["world:" + ch] = Clock::now();
+    }
+
+    void Manager::ScheduleNextBarrensCheck()
+    {
+        uint32_t const interval = (m_config && m_config->barrensCheckIntervalSeconds > 0)
+            ? m_config->barrensCheckIntervalSeconds : 60;
+        m_nextBarrensCheck = Clock::now() + std::chrono::seconds(interval);
+    }
+
+    void Manager::PruneBarrensNovelty()
+    {
+        if (!m_config)
+            return;
+
+        auto const now = Clock::now();
+        for (auto& pair : m_barrensNoveltyRings)
+            pair.second.Prune(now, m_config->barrensAITopicNoveltyWindowSeconds);
+
+        for (auto it = m_barrensTopicCooldowns.begin(); it != m_barrensTopicCooldowns.end(); )
+        {
+            if (it->second <= now)
+                it = m_barrensTopicCooldowns.erase(it);
+            else
+                ++it;
+        }
+
+        for (auto it = m_barrensBotCooldowns.begin(); it != m_barrensBotCooldowns.end(); )
+        {
+            if (it->second <= now)
+                it = m_barrensBotCooldowns.erase(it);
+            else
+                ++it;
+        }
+    }
+
+    void Manager::RunBarrensChatter()
+    {
+        if (!m_started || !m_config || !m_config->enabled || m_paused || !m_config->barrensEnabled ||
+            !IsScopeEnabled(*m_config, ChatScope::World))
+            return;
+
+        std::string const channel = m_config->worldChannelName.empty() ? "world" : Lower(m_config->worldChannelName);
+        std::string const audienceKey = "world:" + channel;
+
+        auto const now = Clock::now();
+        auto cdIt = m_barrensChannelCooldowns.find(audienceKey);
+        if (cdIt != m_barrensChannelCooldowns.end() && cdIt->second > now)
+            return;
+
+        if (m_barrensScenes.count(audienceKey) > 0)
+            return;
+
+        if (!FindOnlineRealPlayer())
+        {
+            ++m_barrensNoAudience;
+            return;
+        }
+
+        std::vector<Player*> eligibleBots;
+        {
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+            {
+                Player* player = entry.second;
+                if (!player || !player->IsInWorld() || !player->IsAlive() || !Script_IsAIControlled(player))
+                    continue;
+
+                if (m_config->disableRepliesInCombat && player->IsInCombat())
+                    continue;
+
+                auto botCd = m_barrensBotCooldowns.find(player->GetObjectGuid().GetRawValue());
+                if (botCd != m_barrensBotCooldowns.end() && botCd->second > now)
+                    continue;
+
+                if (!HasRealPlayerAudience(player, ChatScope::World, m_config->worldChannelName, 0.0f))
+                    continue;
+
+                eligibleBots.push_back(player);
+            }
+        }
+
+        if (eligibleBots.size() < m_config->barrensMinParticipants)
+        {
+            ++m_barrensInsufficientCast;
+            return;
+        }
+
+        ++m_barrensChecks;
+        if (!Roll(m_config->barrensStartChance))
+            return;
+
+        ++m_barrensChancePasses;
+        TryStartBarrensScene(audienceKey);
+    }
+
+    bool Manager::TryStartBarrensScene(std::string const& audienceKey)
+    {
+        auto const now = Clock::now();
+
+        std::vector<Player*> eligibleBots;
+        {
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+            {
+                Player* player = entry.second;
+                if (!player || !player->IsInWorld() || !player->IsAlive() || !Script_IsAIControlled(player))
+                    continue;
+
+                if (m_config->disableRepliesInCombat && player->IsInCombat())
+                    continue;
+
+                auto botCd = m_barrensBotCooldowns.find(player->GetObjectGuid().GetRawValue());
+                if (botCd != m_barrensBotCooldowns.end() && botCd->second > now)
+                    continue;
+
+                if (!HasRealPlayerAudience(player, ChatScope::World, m_config->worldChannelName, 0.0f))
+                    continue;
+
+                eligibleBots.push_back(player);
+            }
+        }
+
+        if (eligibleBots.size() < m_config->barrensMinParticipants)
+        {
+            ++m_barrensInsufficientCast;
+            return false;
+        }
+
+        static thread_local std::mt19937 rng(std::random_device{}());
+        std::shuffle(eligibleBots.begin(), eligibleBots.end(), rng);
+
+        uint32_t const minPart = m_config->barrensMinParticipants;
+        uint32_t const maxPart = std::max(minPart, m_config->barrensMaxParticipants);
+        uint32_t const participantCount = std::min<uint32_t>(static_cast<uint32_t>(eligibleBots.size()),
+            RandomUInt(minPart, maxPart));
+
+        BarrensScene scene;
+        scene.sceneId = m_nextBarrensSceneId++;
+        scene.epoch = m_barrensEpoch;
+        scene.audienceKey = audienceKey;
+        scene.startTime = now;
+        scene.deadline = now + std::chrono::seconds(m_config->barrensMaxDurationSeconds);
+        scene.targetMessageCount = RandomUInt(m_config->barrensMinMessages, m_config->barrensMaxMessages);
+
+        static std::vector<std::string> const s_roles = {
+            "bait_poster", "contrarian", "deadpan_responder", "salty_veteran", "practical_interrupter"
+        };
+
+        for (uint32_t i = 0; i < participantCount; ++i)
+        {
+            uint64_t const guid = eligibleBots[i]->GetObjectGuid().GetRawValue();
+            scene.participantGuids.push_back(guid);
+            scene.participantRoles[guid] = s_roles[i % s_roles.size()];
+            scene.participantDeliveredCount[guid] = 0;
+
+            uint32_t const rSalt = RandomUInt(1, std::max<uint32_t>(1, m_config->barrensSaltWeights.TotalWeight()));
+            uint32_t const rSarc = RandomUInt(1, std::max<uint32_t>(1, m_config->barrensSarcasmWeights.TotalWeight()));
+            uint32_t const rTox = RandomUInt(1, std::max<uint32_t>(1, m_config->barrensToxicityWeights.TotalWeight()));
+
+            scene.participantBaselines[guid] = SampleBarrensBaselineTone(
+                m_config->barrensSaltLevel, m_config->barrensSarcasmLevel, m_config->barrensToxicityLevel,
+                m_config->barrensSaltWeights, m_config->barrensSarcasmWeights, m_config->barrensToxicityWeights,
+                rSalt, rSarc, rTox);
+        }
+
+        std::string family;
+        if (m_config->barrensTopicMode != "auto" && IsValidBarrensTopicFamily(m_config->barrensTopicMode))
+            family = m_config->barrensTopicMode;
+        else
+            family = SampleBarrensTopicFamily(m_config->barrensTopicWeights, "", false, RandomUInt(1, 1000));
+
+        scene.currentTopicFamily = family;
+
+        bool useAI = false;
+        if (m_config->barrensTopicSource == BarrensTopicSource::AI)
+            useAI = true;
+        else if (m_config->barrensTopicSource == BarrensTopicSource::Curated)
+            useAI = false;
+        else
+            useAI = Roll(m_config->barrensAITopicChance);
+
+        scene.isAITopic = useAI;
+
+        if (useAI)
+        {
+            scene.phase = BarrensScenePhase::TopicPending;
+            m_barrensScenes[audienceKey] = std::move(scene);
+            ++m_barrensStarts;
+            RequestBarrensAITopic(audienceKey, family, false);
+            return true;
+        }
+
+        std::set<std::string> activeTopicCds;
+        for (auto const& pair : m_barrensTopicCooldowns)
+            if (pair.second > now) activeTopicCds.insert(pair.first);
+
+        BarrensCuratedTopic const* curated = SelectBarrensCuratedTopic(family, activeTopicCds, RandomUInt(0, 100));
+        if (!curated)
+        {
+            ++m_barrensTopicExhaustions;
+            return false;
+        }
+
+        scene.currentSeedId = curated->id;
+        scene.currentTopicPremise = curated->premise;
+        uint32_t const variantIdx = curated->variants.empty() ? 0 : RandomUInt(0, static_cast<uint32_t>(curated->variants.size() - 1));
+        scene.currentOpeningIntent = curated->variants.empty() ? curated->premise : curated->variants[variantIdx];
+        scene.phase = BarrensScenePhase::OpeningPending;
+
+        m_barrensScenes[audienceKey] = std::move(scene);
+        ++m_barrensStarts;
+        QueueBarrensTurn(m_barrensScenes[audienceKey]);
+        return true;
+    }
+
+    void Manager::RequestBarrensAITopic(std::string const& audienceKey, std::string const& family, bool isDerail)
+    {
+        auto it = m_barrensScenes.find(audienceKey);
+        if (it == m_barrensScenes.end())
+            return;
+
+        BarrensScene& scene = it->second;
+        std::vector<std::string> recentPremises;
+        auto ringIt = m_barrensNoveltyRings.find(audienceKey);
+        if (ringIt != m_barrensNoveltyRings.end())
+            recentPremises = ringIt->second.GetRecentPremises(m_config->barrensAITopicRecentTopics);
+
+        ChatRequest request;
+        request.id = m_nextRequestId++;
+        request.kind = RequestKind::BarrensTopicGeneration;
+        request.priority = RequestPriority::Ambient;
+        request.barrensScene = true;
+        request.barrensSceneId = scene.sceneId;
+        request.barrensEpoch = scene.epoch;
+        request.barrensAudienceKey = audienceKey;
+        request.maxTokensOverride = m_config->barrensAITopicMaxTokens;
+        request.trigger = isDerail ? "barrens-derail-topic" : "barrens-opener-topic";
+        request.incomingMessage = family;
+        request.systemPrompt = BuildBarrensTopicProposalPrompt(family, recentPremises);
+        request.userPrompt = "Generate one new topic proposal in the family: " + family;
+
+        auto const now = Clock::now();
+        request.created = now;
+        request.expires = now + std::chrono::seconds(m_config->barrensAITopicTimeoutSeconds);
+
+        ++m_barrensAITopicAttempts;
+        scene.phase = isDerail ? BarrensScenePhase::DerailTopicPending : BarrensScenePhase::TopicPending;
+        scene.pendingRequestId = request.id;
+
+        if (!Enqueue(std::move(request)))
+        {
+            ++m_barrensQueueRejections;
+            if (m_config->barrensAITopicFallbackToCurated)
+            {
+                ++m_barrensAITopicFallbacks;
+                std::set<std::string> activeCds;
+                for (auto const& cd : m_barrensTopicCooldowns)
+                    if (cd.second > now) activeCds.insert(cd.first);
+
+                BarrensCuratedTopic const* curated = SelectBarrensCuratedTopic(family, activeCds, RandomUInt(0, 100));
+                if (curated)
+                {
+                    scene.currentTopicFamily = family;
+                    scene.currentSeedId = curated->id;
+                    scene.currentTopicPremise = curated->premise;
+                    uint32_t const vIdx = curated->variants.empty() ? 0 : RandomUInt(0, static_cast<uint32_t>(curated->variants.size() - 1));
+                    scene.currentOpeningIntent = curated->variants.empty() ? curated->premise : curated->variants[vIdx];
+                    scene.phase = isDerail ? BarrensScenePhase::ReplyPending : BarrensScenePhase::OpeningPending;
+                    QueueBarrensTurn(scene);
+                    return;
+                }
+            }
+
+            if (isDerail)
+            {
+                scene.phase = BarrensScenePhase::ReplyPending;
+                QueueBarrensTurn(scene);
+            }
+            else
+            {
+                ++m_barrensAITopicSkips;
+                CancelBarrensScene(audienceKey, "ai_proposal_enqueue_failed", true);
+            }
+        }
+    }
+
+    void Manager::HandleBarrensTopicCompletion(ChatCompletion const& completion)
+    {
+        ChatRequest const& req = completion.request;
+        std::string const& audienceKey = req.barrensAudienceKey;
+
+        auto it = m_barrensScenes.find(audienceKey);
+        if (it == m_barrensScenes.end())
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        BarrensScene& scene = it->second;
+        if (scene.sceneId != req.barrensSceneId || scene.epoch != req.barrensEpoch)
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        if (scene.phase != BarrensScenePhase::TopicPending && scene.phase != BarrensScenePhase::DerailTopicPending)
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        bool const isDerail = (scene.phase == BarrensScenePhase::DerailTopicPending);
+        auto const now = Clock::now();
+
+        if (completion.success)
+        {
+            std::string premise;
+            std::string intent;
+            std::string err;
+            if (ValidateBarrensTopicProposal(completion.responseText, scene.currentTopicFamily, premise, intent, err))
+            {
+                std::string const norm = NormalizeBarrensPremise(premise);
+                auto& ring = m_barrensNoveltyRings[audienceKey];
+                if (ring.IsNovel(norm, now, m_config->barrensAITopicNoveltyWindowSeconds))
+                {
+                    ++m_barrensAITopicSuccess;
+                    scene.currentTopicPremise = premise;
+                    scene.currentOpeningIntent = intent;
+                    scene.currentSeedId = "ai_" + std::to_string(scene.sceneId) + "_" + std::to_string(scene.deliveredCount);
+                    scene.phase = isDerail ? BarrensScenePhase::ReplyPending : BarrensScenePhase::OpeningPending;
+                    QueueBarrensTurn(scene);
+                    return;
+                }
+                else if (m_config->debug)
+                    sLog.outDebug("[AzerothVoices] AI topic rejected by novelty ring: %s", premise.c_str());
+            }
+            else if (m_config->debug)
+                sLog.outDebug("[AzerothVoices] AI topic validation error: %s", err.c_str());
+        }
+        else
+        {
+            ++m_barrensAITopicTimeouts;
+        }
+
+        if (scene.proposalAttempts + 1 < m_config->barrensAITopicMaxAttempts)
+        {
+            ++scene.proposalAttempts;
+            RequestBarrensAITopic(audienceKey, scene.currentTopicFamily, isDerail);
+            return;
+        }
+
+        if (m_config->barrensAITopicFallbackToCurated)
+        {
+            ++m_barrensAITopicFallbacks;
+            std::set<std::string> activeCds;
+            for (auto const& cd : m_barrensTopicCooldowns)
+                if (cd.second > now) activeCds.insert(cd.first);
+
+            BarrensCuratedTopic const* curated = SelectBarrensCuratedTopic(scene.currentTopicFamily, activeCds, RandomUInt(0, 100));
+            if (curated)
+            {
+                scene.currentSeedId = curated->id;
+                scene.currentTopicPremise = curated->premise;
+                uint32_t const vIdx = curated->variants.empty() ? 0 : RandomUInt(0, static_cast<uint32_t>(curated->variants.size() - 1));
+                scene.currentOpeningIntent = curated->variants.empty() ? curated->premise : curated->variants[vIdx];
+                scene.phase = isDerail ? BarrensScenePhase::ReplyPending : BarrensScenePhase::OpeningPending;
+                QueueBarrensTurn(scene);
+                return;
+            }
+        }
+
+        if (isDerail)
+        {
+            scene.phase = BarrensScenePhase::ReplyPending;
+            QueueBarrensTurn(scene);
+        }
+        else
+        {
+            ++m_barrensAITopicSkips;
+            CancelBarrensScene(audienceKey, "ai_proposal_failed_no_fallback", true);
+        }
+    }
+
+    void Manager::QueueBarrensTurn(BarrensScene& scene)
+    {
+        auto const now = Clock::now();
+        uint32_t const turn = scene.deliveredCount;
+
+        BarrensLinePlan plan;
+        plan.sceneId = scene.sceneId;
+        plan.turnIndex = turn;
+        plan.topicFamily = scene.currentTopicFamily;
+        plan.topicPremise = scene.currentTopicPremise;
+        plan.openingIntent = scene.currentOpeningIntent;
+        plan.seedId = scene.currentSeedId;
+
+        uint64_t speakerGuid = 0;
+        Player* speakerPlayer = nullptr;
+
+        if (turn == 0)
+        {
+            speakerGuid = scene.participantGuids.front();
+            speakerPlayer = ObjectAccessor::FindPlayer(ObjectGuid(speakerGuid));
+            if (!speakerPlayer || !speakerPlayer->IsInWorld() || !speakerPlayer->IsAlive())
+            {
+                CancelBarrensScene(scene.audienceKey, "opener_bot_unavailable", true);
+                return;
+            }
+
+            plan.speakerGuid = speakerGuid;
+            plan.speakerRole = scene.participantRoles[speakerGuid];
+            plan.beat = BarrensBeat::Reply;
+            plan.tone = scene.participantBaselines[speakerGuid];
+            plan.profanityAllowed = ResolveBarrensProfanityPermission(
+                m_config->barrensProfanityMode, m_config->barrensProfanityChance, plan.tone, RandomUInt(1, 100));
+        }
+        else
+        {
+            std::vector<Player*> aliveParticipants;
+            for (uint64_t guid : scene.participantGuids)
+            {
+                if (guid == scene.previousSpeakerGuid)
+                    continue;
+
+                Player* p = ObjectAccessor::FindPlayer(ObjectGuid(guid));
+                if (p && p->IsInWorld() && p->IsAlive() && Script_IsAIControlled(p))
+                {
+                    if (!m_config->disableRepliesInCombat || !p->IsInCombat())
+                        aliveParticipants.push_back(p);
+                }
+            }
+
+            if (aliveParticipants.empty())
+            {
+                CancelBarrensScene(scene.audienceKey, "insufficient_participants", false);
+                return;
+            }
+
+            std::sort(aliveParticipants.begin(), aliveParticipants.end(),
+                [&scene](Player* a, Player* b) {
+                    uint32_t const ca = scene.participantDeliveredCount[a->GetObjectGuid().GetRawValue()];
+                    uint32_t const cb = scene.participantDeliveredCount[b->GetObjectGuid().GetRawValue()];
+                    return ca < cb;
+                });
+
+            speakerPlayer = aliveParticipants.front();
+            speakerGuid = speakerPlayer->GetObjectGuid().GetRawValue();
+
+            std::vector<BarrensBeat> const eligibleBeats = FilterEligibleBarrensBeats(
+                m_config->barrensBeatMode, turn, scene.targetMessageCount, scene.derailCount, scene.interruptionUsed, true);
+            BarrensBeat const sampledBeat = SampleBarrensBeat(
+                m_config->barrensBeatWeights, eligibleBeats, RandomUInt(1, 1000));
+
+            if (sampledBeat == BarrensBeat::Derail)
+            {
+                std::string const altFamily = SampleBarrensTopicFamily(
+                    m_config->barrensTopicWeights, scene.currentTopicFamily, true, RandomUInt(1, 1000));
+                scene.currentTopicFamily = altFamily;
+
+                bool useAI = false;
+                if (m_config->barrensTopicSource == BarrensTopicSource::AI)
+                    useAI = true;
+                else if (m_config->barrensTopicSource == BarrensTopicSource::Curated)
+                    useAI = false;
+                else
+                    useAI = Roll(m_config->barrensAITopicChance);
+
+                if (useAI)
+                {
+                    scene.phase = BarrensScenePhase::DerailTopicPending;
+                    RequestBarrensAITopic(scene.audienceKey, altFamily, true);
+                    return;
+                }
+                else
+                {
+                    std::set<std::string> activeCds;
+                    for (auto const& cd : m_barrensTopicCooldowns)
+                        if (cd.second > now) activeCds.insert(cd.first);
+
+                    BarrensCuratedTopic const* curated = SelectBarrensCuratedTopic(altFamily, activeCds, RandomUInt(0, 100));
+                    if (curated)
+                    {
+                        scene.currentSeedId = curated->id;
+                        scene.currentTopicPremise = curated->premise;
+                        uint32_t const vIdx = curated->variants.empty() ? 0 : RandomUInt(0, static_cast<uint32_t>(curated->variants.size() - 1));
+                        scene.currentOpeningIntent = curated->variants.empty() ? curated->premise : curated->variants[vIdx];
+                    }
+                }
+            }
+
+            plan.speakerGuid = speakerGuid;
+            plan.speakerRole = scene.participantRoles[speakerGuid];
+            plan.beat = sampledBeat;
+            plan.topicFamily = scene.currentTopicFamily;
+            plan.topicPremise = scene.currentTopicPremise;
+            plan.openingIntent = scene.currentOpeningIntent;
+            plan.seedId = scene.currentSeedId;
+
+            uint32_t const rReroll = RandomUInt(1, 100);
+            uint32_t const rSalt = RandomUInt(1, std::max<uint32_t>(1, m_config->barrensSaltWeights.TotalWeight()));
+            uint32_t const rSarc = RandomUInt(1, std::max<uint32_t>(1, m_config->barrensSarcasmWeights.TotalWeight()));
+            uint32_t const rTox = RandomUInt(1, std::max<uint32_t>(1, m_config->barrensToxicityWeights.TotalWeight()));
+
+            plan.tone = ResolveBarrensLineTone(
+                scene.participantBaselines[speakerGuid],
+                m_config->barrensSaltLevel, m_config->barrensSarcasmLevel, m_config->barrensToxicityLevel,
+                m_config->barrensSaltWeights, m_config->barrensSarcasmWeights, m_config->barrensToxicityWeights,
+                rReroll, m_config->barrensToneRerollChance, rSalt, rSarc, rTox);
+
+            plan.profanityAllowed = ResolveBarrensProfanityPermission(
+                m_config->barrensProfanityMode, m_config->barrensProfanityChance, plan.tone, RandomUInt(1, 100));
+        }
+
+        ActorSnapshot const actor = SnapshotBot(speakerPlayer);
+        std::string const pacingKey = NormalizePacingKey(ChatScope::World, m_config->worldChannelName,
+            actor.mapId, actor.instanceId, actor.zoneId, actor.instance);
+
+        if (!pacingKey.empty() && m_config->generalChatPacingEnabled)
+        {
+            if (!m_generalPacing.CanDeliver(pacingKey, now))
+            {
+                ++m_barrensPacingDeferrals;
+                scene.phase = BarrensScenePhase::Waiting;
+                scene.nextTurnTime = m_generalPacing.EarliestDelivery(pacingKey, now);
+                return;
+            }
+            ReserveGeneralPacing(ChatScope::World, m_config->worldChannelName, actor, 1);
+        }
+
+        scene.pendingPlan = plan;
+
+        SpeakerSnapshot speaker;
+        if (scene.transcript.empty())
+            speaker = SnapshotSpeaker(speakerPlayer);
+        else
+        {
+            Player* prevBot = ObjectAccessor::FindPlayer(ObjectGuid(scene.previousSpeakerGuid));
+            if (prevBot)
+                speaker = SnapshotSpeaker(prevBot);
+            else
+            {
+                speaker.guid = scene.previousSpeakerGuid;
+                speaker.name = scene.transcript.back().speakerName;
+                speaker.isBot = true;
+            }
+        }
+
+        std::string const promptExt = BuildBarrensSystemPromptExtension(scene.pendingPlan, m_config->barrensMaxMessageCharacters);
+        std::string const contextBlock = BuildBarrensContextBlock(scene.transcript, m_config->barrensMaxContextMessages,
+            scene.currentTopicPremise, scene.currentOpeningIntent, scene.pendingPlan.beat,
+            scene.targetMessageCount - scene.deliveredCount);
+
+        std::string const trigger = (turn == 0) ? "barrens-opener" : "barrens-reply";
+        std::string const promptMsg = (turn == 0) ? scene.currentTopicPremise : scene.transcript.back().text;
+
+        if (!PreflightDialogue(actor, speaker, ChatScope::World, m_config->worldChannelName, trigger, RequestPriority::Ambient, false))
+        {
+            CancelBarrensScene(scene.audienceKey, "preflight_failed", turn == 0);
+            return;
+        }
+
+        ChatRequest request = BuildRequest(actor, speaker, ChatScope::World, m_config->worldChannelName,
+            trigger, promptMsg, RequestPriority::Ambient, false, false, nullptr, nullptr, false, nullptr, nullptr, promptExt);
+        request.barrensScene = true;
+        request.barrensSceneId = scene.sceneId;
+        request.barrensTurnIndex = turn;
+        request.barrensEpoch = scene.epoch;
+        request.barrensAudienceKey = scene.audienceKey;
+        request.context = contextBlock;
+
+        uint64_t const reqId = request.id;
+        if (Enqueue(std::move(request)))
+        {
+            scene.pendingRequestId = reqId;
+            scene.phase = (turn == 0) ? BarrensScenePhase::OpeningPending : BarrensScenePhase::ReplyPending;
+        }
+        else
+        {
+            ++m_barrensQueueRejections;
+            CancelBarrensScene(scene.audienceKey, "enqueue_rejected", turn == 0);
+        }
+    }
+
+    void Manager::OnBarrensDelivered(ChatRequest const& request, std::string const& text)
+    {
+        std::string const& audienceKey = request.barrensAudienceKey;
+        auto it = m_barrensScenes.find(audienceKey);
+        if (it == m_barrensScenes.end())
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        BarrensScene& scene = it->second;
+        if (scene.sceneId != request.barrensSceneId || scene.epoch != request.barrensEpoch)
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        auto const now = Clock::now();
+        ++m_barrensLinesDelivered;
+        ++scene.deliveredCount;
+        scene.previousSpeakerGuid = request.actor.guid;
+        ++scene.participantDeliveredCount[request.actor.guid];
+
+        BarrensTranscriptEntry entry;
+        entry.speakerGuid = request.actor.guid;
+        entry.speakerName = request.actor.name;
+        entry.text = text;
+        entry.beat = scene.pendingPlan.beat;
+        scene.transcript.push_back(std::move(entry));
+
+        if (scene.pendingPlan.beat == BarrensBeat::Derail)
+            ++scene.derailCount;
+        else if (scene.pendingPlan.beat == BarrensBeat::Interruption)
+            scene.interruptionUsed = true;
+
+        if (!scene.currentSeedId.empty())
+            m_barrensTopicCooldowns[scene.currentSeedId] = now + std::chrono::seconds(m_config->barrensTopicCooldownSeconds);
+
+        std::string const normPremise = NormalizeBarrensPremise(scene.currentTopicPremise);
+        m_barrensNoveltyRings[audienceKey].Record(normPremise, now);
+
+        uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
+            now.time_since_epoch()).count());
+        m_generalSpeakerTracker.Record(request.actor.guid, nowSec);
+
+        scene.pendingRequestId = 0;
+
+        if (scene.deliveredCount >= scene.targetMessageCount)
+        {
+            ++m_barrensScenesCompleted;
+            for (uint64_t guid : scene.participantGuids)
+                m_barrensBotCooldowns[guid] = now + std::chrono::seconds(m_config->barrensParticipantCooldownSeconds);
+
+            uint32_t const cooldown = RandomUInt(m_config->barrensCooldownMinSeconds, m_config->barrensCooldownMaxSeconds);
+            m_barrensChannelCooldowns[audienceKey] = now + std::chrono::seconds(cooldown);
+
+            if (m_config->debug)
+            {
+                sLog.outDebug("[AzerothVoices] Barrens scene %llu completed with %u delivered lines. Cooldown %u seconds.",
+                    static_cast<unsigned long long>(scene.sceneId), scene.deliveredCount, cooldown);
+            }
+
+            m_barrensScenes.erase(it);
+            return;
+        }
+
+        scene.phase = BarrensScenePhase::Waiting;
+        uint32_t const delay = RandomUInt(m_config->barrensReplyDelayMinSeconds, m_config->barrensReplyDelayMaxSeconds);
+        scene.nextTurnTime = now + std::chrono::seconds(delay);
+    }
+
+    void Manager::OnBarrensDeliveryFailed(ChatRequest const& request)
+    {
+        std::string const& audienceKey = request.barrensAudienceKey;
+        auto it = m_barrensScenes.find(audienceKey);
+        if (it == m_barrensScenes.end())
+            return;
+
+        BarrensScene& scene = it->second;
+        if (scene.sceneId != request.barrensSceneId || scene.epoch != request.barrensEpoch)
+            return;
+
+        CancelBarrensScene(audienceKey, "delivery_failed", scene.deliveredCount == 0);
+    }
+
+    void Manager::CancelBarrensScene(std::string const& audienceKey, char const* reason, bool failureBackoff)
+    {
+        auto it = m_barrensScenes.find(audienceKey);
+        if (it == m_barrensScenes.end())
+            return;
+
+        BarrensScene& scene = it->second;
+        auto const now = Clock::now();
+        uint32_t cooldown = 0;
+        if (failureBackoff)
+        {
+            cooldown = m_config ? m_config->barrensFailureBackoffSeconds : 120;
+        }
+        else
+        {
+            uint32_t const minCd = m_config ? m_config->barrensCooldownMinSeconds : 900;
+            uint32_t const maxCd = m_config ? m_config->barrensCooldownMaxSeconds : 1800;
+            cooldown = RandomUInt(minCd, maxCd);
+            for (uint64_t guid : scene.participantGuids)
+                m_barrensBotCooldowns[guid] = now + std::chrono::seconds(m_config ? m_config->barrensParticipantCooldownSeconds : 900);
+        }
+
+        m_barrensChannelCooldowns[audienceKey] = now + std::chrono::seconds(cooldown);
+        ++m_barrensScenesCancelled;
+
+        if (m_config && m_config->debug)
+        {
+            sLog.outDebug("[AzerothVoices] Barrens scene %llu cancelled: reason=%s, failureBackoff=%s, cooldown=%u sec.",
+                static_cast<unsigned long long>(scene.sceneId), reason, failureBackoff ? "true" : "false", cooldown);
+        }
+
+        m_barrensScenes.erase(it);
+    }
+
+    void Manager::HandleBarrensTerminalDrop(ChatRequest const& request, char const* reason)
+    {
+        if (!request.barrensScene)
+            return;
+
+        std::string const& audienceKey = request.barrensAudienceKey;
+        auto it = m_barrensScenes.find(audienceKey);
+        if (it == m_barrensScenes.end())
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        BarrensScene& scene = it->second;
+        if (scene.sceneId != request.barrensSceneId || scene.epoch != request.barrensEpoch)
+        {
+            ++m_barrensStaleCallbacks;
+            return;
+        }
+
+        CancelBarrensScene(audienceKey, reason, scene.deliveredCount == 0);
+    }
+
+    void Manager::UpdateBarrensScenes()
+    {
+        if (!m_started || m_stopping || m_paused || !m_config || !m_config->barrensEnabled)
+            return;
+
+        auto const now = Clock::now();
+        std::vector<std::string> toCancel;
+
+        for (auto& pair : m_barrensScenes)
+        {
+            std::string const& audienceKey = pair.first;
+            BarrensScene& scene = pair.second;
+
+            if (now > scene.deadline)
+            {
+                toCancel.push_back(audienceKey);
+                continue;
+            }
+
+            if (!FindOnlineRealPlayer())
+            {
+                toCancel.push_back(audienceKey);
+                continue;
+            }
+
+            if (scene.phase == BarrensScenePhase::Waiting && now >= scene.nextTurnTime)
+            {
+                auto chatIt = m_barrensLastPlayerChat.find(audienceKey);
+                if (chatIt != m_barrensLastPlayerChat.end())
+                {
+                    auto pauseUntil = chatIt->second + std::chrono::seconds(m_config->barrensPauseDuringPlayerChatSeconds);
+                    if (now < pauseUntil)
+                    {
+                        scene.nextTurnTime = pauseUntil;
+                        continue;
+                    }
+                }
+
+                QueueBarrensTurn(scene);
+            }
+        }
+
+        for (std::string const& key : toCancel)
+        {
+            auto it = m_barrensScenes.find(key);
+            if (it != m_barrensScenes.end())
+                CancelBarrensScene(key, "deadline_or_audience_lost", it->second.deliveredCount == 0);
+        }
     }
 }
 

@@ -44,7 +44,8 @@ namespace AzerothVoices
     enum class RequestKind : uint8_t
     {
         Dialogue,
-        PersonalityGeneration
+        PersonalityGeneration,
+        BarrensTopicGeneration
     };
 
     // Full: generate traits, tone, and background from scratch.
@@ -246,6 +247,14 @@ namespace AzerothVoices
         std::string guildPlayerName;
         std::string guildCallbackTopic;
         uint32_t guildInitialDelaySeconds = 0;
+        // Barrens World Chat conversation fields
+        bool barrensScene = false;
+        uint64_t barrensSceneId = 0;
+        uint32_t barrensTurnIndex = 0;
+        uint32_t barrensEpoch = 0;
+        std::string barrensAudienceKey;
+        std::string barrensTopicFingerprint;
+
         // Addon-driven personality work.
         bool addonRequest = false;
         PersonalityGenerationMode personalityMode = PersonalityGenerationMode::Full;

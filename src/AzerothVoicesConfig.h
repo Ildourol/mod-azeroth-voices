@@ -7,6 +7,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "AzerothVoicesBarrens.h"
 
 namespace AzerothVoices
 {
@@ -519,6 +520,51 @@ namespace AzerothVoices
 
         bool addonEnabled = true;
         uint32_t addonMaximumRosterEntries = 200;
+
+        // Barrens World Chat conversation configuration
+        bool barrensEnabled = true;
+        uint32_t barrensCheckIntervalSeconds = 60;
+        uint32_t barrensStartChance = 12;
+        uint32_t barrensCooldownMinSeconds = 900;
+        uint32_t barrensCooldownMaxSeconds = 1800;
+        uint32_t barrensFailureBackoffSeconds = 120;
+        uint32_t barrensMinParticipants = 3;
+        uint32_t barrensMaxParticipants = 5;
+        uint32_t barrensMinMessages = 6;
+        uint32_t barrensMaxMessages = 10;
+        uint32_t barrensReplyDelayMinSeconds = 5;
+        uint32_t barrensReplyDelayMaxSeconds = 14;
+        uint32_t barrensMaxDurationSeconds = 240;
+        uint32_t barrensParticipantCooldownSeconds = 900;
+        uint32_t barrensTopicCooldownSeconds = 7200;
+        uint32_t barrensMaxConsecutiveMessagesPerBot = 1;
+
+        BarrensTaggedLevel barrensSaltLevel;
+        BarrensTaggedLevel barrensSarcasmLevel;
+        BarrensTaggedLevel barrensToxicityLevel;
+        BarrensLevelWeights barrensSaltWeights = BarrensLevelWeights::DefaultSalt();
+        BarrensLevelWeights barrensSarcasmWeights = BarrensLevelWeights::DefaultSarcasm();
+        BarrensLevelWeights barrensToxicityWeights = BarrensLevelWeights::DefaultToxicity();
+        uint32_t barrensToneRerollChance = 35;
+
+        std::string barrensTopicMode = "auto";
+        BarrensTopicSource barrensTopicSource = BarrensTopicSource::Hybrid;
+        uint32_t barrensAITopicChance = 75;
+        bool barrensAITopicFallbackToCurated = true;
+        uint32_t barrensAITopicTimeoutSeconds = 15;
+        uint32_t barrensAITopicMaxAttempts = 1;
+        uint32_t barrensAITopicMaxTokens = 160;
+        uint32_t barrensAITopicRecentTopics = 20;
+        uint32_t barrensAITopicNoveltyWindowSeconds = 7200;
+
+        BarrensBeatMode barrensBeatMode = BarrensBeatMode::Auto;
+        std::vector<std::pair<BarrensBeat, uint32_t>> barrensBeatWeights = DefaultBarrensBeatWeights();
+        BarrensProfanityMode barrensProfanityMode = BarrensProfanityMode::Auto;
+        uint32_t barrensProfanityChance = 20;
+        uint32_t barrensMaxMessageCharacters = 180;
+        uint32_t barrensMaxContextMessages = 8;
+        uint32_t barrensPauseDuringPlayerChatSeconds = 10;
+        std::vector<std::pair<std::string, uint32_t>> barrensTopicWeights = DefaultBarrensTopicWeights();
 
         static Config Load();
         std::string ResolveApiKey() const;

@@ -48,6 +48,7 @@
 13. [Deterministic bot memory ledger](#deterministic-bot-memory-ledger) (17 settings)
 14. [Random nearby, guild, and world chatter](#random-nearby-guild-and-world-chatter) (11 settings)
 15. [Automated World/custom-channel pacing](#automated-worldcustom-channel-pacing) (11 settings)
+15B. [World Chat — Barrens Conversations](#world-chat--barrens-conversations) (38 settings)
 16. [PartyGate per-party delivery pacing](#partygate-per-party-delivery-pacing) (8 settings)
 17. [Lightweight live environment context](#lightweight-live-environment-context) (6 settings)
 18. [Event chatter](#event-chatter) (27 settings)
@@ -2829,6 +2830,319 @@ Forget button and `.av memory forget` delete them.
 - **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
 
 ---
+
+---
+
+## 15B. World Chat — Barrens Conversations
+
+> Implements authentic Vanilla-era Barrens chat banter between online PlayerBots on the public World channel (`ChatScope::World`). Scenes are sequential multi-turn exchanges (2–4 bots, 3–6 turns) driven by dynamic beat progressions (`dynamic`, `scripted`, `escalation`, `derail`), a 3-axis tone model `(salt, sarcasm, toxicity)` with per-line rerolls, Jaccard lexical novelty deduplication, active human player silence suppression, and a hybrid topic engine combining live LLM topic proposals with 36 curated topic seeds (108 variants) across 6 classic MMO discourse families.
+
+| Setting Name | Type / Range | Default | Summary |
+| :--- | :--- | :--- | :--- |
+| [`AzerothVoices.WorldChat.Barrens.Enable`](#azerothvoicesworldchatbarrensenable) | Boolean (`0` or `1`) | `1` | Master toggle for multi-bot Barrens banter scenes on World chat. (Default 1) |
+| [`AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds`](#azerothvoicesworldchatbarrenscheckintervalseconds) | Integer (Seconds, 5-3600) | `30` | Interval between evaluations for starting a new Barrens conversation scene. (Default 30) |
+| [`AzerothVoices.WorldChat.Barrens.TriggerChance`](#azerothvoicesworldchatbarrenstriggerchance) | Percentage (`0` - `100`) | `20` | Percent chance to start a new Barrens conversation scene on each check pass. (Default 20) |
+| [`AzerothVoices.WorldChat.Barrens.TopicSource`](#azerothvoicesworldchatbarrenstopicsource) | String (`hybrid`, `ai`, `curated`) | `hybrid` | Topic selection source mode. (Default hybrid) |
+| [`AzerothVoices.WorldChat.Barrens.AiProposalTimeoutMs`](#azerothvoicesworldchatbarrensaiproposaltimeoutms) | Integer (Milliseconds, 500-30000) | `3500` | Timeout in milliseconds for AI topic proposal completions. (Default 3500) |
+| [`AzerothVoices.WorldChat.Barrens.TurnMinSeconds`](#azerothvoicesworldchatbarrensturnminseconds) | Integer (Seconds, 1-60) | `4` | Minimum delay in seconds between consecutive turns in an active scene. (Default 4) |
+| [`AzerothVoices.WorldChat.Barrens.TurnMaxSeconds`](#azerothvoicesworldchatbarrensturnmaxseconds) | Integer (Seconds, 1-60) | `10` | Maximum delay in seconds between consecutive turns in an active scene. (Default 10) |
+| [`AzerothVoices.WorldChat.Barrens.TypingWpmMin`](#azerothvoicesworldchatbarrenstypingwpmmin) | Integer (Words/min, 10-200) | `40` | Minimum simulated typing speed for turns in words per minute. (Default 40) |
+| [`AzerothVoices.WorldChat.Barrens.TypingWpmMax`](#azerothvoicesworldchatbarrenstypingwpmmax) | Integer (Words/min, 10-200) | `75` | Maximum simulated typing speed for turns in words per minute. (Default 75) |
+| [`AzerothVoices.WorldChat.Barrens.MinBots`](#azerothvoicesworldchatbarrensminbots) | Integer (Bots, 2-8) | `2` | Minimum number of distinct PlayerBots participating in a Barrens scene. (Default 2) |
+| [`AzerothVoices.WorldChat.Barrens.MaxBots`](#azerothvoicesworldchatbarrensmaxbots) | Integer (Bots, 2-8) | `4` | Maximum number of distinct PlayerBots participating in a Barrens scene. (Default 4) |
+| [`AzerothVoices.WorldChat.Barrens.MinTurns`](#azerothvoicesworldchatbarrensminturns) | Integer (Turns, 1-20) | `3` | Minimum number of conversation turns in a single Barrens scene. (Default 3) |
+| [`AzerothVoices.WorldChat.Barrens.MaxTurns`](#azerothvoicesworldchatbarrensmaxturns) | Integer (Turns, 1-20) | `6` | Maximum number of conversation turns in a single Barrens scene. (Default 6) |
+| [`AzerothVoices.WorldChat.Barrens.MinOnlineRealPlayers`](#azerothvoicesworldchatbarrensminonlinerealplayers) | Integer (Players, 0-100) | `1` | Minimum number of online real players required for Barrens scenes to trigger. (Default 1) |
+| [`AzerothVoices.WorldChat.Barrens.HumanActiveSilenceSeconds`](#azerothvoicesworldchatbarrenshumanactivesilenceseconds) | Integer (Seconds, 0-600) | `45` | Silence window suppressing bot Barrens scenes after a human player speaks in World chat. (Default 45) |
+| [`AzerothVoices.WorldChat.Barrens.CooldownSeconds`](#azerothvoicesworldchatbarrenscooldownseconds) | Integer (Seconds, 0-86400) | `180` | Cooldown in seconds on the World channel after a Barrens scene completes. (Default 180) |
+| [`AzerothVoices.WorldChat.Barrens.ParticipantCooldownSeconds`](#azerothvoicesworldchatbarrensparticipantcooldownseconds) | Integer (Seconds, 0-86400) | `600` | Cooldown in seconds before a participating bot can join another Barrens scene. (Default 600) |
+| [`AzerothVoices.WorldChat.Barrens.NoveltyWindowTurns`](#azerothvoicesworldchatbarrensnoveltywindowturns) | Integer (Turns, 1-100) | `24` | Number of recent scene topic fingerprints tracked in the novelty deduplication ring. (Default 24) |
+| [`AzerothVoices.WorldChat.Barrens.NoveltySimilarityThreshold`](#azerothvoicesworldchatbarrensnoveltysimilaritythreshold) | Float (`0.0` - `1.0`) | `0.65` | Maximum Jaccard token similarity allowed against recent topics before rejecting as duplicate. (Default 0.65) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.Enable`](#azerothvoicesworldchatbarrensautomodeenable) | Boolean (`0` or `1`) | `1` | Enables dynamic auto-mode weighted distribution sampling for topic families and tones. (Default 1) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.ClassSaltWeight`](#azerothvoicesworldchatbarrensautomodeclasssaltweight) | Integer (Weight, 0-1000) | `25` | Relative selection weight for the `class_salt` topic family. (Default 25) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.AbsurdBaitWeight`](#azerothvoicesworldchatbarrensautomodeabsurdbaitweight) | Integer (Weight, 0-1000) | `20` | Relative selection weight for the `absurd_bait` topic family. (Default 20) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.QuestMemesWeight`](#azerothvoicesworldchatbarrensautomodequestmemesweight) | Integer (Weight, 0-1000) | `20` | Relative selection weight for the `quest_memes` topic family. (Default 20) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.LootDramaWeight`](#azerothvoicesworldchatbarrensautomodelootdramaweight) | Integer (Weight, 0-1000) | `15` | Relative selection weight for the `loot_drama` topic family. (Default 15) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.OldMmoDebateWeight`](#azerothvoicesworldchatbarrensautomodeoldmmodebateweight) | Integer (Weight, 0-1000) | `10` | Relative selection weight for the `old_mmo_debate` topic family. (Default 10) |
+| [`AzerothVoices.WorldChat.Barrens.AutoMode.ServerLifeWeight`](#azerothvoicesworldchatbarrensautomodeserverlifeweight) | Integer (Weight, 0-1000) | `10` | Relative selection weight for the `server_life` topic family. (Default 10) |
+| [`AzerothVoices.WorldChat.Barrens.SarcasmWeight`](#azerothvoicesworldchatbarrenssarcasmweight) | Integer (Weight, 0-1000) | `35` | Relative weight for sarcastic baseline/line tone sampling. (Default 35) |
+| [`AzerothVoices.WorldChat.Barrens.SaltWeight`](#azerothvoicesworldchatbarrenssaltweight) | Integer (Weight, 0-1000) | `30` | Relative weight for salty/grumpy baseline/line tone sampling. (Default 30) |
+| [`AzerothVoices.WorldChat.Barrens.ToxicityWeight`](#azerothvoicesworldchatbarrenstoxicityweight) | Integer (Weight, 0-1000) | `15` | Relative weight for mildly abrasive/toxic banter tone sampling. (Default 15) |
+| [`AzerothVoices.WorldChat.Barrens.AbsurdistWeight`](#azerothvoicesworldchatbarrensabsurdistweight) | Integer (Weight, 0-1000) | `20` | Relative weight for absurd/nonsense banter tone sampling. (Default 20) |
+| [`AzerothVoices.WorldChat.Barrens.HelpfulTrollWeight`](#azerothvoicesworldchatbarrenshelpfultrollweight) | Integer (Weight, 0-1000) | `10` | Relative weight for unhelpful/trolling answer tone sampling. (Default 10) |
+| [`AzerothVoices.WorldChat.Barrens.LineToneRerollChance`](#azerothvoicesworldchatbarrenslinetonererollchance) | Percentage (`0` - `100`) | `35` | Chance on each reply turn to re-roll the speaker's tone tuple instead of retaining baseline. (Default 35) |
+| [`AzerothVoices.WorldChat.Barrens.BeatMode`](#azerothvoicesworldchatbarrensbeatmode) | String (`dynamic`, `scripted`, `escalation`, `derail`) | `dynamic` | Conversational beat progression mode. (Default dynamic) |
+| [`AzerothVoices.WorldChat.Barrens.BeatEscalationChance`](#azerothvoicesworldchatbarrensbeatescalationchance) | Percentage (`0` - `100`) | `30` | Chance for a reply turn to select an escalation beat in dynamic mode. (Default 30) |
+| [`AzerothVoices.WorldChat.Barrens.BeatDerailChance`](#azerothvoicesworldchatbarrensbeatderailchance) | Percentage (`0` - `100`) | `20` | Chance for a reply turn to derail into an alternate topic family in dynamic mode. (Default 20) |
+| [`AzerothVoices.WorldChat.Barrens.BeatInterruptionChance`](#azerothvoicesworldchatbarrensbeatinterruptionchance) | Percentage (`0` - `100`) | `15` | Chance for a reply turn to introduce an outsider interruption in dynamic mode. (Default 15) |
+| [`AzerothVoices.WorldChat.Barrens.BeatConsensusChance`](#azerothvoicesworldchatbarrensbeatconsensuschance) | Percentage (`0` - `100`) | `10` | Chance for an end-of-scene turn to reach begrudging consensus. (Default 10) |
+| [`AzerothVoices.WorldChat.Barrens.ProfanityMode`](#azerothvoicesworldchatbarrensprofanitymode) | String (`vintage_mild`, `vintage_full`, `off`, `auto`) | `vintage_mild` | Permitted profanity level in generated Barrens banter lines. (Default vintage_mild) |
+
+### <a id="azerothvoicesworldchatbarrensenable"></a>`AzerothVoices.WorldChat.Barrens.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Master switch for multi-bot Barrens-style banter scenes on World chat. (Default 1)
+- **Operator Guidance & Impact**: Keep enabled (`1`) to populate the World chat channel with authentic Vanilla-era Barrens discussions between PlayerBots when real players are online. Set to `0` to completely disable Barrens banter and cancel any active scenes immediately.
+
+### <a id="azerothvoicesworldchatbarrenscheckintervalseconds"></a>`AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds`
+
+- **Data Type**: Integer (Seconds, 5-3600)
+- **Default Value**: `30`
+- **Description**: Interval between evaluations for starting a new Barrens conversation scene. (Seconds, minimum 5; default 30)
+- **Operator Guidance & Impact**: Controls background evaluation frequency. Shorter intervals increase responsiveness at the cost of more frequent world-thread scans; longer intervals conserve server CPU.
+
+### <a id="azerothvoicesworldchatbarrenstriggerchance"></a>`AzerothVoices.WorldChat.Barrens.TriggerChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `20`
+- **Description**: Percent chance to start a new Barrens conversation scene on each check pass. (0-100; default 20)
+- **Operator Guidance & Impact**: Adjust this probability up for more frequent Barrens banter on active realms, or down to conserve LLM API tokens on high-population servers.
+
+### <a id="azerothvoicesworldchatbarrenstopicsource"></a>`AzerothVoices.WorldChat.Barrens.TopicSource`
+
+- **Data Type**: String (`hybrid`, `ai`, `curated`)
+- **Default Value**: `hybrid`
+- **Description**: Topic selection source mode. `hybrid` attempts an AI proposal first and falls back to curated seeds; `ai` strictly requests fresh LLM proposals; `curated` draws exclusively from the 36 curated topic seeds. (Default hybrid)
+- **Operator Guidance & Impact**: `hybrid` provides optimal variety while preserving classic WoW meme culture. If the server operates in an offline or token-conserving environment, set to `curated` to bypass topic generation requests entirely.
+
+### <a id="azerothvoicesworldchatbarrensaiproposaltimeoutms"></a>`AzerothVoices.WorldChat.Barrens.AiProposalTimeoutMs`
+
+- **Data Type**: Integer (Milliseconds, 500-30000)
+- **Default Value**: `3500`
+- **Description**: Timeout in milliseconds for AI topic proposal completions before falling back to curated bank. (Milliseconds, 500-30000; default 3500)
+- **Operator Guidance & Impact**: Calibrate based on your LLM provider's response latency. 3500ms provides ample time for fast reasoning/completion models while preventing stalls.
+
+### <a id="azerothvoicesworldchatbarrensturnminseconds"></a>`AzerothVoices.WorldChat.Barrens.TurnMinSeconds`
+
+- **Data Type**: Integer (Seconds, 1-60)
+- **Default Value**: `4`
+- **Description**: Minimum delay in seconds between consecutive turns in an active scene. (Seconds, 1-60; default 4)
+- **Operator Guidance & Impact**: Ensures bot replies appear natural and prevents multi-line message flooding on the World channel.
+
+### <a id="azerothvoicesworldchatbarrensturnmaxseconds"></a>`AzerothVoices.WorldChat.Barrens.TurnMaxSeconds`
+
+- **Data Type**: Integer (Seconds, 1-60)
+- **Default Value**: `10`
+- **Description**: Maximum delay in seconds between consecutive turns in an active scene. (Seconds, 1-60; default 10)
+- **Operator Guidance & Impact**: Paired with `TurnMinSeconds` to introduce natural conversational jitter between participants.
+
+### <a id="azerothvoicesworldchatbarrenstypingwpmmin"></a>`AzerothVoices.WorldChat.Barrens.TypingWpmMin`
+
+- **Data Type**: Integer (Words/min, 10-200)
+- **Default Value**: `40`
+- **Description**: Minimum simulated typing speed for turns in words per minute. (WPM, 10-200; default 40)
+- **Operator Guidance & Impact**: Simulates human typing delay proportional to message length, giving the impression of real players typing out responses.
+
+### <a id="azerothvoicesworldchatbarrenstypingwpmmax"></a>`AzerothVoices.WorldChat.Barrens.TypingWpmMax`
+
+- **Data Type**: Integer (Words/min, 10-200)
+- **Default Value**: `75`
+- **Description**: Maximum simulated typing speed for turns in words per minute. (WPM, 10-200; default 75)
+- **Operator Guidance & Impact**: Higher values model fast typists; lower values produce deliberate pacing.
+
+### <a id="azerothvoicesworldchatbarrensminbots"></a>`AzerothVoices.WorldChat.Barrens.MinBots`
+
+- **Data Type**: Integer (Bots, 2-8)
+- **Default Value**: `2`
+- **Description**: Minimum number of distinct PlayerBots participating in a Barrens scene. (Bots, 2-8; default 2)
+- **Operator Guidance & Impact**: Requires at least 2 bots to maintain a dialogue exchange.
+
+### <a id="azerothvoicesworldchatbarrensmaxbots"></a>`AzerothVoices.WorldChat.Barrens.MaxBots`
+
+- **Data Type**: Integer (Bots, 2-8)
+- **Default Value**: `4`
+- **Description**: Maximum number of distinct PlayerBots participating in a Barrens scene. (Bots, 2-8; default 4)
+- **Operator Guidance & Impact**: Prevents too many bots from crowding a single scene; 3-4 bots emulate authentic crowded channel banter.
+
+### <a id="azerothvoicesworldchatbarrensminturns"></a>`AzerothVoices.WorldChat.Barrens.MinTurns`
+
+- **Data Type**: Integer (Turns, 1-20)
+- **Default Value**: `3`
+- **Description**: Minimum number of conversation turns in a single Barrens scene. (Turns, 1-20; default 3)
+- **Operator Guidance & Impact**: Guarantees at least an opener, reply, and follow-up reaction per scene.
+
+### <a id="azerothvoicesworldchatbarrensmaxturns"></a>`AzerothVoices.WorldChat.Barrens.MaxTurns`
+
+- **Data Type**: Integer (Turns, 1-20)
+- **Default Value**: `6`
+- **Description**: Maximum number of conversation turns in a single Barrens scene. (Turns, 1-20; default 6)
+- **Operator Guidance & Impact**: Bounds scene duration so bots do not monopolize World chat indefinitely.
+
+### <a id="azerothvoicesworldchatbarrensminonlinerealplayers"></a>`AzerothVoices.WorldChat.Barrens.MinOnlineRealPlayers`
+
+- **Data Type**: Integer (Players, 0-100)
+- **Default Value**: `1`
+- **Description**: Minimum number of online real players required for Barrens scenes to trigger. (Players, 0-100; default 1)
+- **Operator Guidance & Impact**: Zero-Audience Protection: ensures the server never wastes LLM API calls generating chat when no human players are online to read it.
+
+### <a id="azerothvoicesworldchatbarrenshumanactivesilenceseconds"></a>`AzerothVoices.WorldChat.Barrens.HumanActiveSilenceSeconds`
+
+- **Data Type**: Integer (Seconds, 0-600)
+- **Default Value**: `45`
+- **Description**: Silence window suppressing bot Barrens scenes after a human player speaks in World chat. (Seconds, 0-600; default 45)
+- **Operator Guidance & Impact**: Priority Courtesy: yields the World channel to real players, preventing automated bot conversations from talking over human discussions.
+
+### <a id="azerothvoicesworldchatbarrenscooldownseconds"></a>`AzerothVoices.WorldChat.Barrens.CooldownSeconds`
+
+- **Data Type**: Integer (Seconds, 0-86400)
+- **Default Value**: `180`
+- **Description**: Cooldown in seconds on the World channel after a Barrens scene completes before another can start. (Seconds, 0-86400; default 180)
+- **Operator Guidance & Impact**: Pacing control. 180 seconds (3 minutes) creates natural lulls between discussions.
+
+### <a id="azerothvoicesworldchatbarrensparticipantcooldownseconds"></a>`AzerothVoices.WorldChat.Barrens.ParticipantCooldownSeconds`
+
+- **Data Type**: Integer (Seconds, 0-86400)
+- **Default Value**: `600`
+- **Description**: Cooldown in seconds before a participating bot can join another Barrens scene. (Seconds, 0-86400; default 600)
+- **Operator Guidance & Impact**: Rotates bot speakers across scenes so the same characters do not dominate the conversation repeatedly.
+
+### <a id="azerothvoicesworldchatbarrensnoveltywindowturns"></a>`AzerothVoices.WorldChat.Barrens.NoveltyWindowTurns`
+
+- **Data Type**: Integer (Turns, 1-100)
+- **Default Value**: `24`
+- **Description**: Number of recent scene topic fingerprints tracked in the novelty deduplication ring. (Turns, 1-100; default 24)
+- **Operator Guidance & Impact**: Memory ring capacity. Higher values ensure topics do not repeat across extended play sessions.
+
+### <a id="azerothvoicesworldchatbarrensnoveltysimilaritythreshold"></a>`AzerothVoices.WorldChat.Barrens.NoveltySimilarityThreshold`
+
+- **Data Type**: Float (`0.0` - `1.0`)
+- **Default Value**: `0.65`
+- **Description**: Maximum Jaccard token similarity allowed against recent topics before rejecting as duplicate. (Float, 0.0-1.0; default 0.65)
+- **Operator Guidance & Impact**: Lexical deduplication filter. Rejects AI topic proposals that share more than 65% word overlap with recent scenes.
+
+### <a id="azerothvoicesworldchatbarrensautomodeenable"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables dynamic auto-mode weighted distribution sampling for topic families and tones. (Default 1)
+- **Operator Guidance & Impact**: When enabled, topic families and tone tuples are dynamically sampled from configured relative weights.
+
+### <a id="azerothvoicesworldchatbarrensautomodeclasssaltweight"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.ClassSaltWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `25`
+- **Description**: Relative selection weight for the `class_salt` topic family (inter-class balance complaints, paladin dps, hunter pet pulls, rogue stealth grievances). (Default 25)
+- **Operator Guidance & Impact**: Adjust relative to other family weights to emphasize or de-emphasize class salt arguments.
+
+### <a id="azerothvoicesworldchatbarrensautomodeabsurdbaitweight"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.AbsurdBaitWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `20`
+- **Description**: Relative selection weight for the `absurd_bait` topic family (Chuck Norris memes, outlandish theories, bait questions). (Default 20)
+- **Operator Guidance & Impact**: Controls the frequency of surreal or absurd Barrens humor.
+
+### <a id="azerothvoicesworldchatbarrensautomodequestmemesweight"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.QuestMemesWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `20`
+- **Description**: Relative selection weight for the `quest_memes` topic family (Mankrik's wife, zebra hooves drop rates, Chen's empty keg). (Default 20)
+- **Operator Guidance & Impact**: Classic Vanilla quest frustrations and humorous inquiries.
+
+### <a id="azerothvoicesworldchatbarrensautomodelootdramaweight"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.LootDramaWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `15`
+- **Description**: Relative selection weight for the `loot_drama` topic family (need before greed, hunter weapon priority, ninja looting disputes). (Default 15)
+- **Operator Guidance & Impact**: Classic dungeon loot debates and ninja accusations.
+
+### <a id="azerothvoicesworldchatbarrensautomodeoldmmodebateweight"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.OldMmoDebateWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `10`
+- **Description**: Relative selection weight for the `old_mmo_debate` topic family (EverQuest vs WoW corpse runs, Ultima Online nostalgia, clicker vs keybinder arguments). (Default 10)
+- **Operator Guidance & Impact**: Nostalgic 2004-2006 era MMO culture references.
+
+### <a id="azerothvoicesworldchatbarrensautomodeserverlifeweight"></a>`AzerothVoices.WorldChat.Barrens.AutoMode.ServerLifeWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `10`
+- **Description**: Relative selection weight for the `server_life` topic family (lag spikes, zeppelin glitches, disconnects, queue times). (Default 10)
+- **Operator Guidance & Impact**: Authentic server economy and infrastructure banter.
+
+### <a id="azerothvoicesworldchatbarrenssarcasmweight"></a>`AzerothVoices.WorldChat.Barrens.SarcasmWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `35`
+- **Description**: Relative weight for sarcastic baseline/line tone sampling. (Default 35)
+- **Operator Guidance & Impact**: Calibrates sarcastic humor prevalence in generated lines.
+
+### <a id="azerothvoicesworldchatbarrenssaltweight"></a>`AzerothVoices.WorldChat.Barrens.SaltWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `30`
+- **Description**: Relative weight for salty/grumpy baseline/line tone sampling. (Default 30)
+- **Operator Guidance & Impact**: Calibrates grumpy gamer complaining prevalence.
+
+### <a id="azerothvoicesworldchatbarrenstoxicityweight"></a>`AzerothVoices.WorldChat.Barrens.ToxicityWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `15`
+- **Description**: Relative weight for mildly abrasive/toxic banter tone sampling. (Default 15)
+- **Operator Guidance & Impact**: Calibrates competitive banter and light roasting. Does not permit hate speech or TOS violations.
+
+### <a id="azerothvoicesworldchatbarrensabsurdistweight"></a>`AzerothVoices.WorldChat.Barrens.AbsurdistWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `20`
+- **Description**: Relative weight for absurd/nonsense banter tone sampling. (Default 20)
+- **Operator Guidance & Impact**: Calibrates non-sequiturs and silly responses.
+
+### <a id="azerothvoicesworldchatbarrenshelpfultrollweight"></a>`AzerothVoices.WorldChat.Barrens.HelpfulTrollWeight`
+
+- **Data Type**: Integer (Weight, 0-1000)
+- **Default Value**: `10`
+- **Description**: Relative weight for unhelpful or playfully misleading answer tone sampling (e.g. telling players Alt+F4 dupes gold). (Default 10)
+- **Operator Guidance & Impact**: Classic gaming prank humor.
+
+### <a id="azerothvoicesworldchatbarrenslinetonererollchance"></a>`AzerothVoices.WorldChat.Barrens.LineToneRerollChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `35`
+- **Description**: Chance on each reply turn to re-roll the speaker's tone tuple instead of retaining baseline. (Percentage, 0-100; default 35)
+- **Operator Guidance & Impact**: At `0`, bots retain their sampled personality baselines throughout the entire scene. At `100`, every line samples a fresh tone tuple. 35% provides organic conversational shifting.
+
+### <a id="azerothvoicesworldchatbarrensbeatmode"></a>`AzerothVoices.WorldChat.Barrens.BeatMode`
+
+- **Data Type**: String (`dynamic`, `scripted`, `escalation`, `derail`)
+- **Default Value**: `dynamic`
+- **Description**: Conversational beat progression mode. `dynamic` probabilistically chooses between replies, escalations, derails, interruptions, and consensus. (Default dynamic)
+- **Operator Guidance & Impact**: `dynamic` delivers the most varied and lively exchanges. Use `scripted` for steady question-answer sequences.
+
+### <a id="azerothvoicesworldchatbarrensbeatescalationchance"></a>`AzerothVoices.WorldChat.Barrens.BeatEscalationChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `30`
+- **Description**: Chance for a reply turn to select an escalation beat in dynamic mode. (Percentage, 0-100; default 30)
+- **Operator Guidance & Impact**: Steers the dialogue toward higher intensity and stronger opinions.
+
+### <a id="azerothvoicesworldchatbarrensbeatderailchance"></a>`AzerothVoices.WorldChat.Barrens.BeatDerailChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `20`
+- **Description**: Chance for a reply turn to derail into an alternate topic family in dynamic mode. (Percentage, 0-100; default 20)
+- **Operator Guidance & Impact**: Emulates classic Barrens chat where a completely unrelated tangent hijacks the ongoing discussion.
+
+### <a id="azerothvoicesworldchatbarrensbeatinterruptionchance"></a>`AzerothVoices.WorldChat.Barrens.BeatInterruptionChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `15`
+- **Description**: Chance for a reply turn to introduce an outsider interruption in dynamic mode. (Percentage, 0-100; default 15)
+- **Operator Guidance & Impact**: Encourages a third or fourth bot to cut in with an unexpected comment.
+
+### <a id="azerothvoicesworldchatbarrensbeatconsensuschance"></a>`AzerothVoices.WorldChat.Barrens.BeatConsensusChance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `10`
+- **Description**: Chance for an end-of-scene turn to reach begrudging consensus. (Percentage, 0-100; default 10)
+- **Operator Guidance & Impact**: Provides natural closure to arguments as the scene winds down.
+
+### <a id="azerothvoicesworldchatbarrensprofanitymode"></a>`AzerothVoices.WorldChat.Barrens.ProfanityMode`
+
+- **Data Type**: String (`vintage_mild`, `vintage_full`, `off`, `auto`)
+- **Default Value**: `vintage_mild`
+- **Description**: Permitted profanity level in generated Barrens banter lines. `vintage_mild` allows mild gaming slang (damn, crap, hell, noob); `vintage_full` allows authentic unfiltered 2005 banter; `off` forbids all swears. (Default vintage_mild)
+- **Operator Guidance & Impact**: Calibrate based on server community standards. `vintage_mild` fits most family-friendly private servers while retaining authentic flavor.
 
 ## 16. PartyGate per-party delivery pacing
 

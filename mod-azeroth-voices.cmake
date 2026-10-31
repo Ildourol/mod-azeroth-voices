@@ -57,6 +57,7 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
     add_executable(azeroth_voices_tests
       "${CMAKE_CURRENT_LIST_DIR}/tests/AzerothVoicesTests.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesAddon.cpp"
+      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesBarrens.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesBossDialogue.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesBossRegistry.cpp"
       "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesInstanceLore.cpp"

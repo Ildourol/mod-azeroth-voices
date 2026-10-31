@@ -7,6 +7,7 @@
 #include "AzerothVoicesMemory.h"
 #include "AzerothVoicesPacing.h"
 #include "AzerothVoicesPartyGate.h"
+#include "AzerothVoicesBarrens.h"
 #include "AzerothVoicesSocial.h"
 #include "AzerothVoicesTypes.h"
 
@@ -164,6 +165,8 @@ namespace AzerothVoices
         bool IsPaused() const;
         StatusSnapshot GetStatus() const;
         bool IsWorldChannel(std::string const& channelName) const;
+        bool HasActiveBarrensScene(std::string const& channelName) const;
+        void NotePlayerWorldChat(std::string const& channelName);
 
     private:
         Manager();
@@ -421,6 +424,18 @@ namespace AzerothVoices
         ActiveSayConversation* FindActiveSayConversation(Player* player);
         void RunBossDialogue();
         void PruneBossPresences();
+        void RunBarrensChatter();
+        void ScheduleNextBarrensCheck();
+        void UpdateBarrensScenes();
+        void PruneBarrensNovelty();
+        bool TryStartBarrensScene(std::string const& audienceKey);
+        void RequestBarrensAITopic(std::string const& audienceKey, std::string const& family, bool isDerail);
+        void HandleBarrensTopicCompletion(ChatCompletion const& completion);
+        void QueueBarrensTurn(BarrensScene& scene);
+        void OnBarrensDelivered(ChatRequest const& request, std::string const& text);
+        void OnBarrensDeliveryFailed(ChatRequest const& request);
+        void CancelBarrensScene(std::string const& audienceKey, char const* reason, bool failureBackoff = false);
+        void HandleBarrensTerminalDrop(ChatRequest const& request, char const* reason);
         bool QueueBossDirectedReply(Player* speaker, std::string const& message);
         void NoteBossLineDelivered(ChatRequest const& request, std::string const& text);
         void LoadInstanceLore();
@@ -629,6 +644,33 @@ namespace AzerothVoices
         std::atomic<uint64_t> m_failed;
         std::atomic<uint64_t> m_dropped;
         std::chrono::steady_clock::time_point m_nextAmbient;
+        std::chrono::steady_clock::time_point m_nextBarrensCheck;
+        uint32_t m_barrensEpoch = 1;
+        uint64_t m_nextBarrensSceneId = 1;
+        std::unordered_map<std::string, BarrensScene> m_barrensScenes;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_barrensChannelCooldowns;
+        std::unordered_map<std::string, BarrensNoveltyRing> m_barrensNoveltyRings;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_barrensTopicCooldowns;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_barrensBotCooldowns;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_barrensLastPlayerChat;
+
+        uint64_t m_barrensChecks = 0;
+        uint64_t m_barrensChancePasses = 0;
+        uint64_t m_barrensStarts = 0;
+        uint64_t m_barrensLinesDelivered = 0;
+        uint64_t m_barrensScenesCompleted = 0;
+        uint64_t m_barrensScenesCancelled = 0;
+        uint64_t m_barrensQueueRejections = 0;
+        uint64_t m_barrensNoAudience = 0;
+        uint64_t m_barrensInsufficientCast = 0;
+        uint64_t m_barrensPacingDeferrals = 0;
+        uint64_t m_barrensTopicExhaustions = 0;
+        uint64_t m_barrensStaleCallbacks = 0;
+        uint64_t m_barrensAITopicAttempts = 0;
+        uint64_t m_barrensAITopicSuccess = 0;
+        uint64_t m_barrensAITopicTimeouts = 0;
+        uint64_t m_barrensAITopicFallbacks = 0;
+        uint64_t m_barrensAITopicSkips = 0;
         std::chrono::steady_clock::time_point m_lastErrorLog;
         uint32_t m_suppressedErrors;
         std::chrono::steady_clock::time_point m_telemetryWindowStarted;

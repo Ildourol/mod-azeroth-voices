@@ -2068,6 +2068,8 @@ AzerothVoices.Random.WorldPrompts = Start a short topic about zones, dungeons, l
 #                    - lore:          Warcraft legends, ancient wars, faction rivalries.
 #                    - questions:     Questions about trade, directions, quests.
 #     Default:     entertainment:30,toxic:25,reallife:25,lore:10,questions:10
+# Note: 'barrens' is an independent category configured under Section 15B
+# (AzerothVoices.WorldChat.Barrens.*) and must NOT be added here.
 AzerothVoices.Random.CategoryWeights = entertainment:30,toxic:25,reallife:25,lore:10,questions:10
 
 # --------------------------------------------
@@ -2144,6 +2146,215 @@ AzerothVoices.General.GossipTargetCooldownSeconds = 1800
 #                  channel ambient chatter again. (Seconds.)
 #     Default:     900
 AzerothVoices.General.BotSpeakerCooldownSeconds = 900
+
+# --------------------------------------------
+# 15B. WORLD CHAT - BARRENS CONVERSATIONS
+# --------------------------------------------
+# A distinct category in the configured World channel that occasionally starts a brief,
+# chaotic conversation between several eligible playerbots. Features old-school MMO public
+# channel banter: bait questions, class/spec arguments, petty gaming salt, abrupt topic
+# derails, deadpan reactions, and gaming interruptions.
+
+# AzerothVoices.WorldChat.Barrens.Enable
+#     Description: Turns automatic starts and continuation of Barrens conversations on or off.
+#     Default:     1
+AzerothVoices.WorldChat.Barrens.Enable = 1
+
+# AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds
+#     Description: Cadence for channel-wide eligibility checks. (Seconds, 5-3600.)
+#     Default:     60
+AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds = 60
+
+# AzerothVoices.WorldChat.Barrens.StartChance
+#     Description: Percent chance to start a Barrens scene per eligible check pass. (0-100.)
+#     Default:     12
+AzerothVoices.WorldChat.Barrens.StartChance = 12
+
+# AzerothVoices.WorldChat.Barrens.CooldownMinSeconds
+#     Description: Minimum channel cooldown sampled when a Barrens conversation closes. (Seconds, 0-86400.)
+#     Default:     900
+AzerothVoices.WorldChat.Barrens.CooldownMinSeconds = 900
+
+# AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds
+#     Description: Maximum channel cooldown sampled when a Barrens conversation closes. (Seconds, 0-86400.)
+#     Default:     1800
+AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds = 1800
+
+# AzerothVoices.WorldChat.Barrens.FailureBackoffSeconds
+#     Description: Minimum delay after a failed pre-delivery scene attempt. (Seconds, 5-3600.)
+#     Default:     120
+AzerothVoices.WorldChat.Barrens.FailureBackoffSeconds = 120
+
+# AzerothVoices.WorldChat.Barrens.MinParticipants
+#     Description: Minimum distinct eligible bots required before starting a scene. (2-8.)
+#     Default:     3
+AzerothVoices.WorldChat.Barrens.MinParticipants = 3
+
+# AzerothVoices.WorldChat.Barrens.MaxParticipants
+#     Description: Maximum distinct bots selected to participate in a scene. (2-8.)
+#     Default:     5
+AzerothVoices.WorldChat.Barrens.MaxParticipants = 5
+
+# AzerothVoices.WorldChat.Barrens.MinMessages
+#     Description: Minimum planned total bot messages for the scene including opener. (2-20.)
+#     Default:     6
+AzerothVoices.WorldChat.Barrens.MinMessages = 6
+
+# AzerothVoices.WorldChat.Barrens.MaxMessages
+#     Description: Maximum planned total bot messages for the scene including opener. (2-20.)
+#     Default:     15
+AzerothVoices.WorldChat.Barrens.MaxMessages = 15
+
+# AzerothVoices.WorldChat.Barrens.ReplyDelayMinSeconds
+#     Description: Minimum inter-line delay after successful line delivery. (Seconds, 1-120.)
+#     Default:     5
+AzerothVoices.WorldChat.Barrens.ReplyDelayMinSeconds = 5
+
+# AzerothVoices.WorldChat.Barrens.ReplyDelayMaxSeconds
+#     Description: Maximum inter-line delay after successful line delivery. (Seconds, 1-120.)
+#     Default:     14
+AzerothVoices.WorldChat.Barrens.ReplyDelayMaxSeconds = 14
+
+# AzerothVoices.WorldChat.Barrens.MaxDurationSeconds
+#     Description: Absolute scene lifetime cap including provider response wait times. (Seconds, 30-1800.)
+#     Default:     240
+AzerothVoices.WorldChat.Barrens.MaxDurationSeconds = 240
+
+# AzerothVoices.WorldChat.Barrens.ParticipantCooldownSeconds
+#     Description: Per-bot cooldown before participating in another Barrens conversation. (Seconds, 0-86400.)
+#     Default:     900
+AzerothVoices.WorldChat.Barrens.ParticipantCooldownSeconds = 900
+
+# AzerothVoices.WorldChat.Barrens.TopicCooldownSeconds
+#     Description: Cooldown before the same seed topic can be selected again. (Seconds, 0-604800.)
+#     Default:     7200
+AzerothVoices.WorldChat.Barrens.TopicCooldownSeconds = 7200
+
+# AzerothVoices.WorldChat.Barrens.MaxConsecutiveMessagesPerBot
+#     Description: Maximum consecutive messages a single bot can send before rotating. (1-2.)
+#     Default:     1
+AzerothVoices.WorldChat.Barrens.MaxConsecutiveMessagesPerBot = 1
+
+# AzerothVoices.WorldChat.Barrens.SaltLevel
+#     Description: Gaming frustration/salt level. Values: 'auto' (sampled from SaltWeights) or fixed 0-3.
+#     Default:     auto
+AzerothVoices.WorldChat.Barrens.SaltLevel = auto
+
+# AzerothVoices.WorldChat.Barrens.SarcasmLevel
+#     Description: Sarcasm level. Values: 'auto' (sampled from SarcasmWeights) or fixed 0-3.
+#     Default:     auto
+AzerothVoices.WorldChat.Barrens.SarcasmLevel = auto
+
+# AzerothVoices.WorldChat.Barrens.ToxicityLevel
+#     Description: Gaming toxicity level (trash talk / banter). Values: 'auto' or fixed 0-3.
+#     Default:     auto
+AzerothVoices.WorldChat.Barrens.ToxicityLevel = auto
+
+# AzerothVoices.WorldChat.Barrens.SaltWeights
+#     Description: Relative chances for auto salt levels (0:weight, 1:weight, 2:weight, 3:weight).
+#     Default:     0:20,1:30,2:35,3:15
+AzerothVoices.WorldChat.Barrens.SaltWeights = 0:20,1:30,2:35,3:15
+
+# AzerothVoices.WorldChat.Barrens.SarcasmWeights
+#     Description: Relative chances for auto sarcasm levels (0:weight, 1:weight, 2:weight, 3:weight).
+#     Default:     0:15,1:30,2:35,3:20
+AzerothVoices.WorldChat.Barrens.SarcasmWeights = 0:15,1:30,2:35,3:20
+
+# AzerothVoices.WorldChat.Barrens.ToxicityWeights
+#     Description: Relative chances for auto gaming-toxicity levels (0:weight, 1:weight, 2:weight, 3:weight).
+#     Default:     0:30,1:35,2:25,3:10
+AzerothVoices.WorldChat.Barrens.ToxicityWeights = 0:30,1:35,2:25,3:10
+
+# AzerothVoices.WorldChat.Barrens.ToneRerollChance
+#     Description: Percent chance per planned reply turn to roll fresh auto tone levels. (0-100.)
+#     Default:     35
+AzerothVoices.WorldChat.Barrens.ToneRerollChance = 35
+
+# AzerothVoices.WorldChat.Barrens.TopicMode
+#     Description: Theme family selector: 'auto' (sampled from TopicWeights) or fixed family ID:
+#                  class_salt, absurd_bait, quest_memes, loot_drama, old_mmo_debate, server_life.
+#     Default:     auto
+AzerothVoices.WorldChat.Barrens.TopicMode = auto
+
+# AzerothVoices.WorldChat.Barrens.TopicSource
+#     Description: Topic premise generation source: 'hybrid', 'curated', or 'ai'.
+#     Default:     hybrid
+AzerothVoices.WorldChat.Barrens.TopicSource = hybrid
+
+# AzerothVoices.WorldChat.Barrens.AITopicChance
+#     Description: Percent chance in hybrid mode to request a novel AI-generated topic premise. (0-100.)
+#     Default:     75
+AzerothVoices.WorldChat.Barrens.AITopicChance = 75
+
+# AzerothVoices.WorldChat.Barrens.AITopicFallbackToCurated
+#     Description: Fall back to curated topic pool if AI topic proposal fails or times out.
+#     Default:     1
+AzerothVoices.WorldChat.Barrens.AITopicFallbackToCurated = 1
+
+# AzerothVoices.WorldChat.Barrens.AITopicTimeoutSeconds
+#     Description: Timeout deadline for an AI topic proposal request. (Seconds, 1-60.)
+#     Default:     15
+AzerothVoices.WorldChat.Barrens.AITopicTimeoutSeconds = 15
+
+# AzerothVoices.WorldChat.Barrens.AITopicMaxAttempts
+#     Description: Maximum proposal attempts per topic selection before fallback. (1-2.)
+#     Default:     1
+AzerothVoices.WorldChat.Barrens.AITopicMaxAttempts = 1
+
+# AzerothVoices.WorldChat.Barrens.AITopicMaxTokens
+#     Description: Maximum token completion budget for topic proposals. (64-512.)
+#     Default:     160
+AzerothVoices.WorldChat.Barrens.AITopicMaxTokens = 160
+
+# AzerothVoices.WorldChat.Barrens.AITopicRecentTopics
+#     Description: Number of recent delivered topic premises supplied as deduplication context. (0-100.)
+#     Default:     20
+AzerothVoices.WorldChat.Barrens.AITopicRecentTopics = 20
+
+# AzerothVoices.WorldChat.Barrens.AITopicNoveltyWindowSeconds
+#     Description: Retention window for recent delivered topic fingerprints. (Seconds, 0-604800.)
+#     Default:     7200
+AzerothVoices.WorldChat.Barrens.AITopicNoveltyWindowSeconds = 7200
+
+# AzerothVoices.WorldChat.Barrens.BeatMode
+#     Description: Conversation beat selector: 'auto' (reply, reaction, derail, interruption) or 'reply'.
+#     Default:     auto
+AzerothVoices.WorldChat.Barrens.BeatMode = auto
+
+# AzerothVoices.WorldChat.Barrens.BeatWeights
+#     Description: Relative weights for eligible auto reply beats.
+#     Default:     reply:50,reaction:25,derail:20,interruption:5
+AzerothVoices.WorldChat.Barrens.BeatWeights = reply:50,reaction:25,derail:20,interruption:5
+
+# AzerothVoices.WorldChat.Barrens.ProfanityMode
+#     Description: Profanity permission mode: 'auto' (controlled by ProfanityChance and tone) or 'off'.
+#     Default:     auto
+AzerothVoices.WorldChat.Barrens.ProfanityMode = auto
+
+# AzerothVoices.WorldChat.Barrens.ProfanityChance
+#     Description: Percent chance to permit mild gaming profanity on turns with salt>0 or toxicity>0. (0-100.)
+#     Default:     20
+AzerothVoices.WorldChat.Barrens.ProfanityChance = 20
+
+# AzerothVoices.WorldChat.Barrens.MaxMessageCharacters
+#     Description: Maximum character ceiling per message line. (40-240.)
+#     Default:     180
+AzerothVoices.WorldChat.Barrens.MaxMessageCharacters = 180
+
+# AzerothVoices.WorldChat.Barrens.MaxContextMessages
+#     Description: Maximum recent delivered scene messages included in reply context. (2-20.)
+#     Default:     8
+AzerothVoices.WorldChat.Barrens.MaxContextMessages = 8
+
+# AzerothVoices.WorldChat.Barrens.PauseDuringPlayerChatSeconds
+#     Description: Delay ambient scene replies briefly after a real player posts in World chat. (Seconds, 0-120.)
+#     Default:     10
+AzerothVoices.WorldChat.Barrens.PauseDuringPlayerChatSeconds = 10
+
+# AzerothVoices.WorldChat.Barrens.TopicWeights
+#     Description: Relative chances for auto topic family sampling.
+#     Default:     class_salt:25,absurd_bait:20,quest_memes:20,loot_drama:15,old_mmo_debate:10,server_life:10
+AzerothVoices.WorldChat.Barrens.TopicWeights = class_salt:25,absurd_bait:20,quest_memes:20,loot_drama:15,old_mmo_debate:10,server_life:10
 
 # --------------------------------------------
 # 16. PARTYGATE PER-PARTY DELIVERY PACING

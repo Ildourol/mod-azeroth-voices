@@ -12,6 +12,7 @@ This is a community server module, not an official Turtle WoW service or client 
 - **Dynamic token budgeting & adaptive length guidance:** support for dynamic token ranges (`AzerothVoices.TokenRange.Mode = 2`, randomly rolling between `AzerothVoices.MinTokens` and `AzerothVoices.MaxTokens` per turn, or Mode 1 fixed budget) with proportional adaptive length prompt guidance (`AdaptiveLengthGuidance.Short`, `Medium`, `Long`) and low-token line capping so replies stay punchy and single-line on small rolls while naturally expanding on higher rolls.
 - **Character personalities:** configurable personality traits, tone, and backstory for PlayerBots, backed by SQL persistence (`TEXT` column). Features dedicated length, prompt, and sentence controls (`AzerothVoices.Personality.BackstorySentences`, `AzerothVoices.Personality.MaxTokens`, `AzerothVoices.Personality.MaxBackgroundChars`, and `AzerothVoices.Personality.MaxPromptChars` with unconstrained auto-0 mode) and a dual-layer lightweight architecture: an active voice layer (Traits + Tone + Priority Rule, ~25 tokens) always present, paired with an AI self-gating backstory directive (`Keep private: only mention or draw from this if asked about who you are, what you do, or your life.`) that evaluates conversational relevance natively in a single pass with zero extra latency and zero string-scanning overhead, automatically suppressing backstories during combat and tactical triggers.
 - **Conversation context:** bounded history, snapshots, player sentiment, and a deterministic memory ledger for more consistent interactions.
+- **World Chat Barrens conversations:** sequential multi-bot banter scenes (2–4 bots, 3–6 turns) on the public World channel (`ChatScope::World`), combining live AI topic proposals (`RequestKind::BarrensTopicGeneration`) with 36 curated topic seeds (108 variants) across 6 classic discourse families, dynamic conversational beat progressions (`dynamic`, `escalation`, `derail`, `interruption`, `consensus`), a 3-axis tone model `(salt, sarcasm, toxicity)`, Jaccard lexical novelty deduplication, active human player silence suppression, and zero-audience gating.
 - **Ambient dialogue:** optional nearby, proximity, guild, world-channel, party, and raid chatter with separate probabilities, cooldowns, and anti-spam pacing.
 - **Event reactions:** contextual lines for supported combat, group, quest, loot, and environmental events with dedicated repeat cooldowns and responder pacing.
 - **NPC and encounter dialogue:** supported NPC interactions and configurable dungeon/raid pre-aggro boss speech.
@@ -93,6 +94,26 @@ The complete, setting-by-setting reference is the [Configuration and Tuning Guid
 | `AzerothVoices.Personality.MaxPromptChars` | `900` | Persona prompt character cap |
 
 In `Thinking.Mode=Auto`, reasoning controls are conditional on the recognized official provider/model and `AzerothVoices.Thinking.AutoKinds` (default: `PersonalityGeneration,EventChat`). Some reasoning models cannot fully disable reasoning. For conversational latency and cost, consider output limits, request rates, the selected provider, and ambient trigger frequency together.
+
+### World Chat Barrens Conversations Quick-Start
+
+To activate the authentic Vanilla Barrens banter experience on your server's World channel, configure the following keys in your live configuration:
+
+```ini
+[worldserver]
+AzerothVoices.WorldChat.Barrens.Enable = 1
+AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds = 30
+AzerothVoices.WorldChat.Barrens.TriggerChance = 20
+AzerothVoices.WorldChat.Barrens.TopicSource = hybrid
+AzerothVoices.WorldChat.Barrens.MinBots = 2
+AzerothVoices.WorldChat.Barrens.MaxBots = 4
+AzerothVoices.WorldChat.Barrens.MinTurns = 3
+AzerothVoices.WorldChat.Barrens.MaxTurns = 6
+AzerothVoices.WorldChat.Barrens.HumanActiveSilenceSeconds = 45
+AzerothVoices.WorldChat.Barrens.CooldownSeconds = 180
+AzerothVoices.WorldChat.Barrens.BeatMode = dynamic
+AzerothVoices.WorldChat.Barrens.ProfanityMode = vintage_mild
+```
 
 The template includes per-feature enable switches, chances, distances, cooldowns, message length limits, SQL retention settings, and logging controls. `AzerothVoices.Console.GeneratedMessages=1` may log private dialogue; leave it disabled unless needed for a carefully controlled investigation.
 
